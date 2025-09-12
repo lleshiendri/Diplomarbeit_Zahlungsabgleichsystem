@@ -1,6 +1,6 @@
 <?php
 $servername = "endlle19_diplomarbeit_probe_server";
-$username = "endlle19 ";
+$username = "endlle19";
 $password = "1INSY$data";
 $dbname = "endlle19_diplomarbeit_probe_server";
 
