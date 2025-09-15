@@ -1,8 +1,8 @@
 <?php
-$servername = "endlle19_diplomarbeit_probe_server";
-$username = "endlle19";
-$password = "1INSY$data";
-$dbname = "endlle19_diplomarbeit_probe_server";
+$servername = "buchhaltung.htl-projekt.com";
+$username = "buchhaltungsql1";
+$password = "0R3+tMyv";
+$dbname = "buchhaltungsql1";
 
 $conn = new mysqli($servername, $username, $password, $dbname);
 
