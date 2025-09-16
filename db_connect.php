@@ -1,8 +1,8 @@
 <?php
-$servername = "buchhaltung.htl-projekt.com";
-$username = "buchhaltungsql1";
-$password = "0R3+tMyv";
-$dbname = "buchhaltungsql1";
+$servername = "xxxxxxxxx";
+$username = "xxxxxxxxx";
+$password = "xxxxxxxxxx";
+$dbname = "xxxxxxxx";
 
 $conn = new mysqli($servername, $username, $password, $dbname);
 
