@@ -30,23 +30,32 @@ require 'db_connect.php';
    
     .header{
       position: fixed;
-  top: 0; left: 0; right: 0;
-  z-index: 1300;
-  height: 60px;
+      top: 0; left: 0; right: 0;
+      z-index: 1300;
+      height: 60px;
       display:flex; align-items:center; justify-content:space-between;
-      padding:35px 45px;
+      padding:45px 50px;
       background:var(--red-main); color:#fff;
       box-shadow:0 2px 6px rgba(0,0,0,.1);
     }
-
-    .menu-icon{
-      font-size:26px; 
-      cursor:pointer; 
-      transition:.2s;
+  
+    .nav-left {
+      display: flex;
+      align-items: center;
+      gap: 20px; 
     }
 
-    .menu-icon:hover{
-      color:var(--red-dark);
+    .menu-icon,
+    .nav-icon {
+      font-size: 26px;
+      cursor: pointer;
+      color: white;
+      transition: 0.2s;
+    }
+
+    .menu-icon:hover,
+    .nav-icon:hover {
+      color: var(--red-dark); 
     }
 
     .logo img{
@@ -54,33 +63,33 @@ require 'db_connect.php';
     }
 
    .sidebar {
-  position: fixed;
-  top: 60px;  
-  left: 0;
-  bottom: 0;
-  width: 0;
-  padding-top: 30px;
-  background: #fff;
-  overflow-x: hidden;
-  transition: width 0.3s ease;
-  z-index: 1200;
-  border-right: 1px solid var(--gray-light);
-  box-shadow: 2px 0 8px rgba(0,0,0,.15);
-}
+      position: fixed;
+      top: 60px;  
+      left: 0;
+      bottom: 0;
+      width: 0;
+      padding-top: 30px;
+      background: #fff;
+      overflow-x: hidden;
+      transition: width 0.3s ease;
+      z-index: 1200;
+      border-right: 1px solid var(--gray-light);
+      box-shadow: 2px 0 8px rgba(0,0,0,.15);
+    }
 
-.sidebar.open {
-  width: 260px; 
-}
+    .sidebar.open {
+      width: 260px; 
+    }
 
-#content {
-  transition: margin-left 0.3s ease;
-  margin-left: 0;
-  padding-top: 80px; 
-}
+    #content {
+      transition: margin-left 0.3s ease;
+      margin-left: 0;
+      padding-top: 80px; 
+    }
 
-#content.shifted {
-  margin-left: 260px; 
-}
+    #content.shifted {
+      margin-left: 260px; 
+    }
 
     #content {
       transition: margin-left 0.3s ease;
@@ -91,20 +100,24 @@ require 'db_connect.php';
       margin-left: 260px; 
     }
 
-.sidebar-inner {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  padding-top: 0;
-}
+    .sidebar-inner {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding-top: 0;
+    }
 
     .sidebar header{
       font-family:'Montserrat',sans-serif;
       font-weight:600; color:var(--red-dark);
       font-size:18px;
-      padding:0 20px 12px;
+      padding: 15px 20px 12px; 
     }
-    .close-btn{float:right; cursor:pointer}
+
+    .close-btn{
+      float:right; 
+      cursor:pointer
+    }
 
     nav a,
     .logout-link{
@@ -118,7 +131,8 @@ require 'db_connect.php';
 
     nav a .material-icons-outlined,
     .logout-link .material-icons-outlined{
-      font-size:20px; color:#666;
+      font-size:20px; 
+      color:#666;
     }
 
     nav a:hover,
@@ -134,9 +148,10 @@ require 'db_connect.php';
     }
 
     .logout-wrap {
-  border-top: 1px solid var(--gray-light);
-  margin-top: auto;  
-}
+      border-top: 1px solid var(--gray-light);
+      margin-top: auto;  
+    }
+
     .logout-link{
       color:var(--red-main); 
       font-weight:500;
@@ -178,19 +193,29 @@ require 'db_connect.php';
       opacity:0; pointer-events:none; transition:opacity .28s ease;
       z-index:1150;
     }
-    .overlay.show{opacity:1; pointer-events:auto;}
+    .overlay.show{
+      opacity:1; 
+      pointer-events:auto;
+    }
+
   </style>
 </head>
 <body>
   <div class="header">
-    <span class="menu-icon" onclick="openSidebar()">&#9776;</span>
-    <div class="logo"><img src="logo1.png" alt="Logo"></div>
+  <div class="nav-left">
+    <span class="menu-icon material-icons-outlined" onclick="toggleSidebar()">menu</span>
+    <span class="nav-icon material-icons-outlined">notifications</span>
+    <span class="nav-icon material-icons-outlined">priority_high</span>
   </div>
 
+  <div class="logo">
+    <img src="logo1.png" alt="Logo">
+  </div>
+</div>
   <aside id="sidebar" class="sidebar" aria-label="Seitennavigation">
     <div class="sidebar-inner">
       <header>
-        Menu
+        MENU
         <span class="close-btn" onclick="closeSidebar()">&times;</span>
       </header>
 
@@ -226,19 +251,26 @@ require 'db_connect.php';
   </footer>
 </div>
 
-  <script>
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('overlay');
+<script>
+  const sidebar = document.getElementById("sidebar");
+  const content = document.getElementById("content");
 
-    function openSidebar() {
-  document.getElementById("sidebar").classList.add("open");
-  document.getElementById("content").classList.add("shifted");
-}
+  function toggleSidebar() {
+    if (sidebar.classList.contains("open")) {
+      sidebar.classList.remove("open");
+      content.classList.remove("shifted");
+    } else {
+      sidebar.classList.add("open");
+      content.classList.add("shifted");
+    }
+  }
 
-function closeSidebar() {
-  document.getElementById("sidebar").classList.remove("open");
-  document.getElementById("content").classList.remove("shifted");
-}
-  </script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const closeBtn = document.querySelector(".close-btn");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", toggleSidebar);
+    }
+  });
+</script>
 </body>
 </html>
