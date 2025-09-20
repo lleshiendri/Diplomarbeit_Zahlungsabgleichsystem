@@ -19,15 +19,14 @@ require 'db_connect.php';
       --gray-light:#E3E5E0;
     }
 
-  *{box-sizing:border-box}
+    *{box-sizing:border-box}
     body{
       margin:0;
       font-family:'Roboto',sans-serif;
       color:#222;
-      background:var(--off-white);
+      background:#fff;
     }
 
-   
     .header{
       position: fixed;
       top: 0; left: 0; right: 0;
@@ -69,7 +68,7 @@ require 'db_connect.php';
       bottom: 0;
       width: 0;
       padding-top: 30px;
-      background: #fff;
+      background: var(--off-white);
       overflow-x: hidden;
       transition: width 0.3s ease;
       z-index: 1200;
@@ -77,34 +76,20 @@ require 'db_connect.php';
       box-shadow: 2px 0 8px rgba(0,0,0,.15);
     }
 
-    .sidebar.open {
-      width: 260px; 
-    }
+    .sidebar.open { width: 260px; }
 
     #content {
       transition: margin-left 0.3s ease;
       margin-left: 0;
-      padding-top: 80px; 
+      padding-top: 140px; /* header + filter panel */
     }
 
-    #content.shifted {
-      margin-left: 260px; 
-    }
-
-    #content {
-      transition: margin-left 0.3s ease;
-      margin-left: 0;
-    }
-
-    #content.shifted {
-      margin-left: 260px; 
-    }
+    #content.shifted { margin-left: 260px; }
 
     .sidebar-inner {
       display: flex;
       flex-direction: column;
       height: 100%;
-      padding-top: 0;
     }
 
     .sidebar header{
@@ -114,13 +99,9 @@ require 'db_connect.php';
       padding: 15px 20px 12px; 
     }
 
-    .close-btn{
-      float:right; 
-      cursor:pointer
-    }
+    .close-btn{ float:right; cursor:pointer }
 
-    nav a,
-    .logout-link{
+    nav a, .logout-link{
       padding:14px 20px;
       display:flex; align-items:center; gap:12px;
       text-decoration:none;
@@ -130,10 +111,7 @@ require 'db_connect.php';
     }
 
     nav a .material-icons-outlined,
-    .logout-link .material-icons-outlined{
-      font-size:20px; 
-      color:#666;
-    }
+    .logout-link .material-icons-outlined{ font-size:20px; color:#666; }
 
     nav a:hover,
     .logout-link:hover{
@@ -143,41 +121,135 @@ require 'db_connect.php';
     }
 
     nav a:hover .material-icons-outlined,
-    .logout-link:hover .material-icons-outlined{
-      color:var(--red-dark);
-    }
+    .logout-link:hover .material-icons-outlined{ color:var(--red-dark); }
 
-    .logout-wrap {
-      border-top: 1px solid var(--gray-light);
-      margin-top: auto;  
-    }
+    .logout-wrap { border-top: 1px solid var(--gray-light); margin-top: auto; }
 
-    .logout-link{
-      color:var(--red-main); 
-      font-weight:500;
-    }
+    .logout-link{ color:var(--red-main); font-weight:500; }
+    .logout-link .material-icons-outlined{ color:var(--red-main); }
+    .logout-link:hover{ color:var(--red-dark); }
+    .logout-link:hover .material-icons-outlined{ color:var(--red-dark); }
 
-    .logout-link .material-icons-outlined{
-      color:var(--red-main);
-    }
-
-    .logout-link:hover{
-      color:var(--red-dark);
-    }
-
-    .logout-link:hover .material-icons-outlined{
-      color:var(--red-dark);
-    }
-
-    .main{
-      margin:30px; padding:20px;
-    }
+    .main{ margin:30px; padding:20px; }
 
     .main h1{
       font-family:'Space Grotesk',sans-serif;
       font-size:28px; font-weight:700; color:var(--red-dark);
       margin:0 0 20px;
     }
+
+    /* FILTER PANEL */
+.filter-panel {
+  position: fixed;
+  top: 75px;   /* ⬅️ moved further down so not hidden by navbar */
+  left: 0;
+  right: 0;
+  background: #f9f9f9;
+  border-bottom: 1px solid var(--gray-light);
+  padding: 20px;
+  display: none;
+  transition: margin-left 0.3s ease;
+  z-index: 1250;
+}
+.filter-panel.open { display: block; }
+.filter-panel.shifted { margin-left: 260px; }
+
+/* FILTER FORM */
+.filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;   /* spacing between filters */
+  align-items: center;
+  max-width: 100%;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  max-width: 220px;
+}
+
+.filter-input,
+.filter-select {
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  min-height: 34px;
+}
+
+/* DATE RANGE INLINE */
+.date-group {
+  display: flex;
+  gap: 8px;
+  min-width: 220px;
+}
+.date-group input { flex: 1; }
+
+.range-container {
+  display: flex;
+  flex-direction: column;
+  min-width: 250px;
+  max-width: 300px;
+  margin-left: 80px; /* push right so it doesn’t overlap */
+}
+
+.range-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+
+.range-values {
+  font-size: 14px;
+  margin: 4px 0;
+  color: #444;
+}
+
+.range-container input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--gray-light);
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Chrome/Edge/Safari thumb */
+.range-container input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--red-main);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 3px rgba(0,0,0,0.3);
+}
+
+/* Firefox thumb */
+.range-container input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--red-main);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 3px rgba(0,0,0,0.3);
+}
+
+.filter-button {
+  background: var(--red-dark);
+  color: white;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  height: 40px;
+  top:65px;
+}
 
     footer{
       position:fixed; bottom:0; left:0; right:0;
@@ -193,32 +265,79 @@ require 'db_connect.php';
       opacity:0; pointer-events:none; transition:opacity .28s ease;
       z-index:1150;
     }
-    .overlay.show{
-      opacity:1; 
-      pointer-events:auto;
-    }
-
+    .overlay.show{ opacity:1; pointer-events:auto; }
   </style>
 </head>
 <body>
   <div class="header">
-  <div class="nav-left">
-    <span class="menu-icon material-icons-outlined" onclick="toggleSidebar()">menu</span>
-    <span class="nav-icon material-icons-outlined">notifications</span>
-    <span class="nav-icon material-icons-outlined">priority_high</span>
+    <div class="nav-left">
+      <span class="menu-icon material-icons-outlined" onclick="toggleSidebar()">menu</span>
+      <span class="nav-icon material-icons-outlined">notifications</span>
+      <span class="nav-icon material-icons-outlined">priority_high</span>
+      <span class="nav-icon material-icons-outlined" id="filterToggle">filter_list</span>
+    </div>
+    <div class="logo"><img src="logo1.png" alt="Logo"></div>
   </div>
 
-  <div class="logo">
-    <img src="logo1.png" alt="Logo">
+  <div id="filterPanel" class="filter-panel">
+  <form class="filter-form">
+    
+    <!-- Student -->
+    <div class="filter-group">
+      <label>Student</label>
+      <input type="text" placeholder="Student name" class="filter-input">
+    </div>
+
+    <!-- Class -->
+    <div class="filter-group">
+      <label>Class</label>
+      <select class="filter-select">
+        <option value="">All classes</option>
+        <option value="4AHIF">4AHIF</option>
+        <option value="3BHIF">3BHIF</option>
+      </select>
+    </div>
+
+    <!-- Status -->
+    <div class="filter-group">
+      <label>Status</label>
+      <select class="filter-select">
+        <option value="">All statuses</option>
+        <option value="paid">Paid</option>
+        <option value="open">Open</option>
+        <option value="overdue">Overdue</option>
+        <option value="partial">Partial payment</option>
+      </select>
+    </div>
+
+    <!-- Date Range -->
+    <div class="filter-group">
+      <label>Date Range</label>
+      <div class="date-group">
+        <input type="date" class="filter-input">
+        <input type="date" class="filter-input">
+      </div>
+    </div>
+
+ <!-- Amount Range with min & max, single slider -->
+<div class="range-container">
+  <div class="range-header">
+    <label class="range-label">Amount Range (€)</label>
+    <button type="submit" class="filter-button">Apply</button>
   </div>
+  <div class="range-values">
+    <span id="rangeMin">0</span> € – <span id="rangeMax">1000</span> €
+  </div>
+  <input type="range" id="amountRange" min="0" max="1000" value="500" step="10">
 </div>
+
+  </form>
+</div>
+
+
   <aside id="sidebar" class="sidebar" aria-label="Seitennavigation">
     <div class="sidebar-inner">
-      <header>
-        MENU
-        <span class="close-btn" onclick="closeSidebar()">&times;</span>
-      </header>
-
+      <header>MENU <span class="close-btn" onclick="closeSidebar()">&times;</span></header>
       <nav>
         <a href="#"><span class="material-icons-outlined">payments</span> Add Payment</a>
         <a href="#"><span class="material-icons-outlined">swap_horiz</span> Add Transaction</a>
@@ -229,48 +348,63 @@ require 'db_connect.php';
         <a href="#"><span class="material-icons-outlined">link</span> Connections</a>
         <a href="#"><span class="material-icons-outlined">help_outline</span> Help & Tutorial</a>
       </nav>
-
       <div class="logout-wrap">
-        <a class="logout-link" href="#">
-          <span class="material-icons-outlined">logout</span> Logout
-        </a>
+        <a class="logout-link" href="#"><span class="material-icons-outlined">logout</span> Logout</a>
       </div>
     </div>
   </aside>
 
   <div id="overlay" class="overlay" onclick="closeSidebar()"></div>
 
-<div id="content">
-  <main class="main">
-    <h1>DASHBOARD</h1>
-    <p>Welcome back, Esmerina!</p>
-  </main>
+  <div id="content">
+    <main class="main">
+      <h1>DASHBOARD</h1>
+      <p>Welcome back, Esmerina!</p>
+    </main>
 
-  <footer>
-    © School's Transaction Matching System | Powered By HTL Shkodra
-  </footer>
-</div>
+    <footer>© School's Transaction Matching System | Powered By HTL Shkodra</footer>
+  </div>
 
 <script>
   const sidebar = document.getElementById("sidebar");
   const content = document.getElementById("content");
+  const filterToggle = document.getElementById("filterToggle");
+  const filterPanel = document.getElementById("filterPanel");
 
   function toggleSidebar() {
     if (sidebar.classList.contains("open")) {
       sidebar.classList.remove("open");
       content.classList.remove("shifted");
+      filterPanel.classList.remove("shifted");
     } else {
       sidebar.classList.add("open");
       content.classList.add("shifted");
+      filterPanel.classList.add("shifted");
     }
   }
 
   document.addEventListener("DOMContentLoaded", () => {
     const closeBtn = document.querySelector(".close-btn");
-    if (closeBtn) {
-      closeBtn.addEventListener("click", toggleSidebar);
-    }
+    if (closeBtn) { closeBtn.addEventListener("click", toggleSidebar); }
   });
+
+  if (filterToggle) {
+    filterToggle.addEventListener("click", () => {
+      filterPanel.classList.toggle("open");
+    });
+  }
+
+const amountRange = document.getElementById("amountRange");
+const rangeMinLabel = document.getElementById("rangeMin");
+const rangeMaxLabel = document.getElementById("rangeMax");
+
+if (amountRange) {
+  amountRange.addEventListener("input", () => {
+    const val = parseInt(amountRange.value);
+    rangeMinLabel.textContent = 0;          // fixed min
+    rangeMaxLabel.textContent = val;        // current max
+  });
+}
 </script>
 </body>
 </html>
