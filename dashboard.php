@@ -1,5 +1,6 @@
 <?php
 require 'db_connect.php';
+require 'navigator.html';
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -29,22 +30,6 @@ require 'db_connect.php';
       color:#222;
       background:#fff;
     }
-
-    /* HEADER */
-    .header{
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      z-index: 1300;
-      height: 70px;
-      display:flex; align-items:center; justify-content:space-between;
-      padding:0 30px;
-      background:var(--red-main); color:#fff;
-      box-shadow:0 2px 6px rgba(0,0,0,.1);
-    }
-    .nav-left { display:flex; align-items:center; gap:20px; }
-    .menu-icon, .nav-icon { font-size:26px; cursor:pointer; color:white; transition:.2s; user-select:none; }
-    .menu-icon:hover, .nav-icon:hover { color:var(--red-dark); }
-    .logo img{ height:36px; }
 
     /* SIDEBAR */
     .sidebar {
@@ -228,17 +213,6 @@ ul.msgs li{ margin:8px 0; font-size: 13px;}
   </style>
 </head>
 <body>
-  <!-- HEADER -->
-  <div class="header">
-    <div class="nav-left">
-      <span class="menu-icon material-icons-outlined" onclick="toggleSidebar()">menu</span>
-      <span class="nav-icon material-icons-outlined">notifications</span>
-      <span class="nav-icon material-icons-outlined">priority_high</span>
-      <span class="nav-icon material-icons-outlined" id="filterToggle">filter_list</span>
-    </div>
-    <div class="logo"><img src="logo1.png" alt="Logo"></div>
-  </div>
-
   <!-- FILTER PANEL -->
   <div id="filterPanel" class="filter-panel">
     <form class="filter-form">
