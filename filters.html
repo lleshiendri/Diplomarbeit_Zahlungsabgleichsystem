@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <style>
+    /* FILTER PANEL */
+    .filter-panel {
+      position: fixed;
+      top: 60px;
+      left: 0; right: 0;
+      background: #f9f9f9;
+      border-bottom: 1px solid var(--gray-light);
+      padding: 16px 24px;
+      display: none;
+      transition: margin-left 0.3s ease;
+      z-index: 1250;
+    }
+    .filter-panel.open { display: block; }
+    .filter-panel.shifted { margin-left: 260px; }
+
+    .filter-form { display:flex; flex-wrap:wrap; gap:24px; align-items:center; }
+    .filter-group { display:flex; flex-direction:column; min-width:160px; }
+    .filter-input,.filter-select{ padding:6px 10px; border:1px solid #ccc; border-radius:6px; min-height:34px; }
+    .date-group{ display:flex; gap:8px; }
+    .range-container{ display:flex; flex-direction:column; min-width:240px; }
+    .range-header{ display:flex; justify-content:space-between; align-items:center; }
+    .filter-button{ background:var(--red-dark); color:white; border:none; padding:6px 14px; border-radius:8px; cursor:pointer; height:38px; }
+    .range-values{ font-size:14px; margin:4px 0; color:#444; }
+    .range-container input[type="range"]{ -webkit-appearance:none; width:100%; height:6px; background:var(--gray-light); border-radius:4px; cursor:pointer; }
+    .range-container input[type="range"]::-webkit-slider-thumb{ -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:var(--red-main); border:none; }
+    .range-container input[type="range"]::-moz-range-thumb{ width:14px; height:14px; border-radius:50%; background:var(--red-main); border:none; }
+
+    /* OVERLAY */
+    .overlay{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.25);
+      opacity:0; pointer-events:none; transition:opacity .28s ease;
+      z-index:1150;
+    }
+    .overlay.show{ opacity:1; pointer-events:auto; }
+</style>
+</head>
+<body>
+    <!-- FILTER PANEL -->
+  <div id="filterPanel" class="filter-panel">
+    <form class="filter-form">
+      <!-- Student -->
+      <div class="filter-group">
+        <label>Student</label>
+        <input type="text" placeholder="Student name" class="filter-input">
+      </div>
+
+      <!-- Class -->
+      <div class="filter-group">
+        <label>Class</label>
+        <select class="filter-select">
+          <option value="">All classes</option>
+          <option value="4AHIF">5A</option>
+          <option value="3BHIF">5B</option>
+        </select>
+      </div>
+
+      <!-- Status -->
+      <div class="filter-group">
+        <label>Status</label>
+        <select class="filter-select">
+          <option value="">All statuses</option>
+          <option value="paid">Paid</option>
+          <option value="open">Open</option>
+          <option value="overdue">Overdue</option>
+          <option value="partial">Partial payment</option>
+        </select>
+      </div>
+
+      <!-- Date Range -->
+      <div class="filter-group">
+        <label>Date Range</label>
+        <div class="date-group">
+          <input type="date" class="filter-input">
+          <input type="date" class="filter-input">
+        </div>
+      </div>
+
+      <!-- Amount Range -->
+      <div class="range-container">
+        <div class="range-header">
+          <label class="range-label">Amount Range (€)</label>
+          <button type="submit" class="filter-button">Apply</button>
+        </div>
+        <div class="range-values">
+          <span id="rangeMin">0</span> € – <span id="rangeMax">1000</span> €
+        </div>
+        <input type="range" id="amountRange" min="0" max="1000" value="500" step="10">
+      </div>
+    </form>
+  </div>
+</body>
