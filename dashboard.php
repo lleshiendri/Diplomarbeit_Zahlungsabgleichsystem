@@ -77,42 +77,6 @@ require 'navigator.html';
     .logout-wrap { border-top: 1px solid var(--gray-light); margin-top: auto; }
     .logout-link{ color:var(--red-main); font-weight:500; }
 
-    /* FILTER PANEL */
-    .filter-panel {
-      position: fixed;
-      top: 60px;
-      left: 0; right: 0;
-      background: #f9f9f9;
-      border-bottom: 1px solid var(--gray-light);
-      padding: 16px 24px;
-      display: none;
-      transition: margin-left 0.3s ease;
-      z-index: 1250;
-    }
-    .filter-panel.open { display: block; }
-    .filter-panel.shifted { margin-left: 260px; }
-
-    .filter-form { display:flex; flex-wrap:wrap; gap:24px; align-items:center; }
-    .filter-group { display:flex; flex-direction:column; min-width:160px; }
-    .filter-input,.filter-select{ padding:6px 10px; border:1px solid #ccc; border-radius:6px; min-height:34px; }
-    .date-group{ display:flex; gap:8px; }
-    .range-container{ display:flex; flex-direction:column; min-width:240px; }
-    .range-header{ display:flex; justify-content:space-between; align-items:center; }
-    .filter-button{ background:var(--red-dark); color:white; border:none; padding:6px 14px; border-radius:8px; cursor:pointer; height:38px; }
-    .range-values{ font-size:14px; margin:4px 0; color:#444; }
-    .range-container input[type="range"]{ -webkit-appearance:none; width:100%; height:6px; background:var(--gray-light); border-radius:4px; cursor:pointer; }
-    .range-container input[type="range"]::-webkit-slider-thumb{ -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:var(--red-main); border:none; }
-    .range-container input[type="range"]::-moz-range-thumb{ width:14px; height:14px; border-radius:50%; background:var(--red-main); border:none; }
-
-    /* OVERLAY */
-    .overlay{
-      position:fixed; inset:0;
-      background:rgba(0,0,0,.25);
-      opacity:0; pointer-events:none; transition:opacity .28s ease;
-      z-index:1150;
-    }
-    .overlay.show{ opacity:1; pointer-events:auto; }
-
     /* CONTENT WRAPPER */
     #content {
       transition: margin-left 0.3s ease;
@@ -153,9 +117,9 @@ require 'navigator.html';
     /* Chart */
     .chart-box{ padding:0; }
     .chart-title{
-      font-family:'Space Grotesk',sans-serif; font-weight:700;
+      font-family:'Montserrat',sans-serif; font-weight:600;
       color:var(--red-dark); text-align:center; padding:10px 0 2px;
-      font-size:18px;
+      font-size:16px;
     }
     .chart-title::after{
       content:""; display:block; height:1px; background:var(--gray-light);
@@ -164,41 +128,80 @@ require 'navigator.html';
     .chart-inner{ flex:1; padding:0 8px 10px; }
     #paymentsChart{ width:100% !important; height:210px !important; }
 
-/* Panels */
-.panel {
-  padding:14px 16px;
-  height:100%;               
-  display:flex;
-  flex-direction:column;
-}
-.panel h3{
-  margin:0 0 10px; font-size:18px; color:var(--red-dark);
-  font-family:'Montserrat',sans-serif; font-weight:600;
-}
+    /* Panels */
+    .panel {
+      padding:14px 16px;
+      height:100%;               
+      display:flex;
+      flex-direction:column;
+    }
+    
+    .panel h3{
+      margin:0 0 10px; font-size:16px; color:var(--red-dark);
+      font-family:'Montserrat',sans-serif; font-weight:600;
+    }
 .panel hr{ border:none; border-top:1px solid var(--gray-light); margin:6px 0 12px; }
 .panel p{ margin:8px 0; font-size: 13px; }
 
-/* Messages list */
-ul.msgs{ margin:0 0 0 18px; padding:0; }
-ul.msgs li{ margin:8px 0; font-size: 13px;}
+    /* Nachrichten-Liste */
+    ul.msgs {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
 
-.widgets-column{
-  height:100%;
-  display:flex;
-  flex-direction:column;
-  gap: 20px;
-  padding-left:8px;
-}
-.widget{
-  height:110px;              
-  width:100%;
-  max-width:260px;
-  margin:0 auto;
-  padding:14px 12px;
-  text-align:center;
-  border-left:4px solid var(--red-main);
-  display:flex; flex-direction:column; justify-content:center;
-}
+    ul.msgs li {
+      display: flex;
+      align-items: center;
+      margin: 8px 0;
+      font-size: 13px;
+      padding: 4px 0;
+    }
+
+    ul.msgs li .icon {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      margin-right: 10px;
+      font-size: 16px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    /* Farben */
+    ul.msgs li.warn .icon {
+      background: orange;
+    }
+
+    ul.msgs li.success .icon {
+      background:  #66BB6A;
+    }
+
+    ul.msgs li.info .icon {
+      background: #555;
+    }
+
+    .widgets-column{
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      gap: 20px;
+      padding-left:8px;
+    }
+    .widget{
+      height:110px;              
+      width:100%;
+      max-width:260px;
+      margin:0 auto;
+      padding:14px 12px;
+      text-align:center;
+      border-left:4px solid var(--red-main);
+      display:flex; flex-direction:column; justify-content:center;
+    }
+
 .widget .label{ font-family:'Montserrat',sans-serif; font-size:14px; color:#555; margin-bottom:6px; }
 .widget .val{ font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; color:var(--red-dark); }
 
@@ -213,60 +216,6 @@ ul.msgs li{ margin:8px 0; font-size: 13px;}
   </style>
 </head>
 <body>
-  <!-- FILTER PANEL -->
-  <div id="filterPanel" class="filter-panel">
-    <form class="filter-form">
-      <!-- Student -->
-      <div class="filter-group">
-        <label>Student</label>
-        <input type="text" placeholder="Student name" class="filter-input">
-      </div>
-
-      <!-- Class -->
-      <div class="filter-group">
-        <label>Class</label>
-        <select class="filter-select">
-          <option value="">All classes</option>
-          <option value="4AHIF">5A</option>
-          <option value="3BHIF">5B</option>
-        </select>
-      </div>
-
-      <!-- Status -->
-      <div class="filter-group">
-        <label>Status</label>
-        <select class="filter-select">
-          <option value="">All statuses</option>
-          <option value="paid">Paid</option>
-          <option value="open">Open</option>
-          <option value="overdue">Overdue</option>
-          <option value="partial">Partial payment</option>
-        </select>
-      </div>
-
-      <!-- Date Range -->
-      <div class="filter-group">
-        <label>Date Range</label>
-        <div class="date-group">
-          <input type="date" class="filter-input">
-          <input type="date" class="filter-input">
-        </div>
-      </div>
-
-      <!-- Amount Range -->
-      <div class="range-container">
-        <div class="range-header">
-          <label class="range-label">Amount Range (€)</label>
-          <button type="submit" class="filter-button">Apply</button>
-        </div>
-        <div class="range-values">
-          <span id="rangeMin">0</span> € – <span id="rangeMax">1000</span> €
-        </div>
-        <input type="range" id="amountRange" min="0" max="1000" value="500" step="10">
-      </div>
-    </form>
-  </div>
-
   <!-- SIDEBAR -->
   <aside id="sidebar" class="sidebar" aria-label="Seitennavigation">
     <div class="sidebar-inner">
@@ -319,10 +268,21 @@ ul.msgs li{ margin:8px 0; font-size: 13px;}
           <div class="box panel">
             <h3>Messages</h3>
             <hr>
-            <ul class="msgs">
-              <li>3 payments waiting for administrator confirmation</li>
-            </ul>
-          </div>
+              <ul class="msgs">
+                <li class="warn">
+                  <span class="icon material-icons-outlined">warning</span>
+                  3 payments waiting for administrator confirmation
+                </li>
+                <li class="success">
+                  <span class="icon material-icons-outlined">check_circle</span>
+                  76 transactions successfully calculated this week
+                </li>
+                <li class="info">
+                  <span class="icon material-icons-outlined">info</span>
+                  Last import on 12.08.2025
+                </li>
+              </ul>
+            </div>
         </div>
 
         <!-- WIDGETS -->
