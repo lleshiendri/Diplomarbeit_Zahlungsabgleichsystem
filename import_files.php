@@ -161,6 +161,22 @@
             document.getElementById(tab.dataset.tab).style.display="block";
         });
     });
+        const sidebar   = document.getElementById("sidebar");
+        const content   = document.getElementById("content");
+
+        function openSidebar(){
+        sidebar.classList.add("open");
+        content.classList.add("shifted");
+        filterPanel.classList.add("shifted");
+        overlay.classList.add("show");
+    }
+        function closeSidebar(){
+        sidebar.classList.remove("open");
+        content.classList.remove("shifted");
+        filterPanel.classList.remove("shifted");
+        overlay.classList.remove("show");
+    }
+        function toggleSidebar(){ sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); }
 </script>
 </body>
 </html>
