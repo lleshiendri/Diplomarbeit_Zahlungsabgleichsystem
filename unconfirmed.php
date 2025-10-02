@@ -1,4 +1,7 @@
-<?php /* unconfirmed.php */ ?>
+<?php   
+require 'navigator.html'; 
+require 'filters.html'; ?>
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -35,7 +38,7 @@
       margin-left: 0;
       padding: 100px 30px 60px; 
     }
-    #content.shifted { margin-left: 300px; }
+    #content.shifted { margin-left: 260px; }
 
     .page h1{
       font-family:'Space Grotesk',sans-serif;
@@ -171,29 +174,9 @@
       z-index: 98;
     }
     #overlay.show {display:block;}
-
-    /* Sidebar */
-    #sidebar {
-      position: fixed;
-      top:0;left:0;
-      width: var(--sidebar-w);
-      height:100%;
-      background:#fff;
-      box-shadow:var(--shadow);
-      transform: translateX(-100%);
-      transition: transform .3s ease;
-      z-index:99;
-      padding:20px;
-    }
-    #sidebar.open {transform: translateX(0);}
-
   </style>
 </head>
 <body>
-
-  <?php require 'navigator.html'; ?>
-  <?php require 'filters.html'; ?>
-
   <main id="content">
     <div class="page">
       <h1>UNCONFIRMED</h1>
