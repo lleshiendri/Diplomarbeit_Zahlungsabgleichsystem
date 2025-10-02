@@ -253,26 +253,7 @@ require 'navigator.html';
       overlay.classList.remove("show");
     }
     function toggleSidebar(){ sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); }
-
-    // Filter panel toggle 
-    if (filterToggle) {
-      filterToggle.addEventListener("click", () => {
-        filterPanel.classList.toggle("open");
-      });
-    }
-
-    // Range labels
-    const amountRange = document.getElementById("amountRange");
-    const rangeMinLabel = document.getElementById("rangeMin");
-    const rangeMaxLabel = document.getElementById("rangeMax");
-    if (amountRange) {
-      amountRange.addEventListener("input", () => {
-        const val = parseInt(amountRange.value, 10);
-        rangeMinLabel.textContent = 0;
-        rangeMaxLabel.textContent = val;
-      });
-    }
-
+    
     const ctx = document.getElementById("paymentsChart").getContext("2d");
     new Chart(ctx,{
       type:"bar",
