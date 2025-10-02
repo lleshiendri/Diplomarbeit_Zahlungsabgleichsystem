@@ -286,47 +286,51 @@
   </div>
 
   <script>
-    const sidebar      = document.getElementById("sidebar");
-    const content      = document.getElementById("content");
-    const overlay      = document.getElementById("overlay");
-    const filterToggle = document.getElementById("filterToggle");
-    const filterPanel  = document.getElementById("filterPanel");
+  const sidebar      = document.getElementById("sidebar");
+  const content      = document.getElementById("content");
+  const overlay      = document.getElementById("overlay");
+  const filterToggle = document.getElementById("filterToggle");
+  const filterPanel  = document.getElementById("filterPanel");
 
-    function openSidebar() {
-      sidebar.classList.add("open");
-      content.classList.add("shifted");
-      overlay.classList.add("show");
+  function openSidebar(){
+    sidebar.classList.add("open");
+    content.classList.add("shifted");
+    overlay.classList.add("show");
+  }
+
+  function closeSidebar(){
+    sidebar.classList.remove("open");
+    content.classList.remove("shifted");
+    overlay.classList.remove("show");
+  }
+
+  function toggleSidebar(){
+    if(sidebar.classList.contains("open")){
+      closeSidebar();
+    } else {
+      openSidebar();
     }
+  }
 
-    function closeSidebar() {
-      sidebar.classList.remove("open");
-      content.classList.remove("shifted");
-      overlay.classList.remove("show");
-    }
+  // Filterpanel Toggle
+  if (filterToggle && filterPanel) {
+    filterToggle.addEventListener("click", () => {
+      filterPanel.classList.toggle("open");
+    });
+  }
 
-    function toggleSidebar() {
-      sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
-    }
+  // Range Label Update
+  const amountRange    = document.getElementById("amountRange");
+  const rangeMinLabel  = document.getElementById("rangeMin");
+  const rangeMaxLabel  = document.getElementById("rangeMax");
 
-    // Filter panel toggle
-    if (filterToggle && filterPanel) {
-      filterToggle.addEventListener("click", () => {
-        filterPanel.classList.toggle("open");
-      });
-    }
-
-    // Range labels
-    const amountRange    = document.getElementById("amountRange");
-    const rangeMinLabel  = document.getElementById("rangeMin");
-    const rangeMaxLabel  = document.getElementById("rangeMax");
-
-    if (amountRange && rangeMinLabel && rangeMaxLabel) {
-      amountRange.addEventListener("input", () => {
-        const val = parseInt(amountRange.value, 10);
-        rangeMinLabel.textContent = 0;
-        rangeMaxLabel.textContent = val;
-      });
-    }
-  </script>
+  if (amountRange && rangeMinLabel && rangeMaxLabel) {
+    amountRange.addEventListener("input", () => {
+      const val = parseInt(amountRange.value, 10);
+      rangeMinLabel.textContent = 0;
+      rangeMaxLabel.textContent = val;
+    });
+  }
+</script>
 </body>
 </html>
