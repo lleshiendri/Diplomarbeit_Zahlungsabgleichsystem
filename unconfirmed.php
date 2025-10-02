@@ -29,16 +29,13 @@
       background:#fff;
     }
 
-    /* Content */
-    #content{
-      padding:96px 24px 40px;
-      max-width:1200px;
-      margin:0 auto;
-      transition: margin-left .3s ease;
+   /* CONTENT WRAPPER */
+    #content {
+      transition: margin-left 0.3s ease;
+      margin-left: 0;
+      padding: 100px 30px 60px; 
     }
-    #content.shifted {
-      margin-left: var(--sidebar-w);
-    }
+    #content.shifted { margin-left: 300px; }
 
     .page h1{
       font-family:'Space Grotesk',sans-serif;
@@ -190,28 +187,12 @@
     }
     #sidebar.open {transform: translateX(0);}
 
-    /* Filter Panel (rechts) */
-    #filterPanel {
-      position: fixed;
-      right:-320px;
-      top:0;
-      width:320px;
-      height:100%;
-      background:#fff;
-      box-shadow:var(--shadow);
-      transition:right .3s ease;
-      z-index:100;
-      padding:20px;
-    }
-    #filterPanel.open { right:0; }
   </style>
 </head>
 <body>
 
   <?php require 'navigator.html'; ?>
   <?php require 'filters.html'; ?>
-
-  <div id="overlay" onclick="closeSidebar()"></div>
 
   <main id="content">
     <div class="page">
@@ -275,58 +256,23 @@
     </div>
   </main>
 
-  <!-- Filter Panel -->
-  <div id="filterPanel">
-    <h3>Filters</h3>
-    <label>Amount Range:</label>
-    <input type="range" id="amountRange" min="0" max="2000" value="1000">
-    <div>
-      <span id="rangeMin">0</span> € - <span id="rangeMax">1000</span> €
-    </div>
-  </div>
-
   <script>
-    const sidebar      = document.getElementById("sidebar");
-    const content      = document.getElementById("content");
-    const overlay      = document.getElementById("overlay");
-    const filterToggle = document.getElementById("filterToggle");
-    const filterPanel  = document.getElementById("filterPanel");
+    const sidebar   = document.getElementById("sidebar");
+    const content   = document.getElementById("content");
 
-    function openSidebar() {
+    function openSidebar(){
       sidebar.classList.add("open");
       content.classList.add("shifted");
+      filterPanel.classList.add("shifted");
       overlay.classList.add("show");
     }
-
-    function closeSidebar() {
+    function closeSidebar(){
       sidebar.classList.remove("open");
       content.classList.remove("shifted");
+      filterPanel.classList.remove("shifted");
       overlay.classList.remove("show");
     }
-
-    function toggleSidebar() {
-      sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
-    }
-
-    // Filter panel toggle
-    if (filterToggle && filterPanel) {
-      filterToggle.addEventListener("click", () => {
-        filterPanel.classList.toggle("open");
-      });
-    }
-
-    // Range labels
-    const amountRange    = document.getElementById("amountRange");
-    const rangeMinLabel  = document.getElementById("rangeMin");
-    const rangeMaxLabel  = document.getElementById("rangeMax");
-
-    if (amountRange && rangeMinLabel && rangeMaxLabel) {
-      amountRange.addEventListener("input", () => {
-        const val = parseInt(amountRange.value, 10);
-        rangeMinLabel.textContent = 0;
-        rangeMaxLabel.textContent = val;
-      });
-    }
+    function toggleSidebar(){ sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); }
   </script>
 </body>
 </html>
