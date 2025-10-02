@@ -1,3 +1,4 @@
+<?php /* unconfirmed.php */ ?>
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -5,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Unconfirmed</title>
 
+  <!-- Fonts & Icons -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Roboto:wght@400;500&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
 
@@ -27,7 +29,16 @@
       background:#fff;
     }
 
-    #content{padding:96px 24px 40px;max-width:1200px;margin:0 auto;}
+    /* Content */
+    #content{
+      padding:96px 24px 40px;
+      max-width:1200px;
+      margin:0 auto;
+      transition: margin-left .3s ease;
+    }
+    #content.shifted {
+      margin-left: var(--sidebar-w);
+    }
 
     .page h1{
       font-family:'Space Grotesk',sans-serif;
@@ -79,7 +90,6 @@
     }
     .amount{text-align:right;font-variant-numeric:tabular-nums;}
 
-    /* Hover Effekt */
     tbody tr:hover {
       background-color:#f5f5f5;
       transition:background-color 0.2s ease-in-out;
@@ -154,12 +164,54 @@
     .btn-primary{background:var(--red-main);color:#fff;}
     .btn-ghost{background:#fff;color:#333;border:1px solid var(--gray-light);}
     .btn:hover{opacity:.9;}
+
+    /* Overlay */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.4);
+      display: none;
+      z-index: 98;
+    }
+    #overlay.show {display:block;}
+
+    /* Sidebar */
+    #sidebar {
+      position: fixed;
+      top:0;left:0;
+      width: var(--sidebar-w);
+      height:100%;
+      background:#fff;
+      box-shadow:var(--shadow);
+      transform: translateX(-100%);
+      transition: transform .3s ease;
+      z-index:99;
+      padding:20px;
+    }
+    #sidebar.open {transform: translateX(0);}
+
+    /* Filter Panel (rechts) */
+    #filterPanel {
+      position: fixed;
+      right:-320px;
+      top:0;
+      width:320px;
+      height:100%;
+      background:#fff;
+      box-shadow:var(--shadow);
+      transition:right .3s ease;
+      z-index:100;
+      padding:20px;
+    }
+    #filterPanel.open { right:0; }
   </style>
 </head>
 <body>
 
   <?php require 'navigator.html'; ?>
   <?php require 'filters.html'; ?>
+
+  <div id="overlay" onclick="closeSidebar()"></div>
 
   <main id="content">
     <div class="page">
@@ -223,18 +275,58 @@
     </div>
   </main>
 
-  <script> 
-    const sidebar = document.getElementById("sidebar"); 
-    const content = document.getElementById("content"); 
-    function toggleSidebar() { 
-      if (sidebar.classList.contains("open")) { 
-        sidebar.classList.remove("open"); 
-        content.classList.remove("shifted"); 
-      } else { 
-        sidebar.classList.add("open"); 
-        content.classList.add("shifted"); 
-      } 
-    } 
+  <!-- Filter Panel -->
+  <div id="filterPanel">
+    <h3>Filters</h3>
+    <label>Amount Range:</label>
+    <input type="range" id="amountRange" min="0" max="2000" value="1000">
+    <div>
+      <span id="rangeMin">0</span> € - <span id="rangeMax">1000</span> €
+    </div>
+  </div>
+
+  <script>
+    const sidebar      = document.getElementById("sidebar");
+    const content      = document.getElementById("content");
+    const overlay      = document.getElementById("overlay");
+    const filterToggle = document.getElementById("filterToggle");
+    const filterPanel  = document.getElementById("filterPanel");
+
+    function openSidebar() {
+      sidebar.classList.add("open");
+      content.classList.add("shifted");
+      overlay.classList.add("show");
+    }
+
+    function closeSidebar() {
+      sidebar.classList.remove("open");
+      content.classList.remove("shifted");
+      overlay.classList.remove("show");
+    }
+
+    function toggleSidebar() {
+      sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+    }
+
+    // Filter panel toggle
+    if (filterToggle && filterPanel) {
+      filterToggle.addEventListener("click", () => {
+        filterPanel.classList.toggle("open");
+      });
+    }
+
+    // Range labels
+    const amountRange    = document.getElementById("amountRange");
+    const rangeMinLabel  = document.getElementById("rangeMin");
+    const rangeMaxLabel  = document.getElementById("rangeMax");
+
+    if (amountRange && rangeMinLabel && rangeMaxLabel) {
+      amountRange.addEventListener("input", () => {
+        const val = parseInt(amountRange.value, 10);
+        rangeMinLabel.textContent = 0;
+        rangeMaxLabel.textContent = val;
+      });
+    }
   </script>
 </body>
 </html>
