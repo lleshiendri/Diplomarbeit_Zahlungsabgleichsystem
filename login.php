@@ -1,1 +1,77 @@
-hahsjhdkajskjfghdfaksbdhksgdhjhf
+<?php
+session_start();
+
+// Example: Replace this with your actual DB check later
+$valid_username = "admin";
+$valid_password = "1234";
+
+$error = "";
+
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $username = trim($_POST["username"] ?? "");
+    $password = trim($_POST["password"] ?? "");
+
+    if ($username === $valid_username && $password === $valid_password) {
+        // Store session info
+        $_SESSION["user"] = $username;
+
+        // Redirect to dashboard
+        header("Location: dashboard.php");
+        exit;
+    } else {
+        $error = "Invalid username or password.";
+    }
+}
+?>
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - Shkolla Austriake</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="left-panel">
+            <div class="logo-box">
+                <img src="logo_ShA.png" class="logo-icon">
+                <h1>SHKOLLA<br>AUSTRIAKE</h1>
+                <p>Manage school finance<br>with clarity and control</p>
+            </div>
+        </div>
+
+        <!-- RIGHT SIDE -->
+        <div class="right-panel">
+            <h2>LOGIN</h2>
+            
+          <?php if (!empty($error)): ?>
+                <p class="error"><?= htmlspecialchars($error) ?></p>
+            <?php endif; ?>
+
+            <form method="post" action="">
+                <div class="input-group">
+                    <input type="text" name="username" placeholder="Username" required>
+                </div>
+                <div class="input-group password-group">
+                    <input type="password" name="password" placeholder="Password" required>
+                    <span class="toggle-password">
+                        <img src="eye.png" alt="Show password">
+                    </span>
+                </div>
+                <button type="submit" class="btn">LOG IN</button>
+            </form>
+        </div>
+    </div>
+
+<script>
+// toggle password visibility
+document.querySelector(".toggle-password").addEventListener("click", function(){
+    const passField = document.querySelector("input[name='password']");
+    passField.type = passField.type === "password" ? "text" : "password";
+});
+</script>
+</body>
+</html>
