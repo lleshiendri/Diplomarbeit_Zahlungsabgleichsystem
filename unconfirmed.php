@@ -1,6 +1,7 @@
 <?php   
 require 'navigator.html'; 
-require 'filters.html'; ?>
+require 'filters.html'; 
+require 'db_connect.php'?>
 
 <!DOCTYPE html>
 <html lang="de">
