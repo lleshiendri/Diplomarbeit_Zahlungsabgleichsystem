@@ -1,4 +1,5 @@
-<?php require 'navigator.html'; ?>
+<?php require 'navigator.html'; 
+require 'db_connect.php';?>
 <!DOCTYPE html>
 <html lang="de">
 <head>
