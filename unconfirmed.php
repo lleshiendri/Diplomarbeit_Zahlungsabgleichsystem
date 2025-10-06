@@ -1,8 +1,77 @@
 <?php   
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 require 'navigator.html'; 
 require 'filters.html'; 
-require 'db_connect.php'?>
+require 'db_connect.php';
 
+// 1) Tabelle: Unbestätigte Transaktionen
+$transactions_sql = "
+    SELECT reference_number, beneficairy, reference, amount_total, processing_date
+    FROM INVOICE_TAB
+    WHERE processing_date IS NULL
+    ORDER BY id DESC
+    LIMIT 50
+";
+$transactions_result = $conn->query($transactions_sql);
+
+// 2) Stat-Karten (Pending / Confirmed)
+$pending_sql = "SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE processing_date IS NULL";
+$pending = $conn->query($pending_sql)->fetch_assoc()['c'];
+
+$confirmed_sql = "SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE processing_date IS NOT NULL";
+$confirmed = $conn->query($confirmed_sql)->fetch_assoc()['c'];
+
+// 3) Vorschläge (Student / Legal Guardian)
+// Wir nehmen die erste offene Zahlung und matchen per Nachname
+$suggestion_student = "";
+$suggestion_guardian = "";
+$reason_text = "";
+
+$suggestion_sql = "
+    SELECT beneficairy
+    FROM INVOICE_TAB
+    WHERE processing_date IS NULL
+    ORDER BY id DESC
+    LIMIT 1
+";
+$suggestion_res = $conn->query($suggestion_sql);
+if ($row = $suggestion_res->fetch_assoc()) {
+    $ordering_name = trim($row['beneficairy']);
+    if (!empty($ordering_name)) {
+        // Nachname extrahieren (letztes Wort)
+        $last_name_parts = explode(' ', $ordering_name);
+        $last_name = end($last_name_parts);
+
+        // Student suchen (per long_name oder name)
+        $student_res = $conn->query("
+            SELECT long_name 
+            FROM STUDENT_TAB 
+            WHERE long_name LIKE '%".$conn->real_escape_string($last_name)."%'
+            LIMIT 1
+        ");
+        if ($student_res && $student_row = $student_res->fetch_assoc()) {
+            $suggestion_student = $student_row['long_name'];
+            $reason_text = "Student and ordering party share the same last name.";
+        }
+
+        // Guardian suchen
+        $guardian_res = $conn->query("
+            SELECT CONCAT(first_name, ' ', last_name) AS fullname 
+            FROM LEGAL_GUARDIAN_TAB 
+            WHERE last_name = '".$conn->real_escape_string($last_name)."'
+            LIMIT 1
+        ");
+        if ($guardian_res && $guardian_row = $guardian_res->fetch_assoc()) {
+            $suggestion_guardian = $guardian_row['fullname'];
+            if (empty($reason_text)) {
+                $reason_text = "Legal guardian and ordering party share the same last name.";
+            }
+        }
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -10,7 +79,6 @@ require 'db_connect.php'?>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Unconfirmed</title>
 
-  <!-- Fonts & Icons -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Roboto:wght@400;500&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
 
@@ -32,148 +100,34 @@ require 'db_connect.php'?>
       color:black;
       background:#fff;
     }
-
-   /* CONTENT WRAPPER */
-    #content {
-      transition: margin-left 0.3s ease;
-      margin-left: 0;
-      padding: 100px 30px 60px; 
-    }
+    #content {transition: margin-left 0.3s ease;margin-left: 0;padding: 100px 30px 60px;}
     #content.shifted { margin-left: 260px; }
 
-    .page h1{
-      font-family:'Space Grotesk',sans-serif;
-      font-size:28px; font-weight:700; color:var(--red-dark);
-      letter-spacing:.5px;
-      margin:0 0 8px;
-    }
+    .page h1{font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;color:var(--red-dark);letter-spacing:.5px;margin:0 0 8px;}
+    .subtitle{display:inline-block;margin:0 0 23px;padding:6px 10px;font-size:14px;color:#444;background:#fff;border-radius:8px;box-shadow:var(--shadow);}
+    .layout{display:grid;grid-template-columns: 1fr var(--sidebar-w);gap:20px;align-items:start;}
+    .card{border:1px solid var(--gray-light);border-radius:var(--radius);background:#fff;box-shadow:var(--shadow);padding:20px;}
 
-    .subtitle{
-      display:inline-block;
-      margin:0 0 23px;
-      padding:6px 10px;
-      font-size:14px;
-      color:#444;
-      background:#fff;
-      border-radius:8px;
-      box-shadow:var(--shadow);
-    }
-
-    .layout{
-      display:grid;
-      grid-template-columns: 1fr var(--sidebar-w);
-      gap:20px;
-      align-items:start;
-    }
-
-    .card{
-      border:1px solid var(--gray-light);
-      border-radius:var(--radius);
-      background:#fff;
-      box-shadow:var(--shadow);
-      padding:20px;
-    }
-
-    /* Table */
     table{width:100%;border-collapse:collapse;font-size:14px;}
-    thead th{
-      font-family:'Montserrat',sans-serif; 
-      text-align:left;
-      padding:12px 14px;
-      background:var(--red-light);
-      color:#333;
-      font-weight:600;
-    }
-    tbody td{
-      font-family:'Roboto',sans-serif;     
-      padding:12px 14px;
-      border-top:1px solid var(--gray-light);
-    }
+    thead th{font-family:'Montserrat',sans-serif;text-align:left;padding:12px 14px;background:var(--red-light);color:#333;font-weight:600;}
+    tbody td{font-family:'Roboto',sans-serif;padding:12px 14px;border-top:1px solid var(--gray-light);}
     .amount{text-align:right;font-variant-numeric:tabular-nums;}
-
-    tbody tr:hover {
-      background-color:#f5f5f5;
-      transition:background-color 0.2s ease-in-out;
-      cursor:pointer;
-    }
+    tbody tr:hover {background-color:#f5f5f5;transition:background-color 0.2s ease-in-out;cursor:pointer;}
 
     .stack{display:flex;flex-direction:column;gap:16px;}
+    .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .stat{border:1px solid var(--gray-light);border-radius:var(--radius);background:#fff;box-shadow:var(--shadow);padding:10px 12px;text-align:center;}
+    .stat .num{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:28px;line-height:1;margin-bottom:6px;color:#000;}
+    .stat .label{font-size:12px;color:#333;border-top:1px solid var(--gray-light);padding-top:6px;font-family:'Roboto',sans-serif;}
 
-    .stats{
-      display:grid; grid-template-columns:1fr 1fr; gap:12px;
-    }
-    .stat{
-      border:1px solid var(--gray-light);
-      border-radius:var(--radius);
-      background:#fff;
-      box-shadow:var(--shadow);
-      padding:10px 12px;
-      text-align:center;
-    }
-    .stat .num{
-      font-family:'Space Grotesk',sans-serif;
-      font-weight:700; font-size:28px; line-height:1;
-      margin-bottom:6px; color:#000;
-    }
-    .stat .label{
-      font-size:12px; color:#333;
-      border-top:1px solid var(--gray-light);
-      padding-top:6px;
-      font-family:'Roboto',sans-serif;
-    }
-
-    .side-title{
-      font-family:'Montserrat',sans-serif; 
-      font-weight:600;
-      color:#333;
-      font-size:15px;
-      margin:0 0 8px;
-    }
-    .side-input{
-      font-family:'Roboto',sans-serif;
-      width:100%;
-      border:1px solid var(--gray-light);
-      border-radius:8px;
-      padding:10px 12px;
-      font-size:14px;
-      margin-bottom:14px;
-      color:grey; 
-      background:#fff;
-    }
-    .reason-text{
-      font-family:'Roboto',sans-serif;
-      font-size:13px;
-      line-height:1.6;
-      margin-top:6px;
-      color:#333;
-    }
-
-    /* Buttons */
-    .btn{
-      font-family:'Roboto',sans-serif;
-      appearance:none;
-      border:none;
-      cursor:pointer;
-      border-radius:6px;
-      padding:8px 14px;
-      font-weight:500;            
-      font-size:13px;
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-    }
+    .side-title{font-family:'Montserrat',sans-serif;font-weight:600;color:#333;font-size:15px;margin:0 0 8px;}
+    .side-input{font-family:'Roboto',sans-serif;width:100%;border:1px solid var(--gray-light);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:14px;color:grey;background:#fff;}
+    .reason-text{font-family:'Roboto',sans-serif;font-size:13px;line-height:1.6;margin-top:6px;color:#333;}
+    .btn{font-family:'Roboto',sans-serif;appearance:none;border:none;cursor:pointer;border-radius:6px;padding:8px 14px;font-weight:500;font-size:13px;display:inline-flex;align-items:center;gap:6px;}
     .btn-primary{background:var(--red-main);color:#fff;}
     .btn-ghost{background:#fff;color:#333;border:1px solid var(--gray-light);}
     .btn:hover{opacity:.9;}
-
-    /* Overlay */
-    #overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.4);
-      display: none;
-      z-index: 98;
-    }
+    #overlay {position: fixed;inset: 0;background: rgba(0,0,0,.4);display: none;z-index: 98;}
     #overlay.show {display:block;}
   </style>
 </head>
@@ -196,39 +150,42 @@ require 'db_connect.php'?>
               </tr>
             </thead>
             <tbody>
-              <tr><td>1001</td><td>John Doe</td><td>Tuition Fee</td><td>10/01/2025</td><td class="amount">800.00 €</td></tr>
-              <tr><td>1002</td><td>James Smith</td><td>Tuition Fee</td><td>22/06/2025</td><td class="amount">500.00 €</td></tr>
-              <tr><td>1003</td><td>Michael Brown</td><td>Tuition Fee</td><td>30/04/2025</td><td class="amount">700.00 €</td></tr>
-              <tr><td>1004</td><td>Emily Johnson</td><td>Tuition Fee</td><td>19/11/2025</td><td class="amount">1100.00 €</td></tr>
+              <?php if ($transactions_result && $transactions_result->num_rows > 0): ?>
+                <?php while($row = $transactions_result->fetch_assoc()): ?>
+                  <tr>
+                    <td><?= htmlspecialchars($row['reference_number']) ?></td>
+                    <td><?= htmlspecialchars($row['beneficairy']) ?></td>
+                    <td><?= htmlspecialchars($row['reference']) ?></td>
+                    <td><?= $row['processing_date'] ? date("d/m/Y", strtotime($row['processing_date'])) : '-' ?></td>
+                    <td class="amount"><?= number_format($row['amount_total'], 2, ',', '.') ?> €</td>
+                  </tr>
+                <?php endwhile; ?>
+              <?php else: ?>
+                <tr><td colspan="5">No unconfirmed transactions found.</td></tr>
+              <?php endif; ?>
             </tbody>
           </table>
         </section>
 
         <aside class="stack">
           <div class="stats">
-            <div class="stat">
-              <div class="num">12</div>
-              <div class="label">Pending</div>
-            </div>
-            <div class="stat">
-              <div class="num">28</div>
-              <div class="label">Confirmed</div>
-            </div>
+            <div class="stat"><div class="num"><?= $pending ?></div><div class="label">Pending</div></div>
+            <div class="stat"><div class="num"><?= $confirmed ?></div><div class="label">Confirmed</div></div>
           </div>
 
           <div class="card">
             <div class="side-title">Suggested Student</div>
-            <input class="side-input" type="text" value="David Wilson">
+            <input class="side-input" type="text" value="<?= htmlspecialchars($suggestion_student) ?>">
           </div>
 
           <div class="card">
             <div class="side-title">Suggested Legal Guardian</div>
-            <input class="side-input" type="text" value="John Wilson">
+            <input class="side-input" type="text" value="<?= htmlspecialchars($suggestion_guardian) ?>">
           </div>
 
           <div class="card">
             <div class="side-title">Connection Reason</div>
-            <p class="reason-text">Student and the suggested legal guardian have the same Last Name.</p>
+            <p class="reason-text"><?= htmlspecialchars($reason_text) ?></p>
 
             <div style="margin-top:12px;display:flex;gap:10px;">
               <button class="btn btn-primary"><span class="material-icons-outlined">check_circle</span> Confirm</button>
@@ -243,19 +200,9 @@ require 'db_connect.php'?>
   <script>
     const sidebar   = document.getElementById("sidebar");
     const content   = document.getElementById("content");
-
-    function openSidebar(){
-      sidebar.classList.add("open");
-      content.classList.add("shifted");
-      filterPanel.classList.add("shifted");
-      overlay.classList.add("show");
-    }
-    function closeSidebar(){
-      sidebar.classList.remove("open");
-      content.classList.remove("shifted");
-      filterPanel.classList.remove("shifted");
-      overlay.classList.remove("show");
-    }
+    const overlay   = document.getElementById("overlay");
+    function openSidebar(){ sidebar.classList.add("open"); content.classList.add("shifted"); overlay.classList.add("show"); }
+    function closeSidebar(){ sidebar.classList.remove("open"); content.classList.remove("shifted"); overlay.classList.remove("show"); }
     function toggleSidebar(){ sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); }
   </script>
 </body>
