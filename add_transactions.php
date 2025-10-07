@@ -2,13 +2,11 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Wichtig: currentPage VOR navigator.php setzen
 $currentPage = basename($_SERVER['PHP_SELF']);
 
 require 'navigator.php'; 
 require 'db_connect.php';
 
-// 1) Datensatz speichern bei Formularabsendung
 $success_message = "";
 $error_message = "";
 
@@ -57,15 +55,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         body{ margin:0; font-family:'Roboto',sans-serif; background:#fff; color:#222; }
 
-        /* Content verschiebbar wie bei unconfirmed */
         #content {
             transition: margin-left 0.3s ease;
             margin-left: 0;
-            padding: 100px 30px 30px; /* 100px wegen fixer Header aus navigator.php */
+            padding: 100px 30px 30px; 
         }
         #content.shifted { margin-left: 100px; }
 
-        /* Overlay für Sidebar (navigator.php liefert es nicht) */
         #overlay {
             position: fixed;
             inset: 0;
@@ -215,15 +211,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 </div>
 
-<!-- Sidebar/Global Overlay (für Sidebar) -->
-<div id="overlay" class="overlay" onclick="closeSidebar(); closeFilter();"></div>
-
-<!-- Filters einbinden (Panel + eigener filterOverlay aus der Datei) -->
-<?php include 'filters.html'; ?>
+<div id="overlay" class="overlay" onclick="closeSidebar();"></div>
 
 <script>
-  // ---- Sidebar Toggle wie bei unconfirmed.php ----
-  const sidebar = document.getElementById("sidebar"); // kommt aus navigator.php
+  const sidebar = document.getElementById("sidebar"); 
   const content = document.getElementById("content");
   const overlay = document.getElementById("overlay");
 
@@ -241,20 +232,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
   function toggleSidebar(){ (sidebar && sidebar.classList.contains("open")) ? closeSidebar() : openSidebar(); }
 
-  // ---- Filter Icon + Home Icon dynamisch in Header einsetzen (ohne navigator.php zu ändern) ----
   document.addEventListener('DOMContentLoaded', () => {
-    const navLeft = document.querySelector('.nav-left'); // Header-Container aus navigator.php
+    const navLeft = document.querySelector('.nav-left'); 
     if (navLeft) {
-      // Filter-Icon nur hinzufügen, wenn es nicht schon existiert
-      if (!document.getElementById('filterToggle')) {
-        const filterSpan = document.createElement('span');
-        filterSpan.id = 'filterToggle';
-        filterSpan.className = 'nav-icon material-icons-outlined';
-        filterSpan.textContent = 'filter_list';
-        filterSpan.style.cursor = 'pointer';
-        navLeft.appendChild(filterSpan);
-      }
-      // Home-Icon nur hinzufügen, wenn es nicht schon existiert
       if (!document.getElementById('homeLink')) {
         const homeLink = document.createElement('a');
         homeLink.id = 'homeLink';
@@ -266,36 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         navLeft.appendChild(homeLink);
       }
     }
-
-    // Filter-Handlers binden
-    attachFilterHandlers();
   });
-
-  // ---- Filter Panel Steuerung (nutzt Markup aus filters.html) ----
-  function attachFilterHandlers(){
-    const filterPanel   = document.getElementById("filterPanel");     // aus filters.html
-    const filterOverlay = document.getElementById("filterOverlay");   // aus filters.html
-    const filterToggle  = document.getElementById("filterToggle");    // Icon oben
-
-    function closeFilter(){
-      if (filterPanel)   filterPanel.classList.remove('open');
-      if (filterOverlay) filterOverlay.classList.remove('show');
-    }
-    // Expose für Overlay onclick oben
-    window.closeFilter = closeFilter;
-
-    if (filterToggle && filterPanel) {
-      filterToggle.addEventListener('click', () => {
-        filterPanel.classList.toggle('open');
-        if (filterOverlay) filterOverlay.classList.toggle('show');
-      });
-    }
-    if (filterOverlay) {
-      filterOverlay.addEventListener('click', closeFilter);
-    }
-  }
-
-  // Falls navigator.php das Menü-Icon mit onclick="toggleSidebar()" hat: Funktionen sind jetzt global vorhanden.
 </script>
 </body>
 </html>
