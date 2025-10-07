@@ -1,6 +1,7 @@
 <?php
 // Aktuelle Seite erkennen (z. B. "dashboard.php" oder "unconfirmed.php")
 $currentPage = basename($_SERVER['PHP_SELF']);
+require 'filters.html';
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -16,7 +17,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     --off-white:#FFF8EB;
     --gray-light:#E3E5E0;
     --ink:#000;
-    --sidebar-w:260px;
   }
 
   /* HEADER */
@@ -55,7 +55,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     border-right: 1px solid var(--gray-light);
     box-shadow: 2px 0 8px rgba(0,0,0,.15);
   }
-  .sidebar.open { width: var(--sidebar-w); }
+  .sidebar.open { width: 260px; }
 
   .sidebar-inner { display: flex; flex-direction: column; height: 100%; }
 
@@ -117,24 +117,15 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 <!-- HEADER -->
 <div class="header">
   <div class="nav-left">
-    <!-- Menü -->
     <span class="menu-icon material-icons-outlined" onclick="toggleSidebar()">menu</span>
-
-    <!-- Notifications -->
     <span class="nav-icon material-icons-outlined">notifications</span>
-
-    <!-- Urgent -->
     <span class="nav-icon material-icons-outlined">priority_high</span>
 
     <?php if ($currentPage === 'unconfirmed.php'): ?>
-      <!-- Filter -->
       <span class="nav-icon material-icons-outlined" id="filterToggle">filter_list</span>
-
-      <!-- Home -->
       <a href="dashboard.php" class="nav-icon material-icons-outlined" style="text-decoration:none;color:white;">home</a>
     <?php endif; ?>
   </div>
-
   <div class="logo"><img src="logo1.png" alt="Logo"></div>
 </div>
 
@@ -174,7 +165,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
   const filterPanel = document.getElementById("filterPanel");
   const filterToggle = document.getElementById("filterToggle");
 
-  // SIDEBAR Funktionen
+  // SIDEBAR
   function openSidebar(){
     sidebar.classList.add("open");
     overlay.classList.add("show");
@@ -187,14 +178,16 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
   }
 
-  // FILTER Panel (nur bei unconfirmed vorhanden)
-  if (filterToggle) {
-    filterToggle.addEventListener('click', () => {
-      filterPanel.classList.toggle('open');
-    });
-  }
+  // FILTER Panel
   function closeFilter(){
     if (filterPanel) filterPanel.classList.remove('open');
+  }
+
+  if (filterToggle && filterPanel) {
+    filterToggle.addEventListener('click', () => {
+      filterPanel.classList.toggle('open');
+      overlay.classList.toggle('show', filterPanel.classList.contains('open') || sidebar.classList.contains('open'));
+    });
   }
 </script>
 

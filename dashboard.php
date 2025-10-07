@@ -75,13 +75,8 @@ for ($m = 1; $m <= 12; $m++) {
       color:#222;
       background:#fff;
     }
-  #content {
-  transition: margin-left 0.3s ease;
-  margin-left: 0;
-}
-#content.shifted {
-  margin-left: 260px;
-}
+  #content {transition: margin-left 0.3s ease;margin-left: 0;padding: 100px 30px 60px;}
+    #content.shifted { margin-left: 260px; }
     .main h1{
       font-family:'Space Grotesk',sans-serif;
       font-size:28px; font-weight:700; color:var(--red-dark);
@@ -261,22 +256,13 @@ for ($m = 1; $m <= 12; $m++) {
   </div>
 
   <script>
-  const sidebar   = document.getElementById("sidebar");
-const content   = document.getElementById("content");
-const overlay   = document.getElementById("overlay");
 
-function openSidebar(){
-  sidebar.classList.add("open");
-  content.classList.add("shifted");
-  overlay.classList.add("show");
-}
-function closeSidebar(){
-  sidebar.classList.remove("open");
-  content.classList.remove("shifted");
-  overlay.classList.remove("show");
-}
-function toggleSidebar(){ sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); }
-
+    const sidebar   = document.getElementById("sidebar");
+    const content   = document.getElementById("content");
+    const overlay   = document.getElementById("overlay");
+    function openSidebar(){ sidebar.classList.add("open"); content.classList.add("shifted"); overlay.classList.add("show"); }
+    function closeSidebar(){ sidebar.classList.remove("open"); content.classList.remove("shifted"); overlay.classList.remove("show"); }
+    function toggleSidebar(){ sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); }
 
     const ctx = document.getElementById("paymentsChart").getContext("2d");
     new Chart(ctx,{
