@@ -3,7 +3,6 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 require 'navigator.php'; 
-require 'filters.html'; 
 require 'db_connect.php';
 
 // 1) Tabelle: Unbestätigte Transaktionen
