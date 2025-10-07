@@ -2,6 +2,9 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+// Wichtig: currentPage VOR navigator.php setzen
+$currentPage = basename($_SERVER['PHP_SELF']);
+
 require 'navigator.php'; 
 require 'db_connect.php';
 
@@ -10,11 +13,11 @@ $success_message = "";
 $error_message = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $ref_number       = trim($_POST['ref_number']);
-    $ordering_name    = trim($_POST['ordering_name']);
-    $transaction_date = $_POST['transaction_date'];
-    $description      = trim($_POST['description']);
-    $amount           = (float) $_POST['amount'];
+    $ref_number       = trim($_POST['ref_number'] ?? '');
+    $ordering_name    = trim($_POST['ordering_name'] ?? '');
+    $transaction_date = $_POST['transaction_date'] ?? '';
+    $description      = trim($_POST['description'] ?? '');
+    $amount           = isset($_POST['amount']) ? (float) $_POST['amount'] : 0;
 
     if ($ref_number && $ordering_name && $transaction_date && $amount) {
         $stmt = $conn->prepare("
@@ -24,16 +27,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($stmt) {
             $stmt->bind_param("ssssd", $ref_number, $ordering_name, $description, $transaction_date, $amount);
             if ($stmt->execute()) {
-                $success_message = "✅ Transaction was successfully added.";
+                $success_message = "Transaction was successfully added.";
             } else {
-                $error_message = "❌ Error while saving: " . $stmt->error;
+                $error_message = "Error while saving: " . $stmt->error;
             }
             $stmt->close();
         } else {
-            $error_message = "❌ Statement error: " . $conn->error;
+            $error_message = "Statement error: " . $conn->error;
         }
     } else {
-        $error_message = "⚠ Please fill out all required fields.";
+        $error_message = "Please fill out all required fields.";
     }
 }
 ?>
@@ -53,7 +56,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             --gray-light:#E3E5E0;
         }
         body{ margin:0; font-family:'Roboto',sans-serif; background:#fff; color:#222; }
-        #content{ margin-top:90px; padding:30px; }
+
+        /* Content verschiebbar wie bei unconfirmed */
+        #content {
+            transition: margin-left 0.3s ease;
+            margin-left: 0;
+            padding: 100px 30px 30px; /* 100px wegen fixer Header aus navigator.php */
+        }
+        #content.shifted { margin-left: 100px; }
+
+        /* Overlay für Sidebar (navigator.php liefert es nicht) */
+        #overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.4);
+            display: none;
+            z-index: 98;
+        }
+        #overlay.show { display:block; }
 
         h1{
             font-family:'Space Grotesk',sans-serif;
@@ -71,14 +91,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin:0 auto;
             box-shadow:0 1px 3px rgba(0,0,0,.08);
         }
-
         .form-grid{
             display:grid;
             grid-template-columns:1fr 1fr;
             gap:20px;
             margin-bottom:20px;
         }
-
         label{
             font-family:'Montserrat',sans-serif;
             font-weight:600;
@@ -86,7 +104,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-bottom:6px;
             color:#333;
         }
-
         .input-group{
             display:flex;
             align-items:center;
@@ -110,7 +127,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             background:transparent;
         }
         textarea{ resize:vertical; min-height:90px; }
-
         .full-width{ grid-column:1 / span 2; }
 
         .save-btn{
@@ -142,6 +158,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
+
+<!-- Inhalt -->
 <div id="content">
     <h1>Add Transaction</h1>
 
@@ -197,22 +215,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 </div>
 
-<script>
-    const sidebar   = document.getElementById("sidebar");
-    const content   = document.getElementById("content");
-    const overlay   = document.getElementById("overlay");
+<!-- Sidebar/Global Overlay (für Sidebar) -->
+<div id="overlay" class="overlay" onclick="closeSidebar(); closeFilter();"></div>
 
-    function openSidebar(){
-        sidebar.classList.add("open");
-        content.classList.add("shifted");
-        overlay.classList.add("show");
+<!-- Filters einbinden (Panel + eigener filterOverlay aus der Datei) -->
+<?php include 'filters.html'; ?>
+
+<script>
+  // ---- Sidebar Toggle wie bei unconfirmed.php ----
+  const sidebar = document.getElementById("sidebar"); // kommt aus navigator.php
+  const content = document.getElementById("content");
+  const overlay = document.getElementById("overlay");
+
+  function openSidebar(){
+    if (!sidebar) return;
+    sidebar.classList.add("open");
+    content && content.classList.add("shifted");
+    overlay && overlay.classList.add("show");
+  }
+  function closeSidebar(){
+    if (!sidebar) return;
+    sidebar.classList.remove("open");
+    content && content.classList.remove("shifted");
+    overlay && overlay.classList.remove("show");
+  }
+  function toggleSidebar(){ (sidebar && sidebar.classList.contains("open")) ? closeSidebar() : openSidebar(); }
+
+  // ---- Filter Icon + Home Icon dynamisch in Header einsetzen (ohne navigator.php zu ändern) ----
+  document.addEventListener('DOMContentLoaded', () => {
+    const navLeft = document.querySelector('.nav-left'); // Header-Container aus navigator.php
+    if (navLeft) {
+      // Filter-Icon nur hinzufügen, wenn es nicht schon existiert
+      if (!document.getElementById('filterToggle')) {
+        const filterSpan = document.createElement('span');
+        filterSpan.id = 'filterToggle';
+        filterSpan.className = 'nav-icon material-icons-outlined';
+        filterSpan.textContent = 'filter_list';
+        filterSpan.style.cursor = 'pointer';
+        navLeft.appendChild(filterSpan);
+      }
+      // Home-Icon nur hinzufügen, wenn es nicht schon existiert
+      if (!document.getElementById('homeLink')) {
+        const homeLink = document.createElement('a');
+        homeLink.id = 'homeLink';
+        homeLink.href = 'dashboard.php';
+        homeLink.className = 'nav-icon material-icons-outlined';
+        homeLink.textContent = 'home';
+        homeLink.style.textDecoration = 'none';
+        homeLink.style.color = 'white';
+        navLeft.appendChild(homeLink);
+      }
     }
-    function closeSidebar(){
-        sidebar.classList.remove("open");
-        content.classList.remove("shifted");
-        overlay.classList.remove("show");
+
+    // Filter-Handlers binden
+    attachFilterHandlers();
+  });
+
+  // ---- Filter Panel Steuerung (nutzt Markup aus filters.html) ----
+  function attachFilterHandlers(){
+    const filterPanel   = document.getElementById("filterPanel");     // aus filters.html
+    const filterOverlay = document.getElementById("filterOverlay");   // aus filters.html
+    const filterToggle  = document.getElementById("filterToggle");    // Icon oben
+
+    function closeFilter(){
+      if (filterPanel)   filterPanel.classList.remove('open');
+      if (filterOverlay) filterOverlay.classList.remove('show');
     }
-    function toggleSidebar(){ sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); }
+    // Expose für Overlay onclick oben
+    window.closeFilter = closeFilter;
+
+    if (filterToggle && filterPanel) {
+      filterToggle.addEventListener('click', () => {
+        filterPanel.classList.toggle('open');
+        if (filterOverlay) filterOverlay.classList.toggle('show');
+      });
+    }
+    if (filterOverlay) {
+      filterOverlay.addEventListener('click', closeFilter);
+    }
+  }
+
+  // Falls navigator.php das Menü-Icon mit onclick="toggleSidebar()" hat: Funktionen sind jetzt global vorhanden.
 </script>
 </body>
 </html>
