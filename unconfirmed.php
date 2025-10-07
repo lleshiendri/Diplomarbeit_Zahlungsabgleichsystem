@@ -23,7 +23,6 @@ $confirmed_sql = "SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE processing_date IS
 $confirmed = $conn->query($confirmed_sql)->fetch_assoc()['c'];
 
 // 3) Vorschläge (Student / Legal Guardian)
-// Wir nehmen die erste offene Zahlung und matchen per Nachname
 $suggestion_student = "";
 $suggestion_guardian = "";
 $reason_text = "";
@@ -39,11 +38,9 @@ $suggestion_res = $conn->query($suggestion_sql);
 if ($row = $suggestion_res->fetch_assoc()) {
     $ordering_name = trim($row['beneficairy']);
     if (!empty($ordering_name)) {
-        // Nachname extrahieren (letztes Wort)
         $last_name_parts = explode(' ', $ordering_name);
         $last_name = end($last_name_parts);
 
-        // Student suchen (per long_name oder name)
         $student_res = $conn->query("
             SELECT long_name 
             FROM STUDENT_TAB 
@@ -55,7 +52,6 @@ if ($row = $suggestion_res->fetch_assoc()) {
             $reason_text = "Student and ordering party share the same last name.";
         }
 
-        // Guardian suchen
         $guardian_res = $conn->query("
             SELECT CONCAT(first_name, ' ', last_name) AS fullname 
             FROM LEGAL_GUARDIAN_TAB 
@@ -128,6 +124,59 @@ if ($row = $suggestion_res->fetch_assoc()) {
     .btn:hover{opacity:.9;}
     #overlay {position: fixed;inset: 0;background: rgba(0,0,0,.4);display: none;z-index: 98;}
     #overlay.show {display:block;}
+
+    /* ---- Filter Panel ---- */
+    #filterPanel {
+      position: fixed;
+      top: 0;
+      right: -320px;
+      width: 320px;
+      height: 100%;
+      background: #fff;
+      box-shadow: -2px 0 8px rgba(0,0,0,.15);
+      transition: right 0.3s ease;
+      z-index: 999;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    #filterPanel.open { right: 0; }
+    #filterOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      display: none;
+      z-index: 998;
+    }
+    #filterOverlay.show { display: block; }
+    #filterPanel h2 {
+      font-family:'Montserrat',sans-serif;
+      font-size:18px;
+      margin:0 0 15px;
+      color:var(--red-dark);
+    }
+    .filter-input {
+      width:100%;
+      padding:8px 10px;
+      border:1px solid var(--gray-light);
+      border-radius:6px;
+      font-family:'Roboto',sans-serif;
+      font-size:14px;
+      margin-bottom:12px;
+    }
+    .filter-btn {
+      display:block;
+      width:100%;
+      padding:10px;
+      background:var(--red-main);
+      color:#fff;
+      border:none;
+      border-radius:6px;
+      font-weight:600;
+      cursor:pointer;
+      font-family:'Montserrat',sans-serif;
+      margin-top:10px;
+    }
+    .filter-btn:hover { background:var(--red-dark); }
   </style>
 </head>
 <body>
@@ -196,6 +245,16 @@ if ($row = $suggestion_res->fetch_assoc()) {
     </div>
   </main>
 
+  <!-- Filter Panel -->
+  <div id="filterPanel">
+    <h2>Filter Transactions</h2>
+    <input type="text" class="filter-input" placeholder="Search by student name">
+    <input type="text" class="filter-input" placeholder="Search by reference number">
+    <input type="text" class="filter-input" placeholder="Search by name">
+    <button class="filter-btn">Apply Filters</button>
+  </div>
+  <div id="filterOverlay"></div>
+
   <script>
     const sidebar   = document.getElementById("sidebar");
     const content   = document.getElementById("content");
@@ -203,6 +262,36 @@ if ($row = $suggestion_res->fetch_assoc()) {
     function openSidebar(){ sidebar.classList.add("open"); content.classList.add("shifted"); overlay.classList.add("show"); }
     function closeSidebar(){ sidebar.classList.remove("open"); content.classList.remove("shifted"); overlay.classList.remove("show"); }
     function toggleSidebar(){ sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); }
+
+    // ---- Filter Panel Toggle ----
+    document.addEventListener('DOMContentLoaded', () => {
+      const navLeft = document.querySelector('.nav-left');
+      if (navLeft && !document.getElementById('filterToggle')) {
+        const filterIcon = document.createElement('span');
+        filterIcon.id = 'filterToggle';
+        filterIcon.className = 'nav-icon material-icons-outlined';
+        filterIcon.textContent = 'filter_list';
+        filterIcon.style.cursor = 'pointer';
+        navLeft.appendChild(filterIcon);
+      }
+
+      const filterPanel = document.getElementById('filterPanel');
+      const filterOverlay = document.getElementById('filterOverlay');
+      const filterToggle = document.getElementById('filterToggle');
+
+      function closeFilter(){
+        filterPanel.classList.remove('open');
+        filterOverlay.classList.remove('show');
+      }
+
+      if (filterToggle) {
+        filterToggle.addEventListener('click', () => {
+          filterPanel.classList.toggle('open');
+          filterOverlay.classList.toggle('show');
+        });
+      }
+      filterOverlay.addEventListener('click', closeFilter);
+    });
   </script>
 </body>
 </html>
