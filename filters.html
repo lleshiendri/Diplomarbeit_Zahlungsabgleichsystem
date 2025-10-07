@@ -2,23 +2,52 @@
 <html lang="de">
 <head>
   <style>
-    /* FILTER PANEL */
-    .filter-panel {
-      position: fixed;
-      top: 60px; /* unterhalb der Navbar */
-      left: 0; right: 0;
-      background: #f9f9f9;
-      border-bottom: 1px solid var(--gray-light);
-      padding: 16px 24px;
-      display: none;
-      transition: margin-left 0.3s ease;
-      z-index: 1250;
-    }
-    .filter-panel.open { display: block; }
+/* FILTER PANEL — rechte Seitenleiste */
+.filter-panel {
+  position: fixed;
+  top: 70px;                  /* unter roter Navbar */
+  right: 0;                   /* Rechtsbündig */
+  height: calc(100% - 70px);  /* volle Höhe unter der Navbar */
+  width: 260px;               /* feste Breite für Sidebar-ähnlich */
+  background: #f9f9f9;
+  border-left: 1px solid var(--gray-light);
+  padding: 15px;
+  display: block;
+  transform: translateX(100%);  /* Start: komplett rausgeschoben */
+  transition: transform 0.3s ease;
+  z-index: 1250;
+  box-shadow: -2px 0 8px rgba(0,0,0,0.05);
+}
+
+.filter-panel.open {
+  transform: translateX(0);     /* Reinschieben von rechts */
+}
+
+/* Overlay bleibt wie gehabt */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .28s ease;
+  z-index: 1150;
+}
+.overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
     .filter-panel.shifted { margin-left: 260px; }
 
-    .filter-form { display:flex; flex-wrap:wrap; gap:24px; align-items:center; }
-    .filter-group { display:flex; flex-direction:column; min-width:160px; }
+    .filter-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.filter-group {
+  display: flex;
+  flex-direction: column;
+}
     .filter-input,.filter-select{
       padding:6px 10px; border:1px solid #ccc; border-radius:6px; min-height:34px;
     }
@@ -42,16 +71,6 @@
       width:14px; height:14px; border-radius:50%;
       background:var(--red-main); border:none;
     }
-
-    /* OVERLAY */
-    .overlay{
-      position:fixed; inset:0;
-      background:rgba(0,0,0,.25);
-      opacity:0; pointer-events:none;
-      transition:opacity .28s ease;
-      z-index:1150;
-    }
-    .overlay.show{ opacity:1; pointer-events:auto; }
   </style>
 </head>
 <body>
