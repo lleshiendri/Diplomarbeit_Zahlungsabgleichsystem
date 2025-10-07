@@ -2,7 +2,7 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-require 'navigator.html'; 
+require 'navigator.php'; 
 require 'filters.html'; 
 require 'db_connect.php';
 
@@ -190,7 +190,7 @@ if ($row = $suggestion_res->fetch_assoc()) {
             <div style="margin-top:12px;display:flex;gap:10px;">
               <button class="btn btn-primary"><span class="material-icons-outlined">check_circle</span> Confirm</button>
               <button class="btn btn-ghost"><span class="material-icons-outlined">edit</span> Edit</button>
-            </div>
+            </div>  
           </div>
         </aside>
       </div>
