@@ -74,6 +74,7 @@ if ($row = $suggestion_res->fetch_assoc()) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Unconfirmed</title>
 
+  <!-- Fonts & Icons -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Roboto:wght@400;500&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
 
@@ -95,88 +96,129 @@ if ($row = $suggestion_res->fetch_assoc()) {
       color:black;
       background:#fff;
     }
-    #content {transition: margin-left 0.3s ease;margin-left: 0;padding: 100px 30px 60px;}
+    #content {
+      transition: margin-left 0.3s ease;
+      margin-left: 0;
+      padding: 100px 30px 60px;
+    }
     #content.shifted { margin-left: 260px; }
 
-    .page h1{font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;color:var(--red-dark);letter-spacing:.5px;margin:0 0 8px;}
-    .subtitle{display:inline-block;margin:0 0 23px;padding:6px 10px;font-size:14px;color:#444;background:#fff;border-radius:8px;box-shadow:var(--shadow);}
-    .layout{display:grid;grid-template-columns: 1fr var(--sidebar-w);gap:20px;align-items:start;}
-    .card{border:1px solid var(--gray-light);border-radius:var(--radius);background:#fff;box-shadow:var(--shadow);padding:20px;}
+    .page h1{
+      font-family:'Space Grotesk',sans-serif;
+      font-size:28px;
+      font-weight:700;
+      color:var(--red-dark);
+      letter-spacing:.5px;
+      margin:0 0 8px;
+    }
+    .subtitle{
+      display:inline-block;
+      margin:0 0 23px;
+      padding:6px 10px;
+      font-size:14px;
+      color:#444;
+      background:#fff;
+      border-radius:8px;
+      box-shadow:var(--shadow);
+    }
+    .layout{
+      display:grid;
+      grid-template-columns: 1fr var(--sidebar-w);
+      gap:20px;
+      align-items:start;
+    }
+    .card{
+      border:1px solid var(--gray-light);
+      border-radius:var(--radius);
+      background:#fff;
+      box-shadow:var(--shadow);
+      padding:20px;
+    }
 
     table{width:100%;border-collapse:collapse;font-size:14px;}
-    thead th{font-family:'Montserrat',sans-serif;text-align:left;padding:12px 14px;background:var(--red-light);color:#333;font-weight:600;}
-    tbody td{font-family:'Roboto',sans-serif;padding:12px 14px;border-top:1px solid var(--gray-light);}
+    thead th{
+      font-family:'Montserrat',sans-serif;
+      text-align:left;
+      padding:12px 14px;
+      background:var(--red-light);
+      color:#333;
+      font-weight:600;
+    }
+    tbody td{
+      font-family:'Roboto',sans-serif;
+      padding:12px 14px;
+      border-top:1px solid var(--gray-light);
+    }
     .amount{text-align:right;font-variant-numeric:tabular-nums;}
-    tbody tr:hover {background-color:#f5f5f5;transition:background-color 0.2s ease-in-out;cursor:pointer;}
+    tbody tr:hover {
+      background-color:#f5f5f5;
+      transition:background-color 0.2s ease-in-out;
+      cursor:pointer;
+    }
 
     .stack{display:flex;flex-direction:column;gap:16px;}
     .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-    .stat{border:1px solid var(--gray-light);border-radius:var(--radius);background:#fff;box-shadow:var(--shadow);padding:10px 12px;text-align:center;}
-    .stat .num{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:28px;line-height:1;margin-bottom:6px;color:#000;}
-    .stat .label{font-size:12px;color:#333;border-top:1px solid var(--gray-light);padding-top:6px;font-family:'Roboto',sans-serif;}
+    .stat{
+      border:1px solid var(--gray-light);
+      border-radius:var(--radius);
+      background:#fff;
+      box-shadow:var(--shadow);
+      padding:10px 12px;
+      text-align:center;
+    }
+    .stat .num{
+      font-family:'Space Grotesk',sans-serif;
+      font-weight:700;
+      font-size:28px;
+      line-height:1;
+      margin-bottom:6px;
+      color:#000;
+    }
+    .stat .label{
+      font-size:12px;
+      color:#333;
+      border-top:1px solid var(--gray-light);
+      padding-top:6px;
+      font-family:'Roboto',sans-serif;
+    }
 
     .side-title{font-family:'Montserrat',sans-serif;font-weight:600;color:#333;font-size:15px;margin:0 0 8px;}
-    .side-input{font-family:'Roboto',sans-serif;width:100%;border:1px solid var(--gray-light);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:14px;color:grey;background:#fff;}
+    .side-input{
+      font-family:'Roboto',sans-serif;
+      width:100%;
+      border:1px solid var(--gray-light);
+      border-radius:8px;
+      padding:10px 12px;
+      font-size:14px;
+      margin-bottom:14px;
+      color:grey;
+      background:#fff;
+    }
     .reason-text{font-family:'Roboto',sans-serif;font-size:13px;line-height:1.6;margin-top:6px;color:#333;}
-    .btn{font-family:'Roboto',sans-serif;appearance:none;border:none;cursor:pointer;border-radius:6px;padding:8px 14px;font-weight:500;font-size:13px;display:inline-flex;align-items:center;gap:6px;}
+    .btn{
+      font-family:'Roboto',sans-serif;
+      appearance:none;
+      border:none;
+      cursor:pointer;
+      border-radius:6px;
+      padding:8px 14px;
+      font-weight:500;
+      font-size:13px;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
     .btn-primary{background:var(--red-main);color:#fff;}
     .btn-ghost{background:#fff;color:#333;border:1px solid var(--gray-light);}
     .btn:hover{opacity:.9;}
-    #overlay {position: fixed;inset: 0;background: rgba(0,0,0,.4);display: none;z-index: 98;}
-    #overlay.show {display:block;}
-
-    /* ---- Filter Panel ---- */
-    #filterPanel {
-      position: fixed;
-      top: 0;
-      right: -320px;
-      width: 320px;
-      height: 100%;
-      background: #fff;
-      box-shadow: -2px 0 8px rgba(0,0,0,.15);
-      transition: right 0.3s ease;
-      z-index: 999;
-      padding: 20px;
-      box-sizing: border-box;
-    }
-    #filterPanel.open { right: 0; }
-    #filterOverlay {
+    #overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.4);
+      background: rgba(0,0,0,.4);
       display: none;
-      z-index: 998;
+      z-index: 98;
     }
-    #filterOverlay.show { display: block; }
-    #filterPanel h2 {
-      font-family:'Montserrat',sans-serif;
-      font-size:18px;
-      margin:0 0 15px;
-      color:var(--red-dark);
-    }
-    .filter-input {
-      width:100%;
-      padding:8px 10px;
-      border:1px solid var(--gray-light);
-      border-radius:6px;
-      font-family:'Roboto',sans-serif;
-      font-size:14px;
-      margin-bottom:12px;
-    }
-    .filter-btn {
-      display:block;
-      width:100%;
-      padding:10px;
-      background:var(--red-main);
-      color:#fff;
-      border:none;
-      border-radius:6px;
-      font-weight:600;
-      cursor:pointer;
-      font-family:'Montserrat',sans-serif;
-      margin-top:10px;
-    }
-    .filter-btn:hover { background:var(--red-dark); }
+    #overlay.show {display:block;}
   </style>
 </head>
 <body>
@@ -245,17 +287,11 @@ if ($row = $suggestion_res->fetch_assoc()) {
     </div>
   </main>
 
-  <!-- Filter Panel -->
-  <div id="filterPanel">
-    <h2>Filter Transactions</h2>
-    <input type="text" class="filter-input" placeholder="Search by student name">
-    <input type="text" class="filter-input" placeholder="Search by reference number">
-    <input type="text" class="filter-input" placeholder="Search by name">
-    <button class="filter-btn">Apply Filters</button>
-  </div>
-  <div id="filterOverlay"></div>
+  <!-- Filter Panel aus externer Datei -->
+  <?php include 'filters.html'; ?>
 
   <script>
+    // Sidebar Steuerung
     const sidebar   = document.getElementById("sidebar");
     const content   = document.getElementById("content");
     const overlay   = document.getElementById("overlay");
@@ -263,7 +299,7 @@ if ($row = $suggestion_res->fetch_assoc()) {
     function closeSidebar(){ sidebar.classList.remove("open"); content.classList.remove("shifted"); overlay.classList.remove("show"); }
     function toggleSidebar(){ sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); }
 
-    // ---- Filter Panel Toggle ----
+    // Filter-Icon dynamisch einfügen & Steuerung aktivieren
     document.addEventListener('DOMContentLoaded', () => {
       const navLeft = document.querySelector('.nav-left');
       if (navLeft && !document.getElementById('filterToggle')) {
@@ -275,22 +311,23 @@ if ($row = $suggestion_res->fetch_assoc()) {
         navLeft.appendChild(filterIcon);
       }
 
-      const filterPanel = document.getElementById('filterPanel');
-      const filterOverlay = document.getElementById('filterOverlay');
-      const filterToggle = document.getElementById('filterToggle');
-
-      function closeFilter(){
-        filterPanel.classList.remove('open');
-        filterOverlay.classList.remove('show');
-      }
+      const filterPanel = document.getElementById("filterPanel");
+      const filterOverlay = document.getElementById("filterOverlay");
+      const filterToggle = document.getElementById("filterToggle");
 
       if (filterToggle) {
-        filterToggle.addEventListener('click', () => {
-          filterPanel.classList.toggle('open');
-          filterOverlay.classList.toggle('show');
+        filterToggle.addEventListener("click", () => {
+          filterPanel.classList.toggle("open");
+          filterOverlay.classList.toggle("show");
         });
       }
-      filterOverlay.addEventListener('click', closeFilter);
+
+      if (filterOverlay) {
+        filterOverlay.addEventListener("click", () => {
+          filterPanel.classList.remove("open");
+          filterOverlay.classList.remove("show");
+        });
+      }
     });
   </script>
 </body>
