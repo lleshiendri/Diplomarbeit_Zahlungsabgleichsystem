@@ -151,7 +151,7 @@ require 'filters.html';
 </aside>
 
 <!-- FILTER PANEL nur bei unconfirmed -->
-<?php if ($currentPage === 'unconfirmed.php'): ?>
+<?php if ($currentPage === 'unconfirmed.php' OR $currentPage === 'add_transactions.php' OR $currentPage === 'import_files.php'): ?>
   <div id="filterPanel">
     <?php include 'filters.html'; ?>
   </div>
