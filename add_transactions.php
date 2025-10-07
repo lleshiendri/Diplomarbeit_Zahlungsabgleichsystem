@@ -2,7 +2,7 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-require 'navigator.html'; 
+require 'navigator.php'; 
 require 'db_connect.php';
 
 // 1) Datensatz speichern bei Formularabsendung
