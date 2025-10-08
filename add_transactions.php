@@ -231,22 +231,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     overlay && overlay.classList.remove("show");
   }
   function toggleSidebar(){ (sidebar && sidebar.classList.contains("open")) ? closeSidebar() : openSidebar(); }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    const navLeft = document.querySelector('.nav-left'); 
-    if (navLeft) {
-      if (!document.getElementById('homeLink')) {
-        const homeLink = document.createElement('a');
-        homeLink.id = 'homeLink';
-        homeLink.href = 'dashboard.php';
-        homeLink.className = 'nav-icon material-icons-outlined';
-        homeLink.textContent = 'home';
-        homeLink.style.textDecoration = 'none';
-        homeLink.style.color = 'white';
-        navLeft.appendChild(homeLink);
-      }
-    }
-  });
 </script>
 </body>
 </html>
