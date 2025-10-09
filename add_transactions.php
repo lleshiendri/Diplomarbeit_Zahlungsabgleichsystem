@@ -19,9 +19,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($ref_number && $ordering_name && $transaction_date && $amount) {
         $stmt = $conn->prepare("
-            INSERT INTO INVOICE_TAB (reference_number, beneficairy, reference, processing_date, amount_total) 
+            INSERT INTO INVOICE_TAB 
+                (reference_number, beneficiary, reference, processing_date, amount_total) 
             VALUES (?, ?, ?, ?, ?)
         ");
+
         if ($stmt) {
             $stmt->bind_param("ssssd", $ref_number, $ordering_name, $description, $transaction_date, $amount);
             if ($stmt->execute()) {
