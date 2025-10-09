@@ -2,22 +2,20 @@
 require 'db_connect.php';
 require 'navigator.php';
 
-// WIDGETS
 $students_res = $conn->query("SELECT COUNT(*) AS c FROM STUDENT_TAB");
-$students = $students_res->fetch_assoc()['c'];
+$students = $students_res->fetch_assoc()['c'] ?? 0;
 
 $critical_res = $conn->query("SELECT COUNT(*) AS c FROM STUDENT_TAB WHERE left_to_pay > 1000");
-$critical = $critical_res->fetch_assoc()['c'];
+$critical = $critical_res->fetch_assoc()['c'] ?? 0;
 
 $transactions_res = $conn->query("SELECT COUNT(*) AS c FROM INVOICE_TAB");
-$total_transactions = $transactions_res->fetch_assoc()['c'];
+$total_transactions = $transactions_res->fetch_assoc()['c'] ?? 0;
 
 $left_res = $conn->query("SELECT SUM(left_to_pay) AS s FROM STUDENT_TAB");
 $left_to_pay = $left_res->fetch_assoc()['s'] ?? 0;
 
-// MESSAGES
 $unconfirmed_res = $conn->query("SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE processing_date IS NULL");
-$unconfirmed = $unconfirmed_res->fetch_assoc()['c'];
+$unconfirmed = $unconfirmed_res->fetch_assoc()['c'] ?? 0;
 
 $processed_week_res = $conn->query("
     SELECT COUNT(*) AS c 
@@ -25,13 +23,12 @@ $processed_week_res = $conn->query("
     WHERE processing_date IS NOT NULL 
     AND YEARWEEK(processing_date, 1) = YEARWEEK(CURDATE(), 1)
 ");
-$processed_week = $processed_week_res->fetch_assoc()['c'];
+$processed_week = $processed_week_res->fetch_assoc()['c'] ?? 0;
 
 $last_import_res = $conn->query("SELECT MAX(processing_date) AS last FROM INVOICE_TAB");
 $last_import = $last_import_res->fetch_assoc()['last'] ?? null;
 $last_import_display = $last_import ? date("d.m.Y", strtotime($last_import)) : "Keine Daten";
 
-// TRANSACTION SUMMARY (z.B. Durchschnittliche Verzögerung)
 $delay_res = $conn->query("
     SELECT AVG(DATEDIFF(processing_date, CURDATE())) AS avg_delay 
     FROM INVOICE_TAB 
@@ -39,11 +36,10 @@ $delay_res = $conn->query("
 ");
 $avg_delay = round($delay_res->fetch_assoc()['avg_delay'] ?? 0, 1);
 
-// CHART DATA (Summe Beträge pro Monat)
 $chart_data = [];
 for ($m = 1; $m <= 12; $m++) {
     $res = $conn->query("
-        SELECT IFNULL(SUM(amount_total),0) AS total
+        SELECT IFNULL(SUM(amount_total), 0) AS total
         FROM INVOICE_TAB
         WHERE MONTH(processing_date) = $m
     ");
