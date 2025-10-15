@@ -121,7 +121,7 @@ require 'filters.html';
     <span class="nav-icon material-icons-outlined">notifications</span>
     <span class="nav-icon material-icons-outlined">priority_high</span>
 
-    <?php if ($currentPage !== 'dashboard.php'): ?>
+    <?php if ($currentPage != 'dashboard.php'): ?>
       <span class="nav-icon material-icons-outlined" id="filterToggle">filter_list</span>
       <a href="dashboard.php" class="nav-icon material-icons-outlined" style="text-decoration:none;color:white;">home</a>
     <?php endif; ?>
