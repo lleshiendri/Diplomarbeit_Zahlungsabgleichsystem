@@ -5,9 +5,14 @@ ini_set('display_errors', 1);
 require 'navigator.php'; 
 require 'db_connect.php';
 
-// 1) Tabelle: Unbestätigte Transaktionen
+// 1) Unbestätigte Transaktionen aus INVOICE_TAB
 $transactions_sql = "
-    SELECT reference_number, beneficairy, reference, amount_total, processing_date
+    SELECT 
+        reference_number,
+        beneficairy,              -- in DB mit Tippfehler so vorhanden!
+        reference,
+        amount_total,
+        processing_date
     FROM INVOICE_TAB
     WHERE processing_date IS NULL
     ORDER BY id DESC
@@ -15,17 +20,20 @@ $transactions_sql = "
 ";
 $transactions_result = $conn->query($transactions_sql);
 
-// 2) Stat-Karten (Pending / Confirmed)
+// 2) Stat-Karten (Pending/Confirmed)
 $pending_sql = "SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE processing_date IS NULL";
-$pending = $conn->query($pending_sql)->fetch_assoc()['c'];
+$pending_res = $conn->query($pending_sql);
+$pending = $pending_res ? (int)$pending_res->fetch_assoc()['c'] : 0;
 
 $confirmed_sql = "SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE processing_date IS NOT NULL";
-$confirmed = $conn->query($confirmed_sql)->fetch_assoc()['c'];
+$confirmed_res = $conn->query($confirmed_sql);
+$confirmed = $confirmed_res ? (int)$confirmed_res->fetch_assoc()['c'] : 0;
 
-// 3) Vorschläge (Student / Legal Guardian)
-$suggestion_student = "";
-$suggestion_guardian = "";
-$reason_text = "";
+// 3) Vorschläge: Passender Student/Legal Guardian
+// anhand des Ordering Names (beneficairy)
+$suggestion_student   = "";
+$suggestion_guardian  = "";
+$reason_text          = "";
 
 $suggestion_sql = "
     SELECT beneficairy
@@ -35,29 +43,35 @@ $suggestion_sql = "
     LIMIT 1
 ";
 $suggestion_res = $conn->query($suggestion_sql);
-if ($row = $suggestion_res->fetch_assoc()) {
+
+if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
     $ordering_name = trim($row['beneficairy']);
     if (!empty($ordering_name)) {
-        $last_name_parts = explode(' ', $ordering_name);
+        // Nachname aus dem Ordering Name extrahieren (letztes Wort)
+        $last_name_parts = preg_split('/\s+/', $ordering_name);
         $last_name = end($last_name_parts);
 
-        $student_res = $conn->query("
-            SELECT long_name 
-            FROM STUDENT_TAB 
+        // Student suchen: anhand von long_name
+        $student_sql = "
+            SELECT long_name
+            FROM STUDENT_TAB
             WHERE long_name LIKE '%".$conn->real_escape_string($last_name)."%'
             LIMIT 1
-        ");
+        ";
+        $student_res = $conn->query($student_sql);
         if ($student_res && $student_row = $student_res->fetch_assoc()) {
             $suggestion_student = $student_row['long_name'];
             $reason_text = "Student and ordering party share the same last name.";
         }
 
-        $guardian_res = $conn->query("
-            SELECT CONCAT(first_name, ' ', last_name) AS fullname 
-            FROM LEGAL_GUARDIAN_TAB 
+        // Legal Guardian suchen: anhand von last_name
+        $guardian_sql = "
+            SELECT CONCAT(first_name, ' ', last_name) AS fullname
+            FROM LEGAL_GUARDIAN_TAB
             WHERE last_name = '".$conn->real_escape_string($last_name)."'
             LIMIT 1
-        ");
+        ";
+        $guardian_res = $conn->query($guardian_sql);
         if ($guardian_res && $guardian_row = $guardian_res->fetch_assoc()) {
             $suggestion_guardian = $guardian_row['fullname'];
             if (empty($reason_text)) {
