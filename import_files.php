@@ -458,7 +458,7 @@ require 'navigator.php';
             <?php
             // Fetch imported transaction files from the database
             $result = $conn->query("
-                SELECT id, filename, filepath 
+                SELECT id, filename, filepath, imported_at 
                 FROM IMPORT_DOCUMENT_TAB 
                 WHERE type = 'Transactions'
                 ORDER BY id DESC
@@ -466,13 +466,12 @@ require 'navigator.php';
 
             if ($result && $result->num_rows > 0) {
                 // Use mock date and user for now (adjust when real data is available)
-                $mockDate = '2025-01-01 12:00:00';
                 $mockUser = 'admin';
 
                 while ($row = $result->fetch_assoc()) {
                     echo '<tr>';
                     echo '<td>' . htmlspecialchars($row['filename']) . '</td>';
-                    echo '<td>' . htmlspecialchars($mockDate) . '</td>';
+                    echo '<td>' . htmlspecialchars($row['imported_at']) . '</td>';
                     echo '<td>' . htmlspecialchars($mockUser) . '</td>';
                     echo '<td><a href="' . htmlspecialchars($row['filepath']) . '" target="_blank" class="download-btn">Download</a></td>';
                     echo '</tr>';
@@ -503,7 +502,7 @@ require 'navigator.php';
             <?php
             // Fetch imported student files from the database
             $result = $conn->query("
-            SELECT id, filename, filepath 
+            SELECT id, filename, filepath, imported_at 
             FROM IMPORT_DOCUMENT_TAB 
             WHERE type = 'Students'
             ORDER BY id DESC
@@ -511,13 +510,12 @@ require 'navigator.php';
 
         if ($result && $result->num_rows > 0) {
             // Use a static mock date and user for now
-            $mockDate = '2025-01-01 12:00:00';
             $mockUser = 'admin';
 
             while ($row = $result->fetch_assoc()) {
                 echo '<tr>';
                 echo '<td>' . htmlspecialchars($row['filename']) . '</td>';
-                echo '<td>' . htmlspecialchars($mockDate) . '</td>';
+                echo '<td>' . htmlspecialchars($row['imported_at']) . '</td>';
                 echo '<td>' . htmlspecialchars($mockUser) . '</td>';
                 echo '<td><a href="' . htmlspecialchars($row['filepath']) . '" target="_blank" class="download-btn">Download</a></td>';
                 echo '</tr>';
@@ -548,7 +546,7 @@ require 'navigator.php';
             <?php
             // Fetch imported legal guardian files from the database
             $result = $conn->query("
-                SELECT id, filename, filepath 
+                SELECT id, filename, filepath, imported_at 
                 FROM IMPORT_DOCUMENT_TAB 
                 WHERE type = 'LegalGuardians'
                 ORDER BY id DESC
@@ -556,13 +554,12 @@ require 'navigator.php';
 
             if ($result && $result->num_rows > 0) {
                 // Use mock date and user for now
-                $mockDate = '2025-01-01 12:00:00';
                 $mockUser = 'admin';
 
                 while ($row = $result->fetch_assoc()) {
                     echo '<tr>';
                     echo '<td>' . htmlspecialchars($row['filename']) . '</td>';
-                    echo '<td>' . htmlspecialchars($mockDate) . '</td>';
+                    echo '<td>' . htmlspecialchars($row['imported_at']) . '</td>';
                     echo '<td>' . htmlspecialchars($mockUser) . '</td>';
                     echo '<td><a href="' . htmlspecialchars($row['filepath']) . '" target="_blank" class="download-btn">Download</a></td>';
                     echo '</tr>';
