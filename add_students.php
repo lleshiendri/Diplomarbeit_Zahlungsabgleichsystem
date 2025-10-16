@@ -97,6 +97,11 @@ if ($result && $result->num_rows > 0) {
             padding: 100px 30px 30px; 
         }
 
+        #content.shifted {
+            margin-left: 260px; 
+            transition: margin-left 0.3s ease;
+        }
+
         h1{
             font-family:'Space Grotesk',sans-serif;
             font-weight:700;
@@ -264,8 +269,8 @@ if ($result && $result->num_rows > 0) {
                         <span class="material-icons-outlined">school</span>
                         <select id="class_id" name="class_id" required>
                             <option value="" disabled selected>-- Select Class --</option>
-                            <?php foreach ($classes as $class): ?>
-                                <!--<option value="<?= htmlspecialchars($class['id']) ?>">-->
+                                <?php foreach ($classes as $class): ?>
+                                <option value="<?= htmlspecialchars($class['id']) ?>">
                                     <?= htmlspecialchars($class['name']) ?> (ID: <?= htmlspecialchars($class['id']) ?>)
                                 </option>
                             <?php endforeach; ?>
@@ -326,6 +331,33 @@ if ($result && $result->num_rows > 0) {
         </table>
     <?php endif; ?>
 </div>
+<script>
+  const sidebar = document.getElementById("sidebar");
+  const overlay = document.getElementById("overlay");
+  const menuIcon = document.querySelector(".menu-icon");
+  const content = document.getElementById("content");
 
+  let clickTimer = null;
+
+  function openSidebar() {
+    sidebar.classList.add("open");
+    overlay.classList.add("show");
+    content.classList.add("shifted");
+  }
+
+  function closeSidebar() {
+    sidebar.classList.remove("open");
+    overlay.classList.remove("show");
+    content.classList.remove("shifted");
+  }
+
+  function toggleSidebar() {
+    if (sidebar.classList.contains("open")) {
+      closeSidebar();
+    } else {
+      openSidebar();
+    }
+  }
+</script>
 </body>
 </html>
