@@ -135,6 +135,7 @@ require 'filters.html';
     <header>MENU <span class="close-btn" onclick="closeSidebar()">&times;</span></header>
     <nav>
       <a href="add_transactions.php"><span class="material-icons-outlined">swap_horiz</span> Add Transaction</a>
+      <a href="add_students.php"><span class="material-icons-outlined">group_add</span> Add Students</a>
       <a href="#"><span class="material-icons-outlined">school</span> Student State</a>
       <a href="#"><span class="material-icons-outlined">schedule</span> Latencies</a>
       <a href="import_files.php"><span class="material-icons-outlined">upload_file</span> Import File</a>
