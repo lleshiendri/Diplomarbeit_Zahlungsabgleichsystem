@@ -1,26 +1,59 @@
 <?php
 session_start();
 
-// Example: Replace this with your actual DB check later
-$valid_username = "admin";
-$valid_password = "1234";
+// Include database connection ($conn - MySQLi)
+require_once __DIR__ . '/db_connect.php';
 
+// If user is already logged in, redirect to dashboard
+if (isset($_SESSION['user_id'])) {
+	header('Location: dashboard.php');
+	exit;
+}
+
+// Initialize error message
 $error = "";
 
+// Handle form submission
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-    $username = trim($_POST["username"] ?? "");
-    $password = trim($_POST["password"] ?? "");
+	// Get and sanitize inputs
+	$username = trim($_POST['username'] ?? ''); // this field captures email in current schema
+	$password = trim($_POST['password'] ?? '');
+	$sanitizedUsername = htmlspecialchars($username, ENT_QUOTES, 'UTF-8');
+	$sanitizedPassword = htmlspecialchars($password, ENT_QUOTES, 'UTF-8');
 
-    if ($username === $valid_username && $password === $valid_password) {
-        // Store session info
-        $_SESSION["user"] = $username;
+	if ($username !== '' && $password !== '') {
+		// Use prepared statement to find user by email and fetch role
+		$stmt = $conn->prepare("SELECT id, email, password, role FROM USER_TAB WHERE email = ? LIMIT 1");
+		if ($stmt) {
+			$stmt->bind_param('s', $username);
+			$stmt->execute();
+			$result = $stmt->get_result();
 
-        // Redirect to dashboard
-        header("Location: http://buchhaltung.htl-projekt.com/dashboard.php");
-        exit;
-    } else {
-        $error = "Invalid username or password.";
-    }
+			if ($result && $result->num_rows === 1) {
+				$user = $result->fetch_assoc();
+				// Verify password (password column should store password_hash)
+				if (password_verify($password, $user['password'])) {
+					// Authentication successful: store user data in session
+					$_SESSION['user_id'] = (int)$user['id'];
+					$_SESSION['username'] = $sanitizedUsername; // store sanitized email
+					$_SESSION['role'] = isset($user['role']) && $user['role'] !== null ? $user['role'] : 'Reader';
+
+					// Redirect to dashboard
+					header('Location: dashboard.php');
+					exit;
+				}
+			}
+
+			// Authentication failed
+			$error = 'Invalid username or password.';
+			$stmt->close();
+		} else {
+			// Statement preparation failed
+			$error = 'An error occurred. Please try again later.';
+		}
+	} else {
+		$error = 'Please enter username and password.';
+	}
 }
 ?>
 
