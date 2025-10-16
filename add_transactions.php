@@ -11,21 +11,24 @@ $success_message = "";
 $error_message = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $ref_number       = trim($_POST['ref_number'] ?? '');
-    $ordering_name    = trim($_POST['ordering_name'] ?? '');
-    $transaction_date = $_POST['transaction_date'] ?? '';
-    $description      = trim($_POST['description'] ?? '');
+    // htmlspecialchars zum Schutz gegen XSS
+    $ref_number       = htmlspecialchars(trim($_POST['ref_number'] ?? ''), ENT_QUOTES, 'UTF-8');  
+    $ordering_name    = htmlspecialchars(trim($_POST['ordering_name'] ?? ''), ENT_QUOTES, 'UTF-8');  
+    $transaction_date = htmlspecialchars($_POST['transaction_date'] ?? '', ENT_QUOTES, 'UTF-8');  
+    $description      = htmlspecialchars(trim($_POST['description'] ?? ''), ENT_QUOTES, 'UTF-8');  
     $amount           = isset($_POST['amount']) ? (float) $_POST['amount'] : 0;
 
     if ($ref_number && $ordering_name && $transaction_date && $amount) {
+        // Prepared Statement verhindert SQL-Injection
         $stmt = $conn->prepare("
             INSERT INTO INVOICE_TAB 
                 (reference_number, beneficiary, reference, processing_date, amount_total) 
             VALUES (?, ?, ?, ?, ?)
-        ");
+        ");  
 
         if ($stmt) {
-            $stmt->bind_param("ssssd", $ref_number, $ordering_name, $description, $transaction_date, $amount);
+            // bind_param sichert Parameterbindung 
+            $stmt->bind_param("ssssd", $ref_number, $ordering_name, $description, $transaction_date, $amount); 
             if ($stmt->execute()) {
                 $success_message = "Transaction was successfully added.";
             } else {
