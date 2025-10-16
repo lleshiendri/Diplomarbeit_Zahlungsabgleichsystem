@@ -2,7 +2,7 @@
 session_start();
 
 // Include database connection ($conn - MySQLi)
-require_once __DIR__ . '/db_connect.php';
+require_once '/db_connect.php';
 
 // If user is already logged in, redirect to dashboard
 if (isset($_SESSION['user_id'])) {
