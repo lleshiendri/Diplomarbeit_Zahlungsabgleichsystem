@@ -2,11 +2,11 @@
 session_start();
 
 // Include database connection ($conn - MySQLi)
-require_once 'db_connect.php';
+require_once '../db_connect.php';
 
 // If user is already logged in, redirect to dashboard
 if (isset($_SESSION['user_id'])) {
-	header('Location: dashboard.php');
+	header('Location: ../dashboard.php');
 	exit;
 }
 
@@ -16,41 +16,85 @@ $error = "";
 // Handle form submission
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
 	// Get and sanitize inputs
-	$username = trim($_POST['username'] ?? ''); // this field captures email in current schema
+	$username = trim($_POST['username'] ?? ''); // this field captures email or username
 	$password = trim($_POST['password'] ?? '');
 	$sanitizedUsername = htmlspecialchars($username, ENT_QUOTES, 'UTF-8');
 	$sanitizedPassword = htmlspecialchars($password, ENT_QUOTES, 'UTF-8');
 
 	if ($username !== '' && $password !== '') {
-		// Use prepared statement to find user by email and fetch role
+		// Try to find user by email first
+		$user = null;
 		$stmt = $conn->prepare("SELECT id, email, password, role FROM USER_TAB WHERE email = ? LIMIT 1");
 		if ($stmt) {
 			$stmt->bind_param('s', $username);
 			$stmt->execute();
 			$result = $stmt->get_result();
-
 			if ($result && $result->num_rows === 1) {
 				$user = $result->fetch_assoc();
-				// Verify password (password column should store password_hash)
-				if (password_verify($password, $user['password'])) {
-					// Authentication successful: store user data in session
-					$_SESSION['user_id'] = (int)$user['id'];
-					$_SESSION['username'] = $sanitizedUsername; // store sanitized email
-					$_SESSION['role'] = isset($user['role']) && $user['role'] !== null ? $user['role'] : 'Reader';
+			}
+			$stmt->close();
+		}
 
-					// Redirect to dashboard
-					header('Location: dashboard.php');
-					exit;
+		// If not found by email, try by username (if such a column exists)
+		if ($user === null) {
+			$stmt2 = $conn->prepare("SELECT id, email, password, role FROM USER_TAB WHERE username = ? LIMIT 1");
+			if ($stmt2) {
+				$stmt2->bind_param('s', $username);
+				$stmt2->execute();
+				$result2 = $stmt2->get_result();
+				if ($result2 && $result2->num_rows === 1) {
+					$user = $result2->fetch_assoc();
+				}
+				$stmt2->close();
+			}
+		}
+
+		if ($user !== null) {
+			$storedPassword = (string)$user['password'];
+			$authOk = false;
+
+			// Primary: verify using password_hash
+			if (password_verify($password, $storedPassword)) {
+				$authOk = true;
+				// Optionally rehash if algorithm parameters changed
+				if (password_needs_rehash($storedPassword, PASSWORD_DEFAULT)) {
+					$newHash = password_hash($password, PASSWORD_DEFAULT);
+					$rehashStmt = $conn->prepare("UPDATE USER_TAB SET password = ? WHERE id = ?");
+					if ($rehashStmt) {
+						$rehashStmt->bind_param('si', $newHash, $user['id']);
+						$rehashStmt->execute();
+						$rehashStmt->close();
+					}
+				}
+			} else {
+				// Fallback for legacy plaintext passwords stored in DB
+				if (hash_equals($storedPassword, $password)) {
+					$authOk = true;
+					// Immediately upgrade to a secure hash
+					$newHash = password_hash($password, PASSWORD_DEFAULT);
+					$upgradeStmt = $conn->prepare("UPDATE USER_TAB SET password = ? WHERE id = ?");
+					if ($upgradeStmt) {
+						$upgradeStmt->bind_param('si', $newHash, $user['id']);
+						$upgradeStmt->execute();
+						$upgradeStmt->close();
+					}
 				}
 			}
 
-			// Authentication failed
-			$error = 'Invalid username or password.';
-			$stmt->close();
-		} else {
-			// Statement preparation failed
-			$error = 'An error occurred. Please try again later.';
+			if ($authOk) {
+				// Authentication successful: store user data in session
+				$_SESSION['user_id'] = (int)$user['id'];
+				$_SESSION['username'] = $sanitizedUsername; // store sanitized identifier
+				$_SESSION['role'] = isset($user['role']) && $user['role'] !== null ? $user['role'] : 'Reader';
+
+				// Redirect to dashboard
+				header('Location: ../dashboard.php');
+				exit;
+			}
 		}
+
+		// Authentication failed
+		$error = 'Invalid username or password.';
 	} else {
 		$error = 'Please enter username and password.';
 	}
@@ -85,9 +129,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             <?php endif; ?>
 
             <form method="post" action="">
-                <div class="input-group">
-                    <input type="text" name="username" placeholder="Username" required>
-                </div>
+				<div class="input-group">
+					<input type="text" name="username" placeholder="Username or Email" required>
+				</div>
                 <div class="input-group password-group">
                     <input type="password" name="password" placeholder="Password" required>
                     <span class="toggle-password">
