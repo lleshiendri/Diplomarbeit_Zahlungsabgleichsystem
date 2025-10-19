@@ -1,4 +1,5 @@
 <?php
+require_once 'auth_check.php';
 require 'db_connect.php';
 require 'navigator.php';
 
