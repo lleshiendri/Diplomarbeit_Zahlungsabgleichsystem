@@ -9,7 +9,8 @@
 <body>
 
 <?php
-require "navigator.php"
+require "navigator.php";
+require "db_connect.php";
 ?>
 <div class="content">
     <h1 class="page-title">Student State</h1>
@@ -27,62 +28,39 @@ require "navigator.php"
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td>1001</td>
-                    <td>John Doe</td>
-                    <td>500.00 €</td>
-                    <td>800.00 €</td>
-                    <td>1300.00 €</td>
-                    <td>10/01/2025</td>
-                </tr>
-                <tr>
-                    <td>1002</td>
-                    <td>James Smith</td>
-                    <td>600.00 €</td>
-                    <td>700.00 €</td>
-                    <td>1300.00 €</td>
-                    <td>06/04/2025</td>
-                </tr>
-                <tr>
-                    <td>1003</td>
-                    <td>Michael Brown</td>
-                    <td>200.00 €</td>
-                    <td>1100.00 €</td>
-                    <td>1300.00 €</td>
-                    <td>22/06/2025</td>
-                </tr>
-                <tr>
-                    <td>1004</td>
-                    <td>Emily Johnson</td>
-                    <td>1300.00 €</td>
-                    <td>0.00 €</td>
-                    <td>1300.00 €</td>
-                    <td>19/11/2025</td>
-                </tr>
-                <tr>
-                    <td>1005</td>
-                    <td>David Wilson</td>
-                    <td>1300.00 €</td>
-                    <td>0.00 €</td>
-                    <td>1300.00 €</td>
-                    <td>30/04/2025</td>
-                </tr>
-                <tr>
-                    <td>1006</td>
-                    <td>Christofer White</td>
-                    <td>900.00 €</td>
-                    <td>500.00 €</td>
-                    <td>1300.00 €</td>
-                    <td>15/09/2025</td>
-                </tr>
-                <tr>
-                    <td>1007</td>
-                    <td>Yuta Lee</td>
-                    <td>400.00 €</td>
-                    <td>900.00 €</td>
-                    <td>1300.00 €</td>
-                    <td>19/03/2025</td>
-                </tr>
+                 <?php
+            // Fetch students from database
+            $result = $conn->query("
+                SELECT extern_key AS student_id, long_name AS student_name
+                FROM STUDENT_TAB
+                ORDER BY id ASC
+            ");
+
+            if ($result && $result->num_rows > 0) {
+
+                while ($row = $result->fetch_assoc()) {
+                    // Generate mock data
+                    $totalAmount = 1300;
+                    $amountPaid  = rand(0, $totalAmount);
+                    $leftToPay   = $totalAmount - $amountPaid;
+
+                    // Generate a random mock date between Jan–Nov 2025
+                    $timestamp = mt_rand(strtotime('2025-01-01'), strtotime('2025-11-30'));
+                    $mockDate  = date('d/m/Y', $timestamp);
+
+                    echo '<tr>';
+                    echo '<td>' . htmlspecialchars($row['student_id']) . '</td>';
+                    echo '<td>' . htmlspecialchars($row['student_name']) . '</td>';
+                    echo '<td>' . number_format($amountPaid, 2, ',', '.') . ' €</td>';
+                    echo '<td>' . number_format($leftToPay, 2, ',', '.') . ' €</td>';
+                    echo '<td>' . number_format($totalAmount, 2, ',', '.') . ' €</td>';
+                    echo '<td>' . htmlspecialchars($mockDate) . '</td>';
+                    echo '</tr>';
+                }
+            } else {
+                echo '<tr><td colspan="6" style="text-align:center; color:#888;">No students found</td></tr>';
+            }
+            ?>
             </tbody>
         </table>
     </div>

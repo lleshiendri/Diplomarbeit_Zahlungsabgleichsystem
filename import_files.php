@@ -94,40 +94,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                 if ($fileType === 'Students') {
                 $filePath = $destination;
 
-                    if (($handle = fopen($filePath, "r")) !== FALSE) {
-                        // Read header row
-                        $header = fgetcsv($handle, 1000, ",");
+                if (($handle = fopen($filePath, "r")) !== FALSE) {
+                    // Read header row
+                    $header = fgetcsv($handle, 1000, ",");
 
-                        // Prepare insert statement for STUDENT table
-                        $stmtStudent = $conn->prepare("
-                            INSERT INTO STUDENT_TAB (forename, name, long_name, birth_date, left_to_pay, additional_payments_status)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                        ");
+                    // Prepare insert statement for STUDENT_TAB
+                    $stmtStudent = $conn->prepare("
+                        INSERT INTO STUDENT_TAB (
+                            name, long_name, forename, gender, 
+                            birth_date, entry_date, exit_date,
+                            description, second_ID, extern_key, email
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
 
-                        while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
-                            // Map CSV columns to variables
-                            $forename = $data[0] ?? null;
-                            $name = $data[1] ?? null;
-                            $long_name = $data[2] ?? null;
-                            $birth_date = normalizeDate($data[4] ?? null);
-                            $left_to_pay = $data[5] ?? 0;
-                            $additional_payments_status = $data[6] ?? 0;
-
-                            $stmtStudent->bind_param(
-                                "ssssdd",
-                                $forename,
-                                $name,
-                                $long_name,
-                                $birth_date,
-                                $left_to_pay,
-                                $additional_payments_status
-                            );
-                            $stmtStudent->execute();
-                        }
-
-                        fclose($handle);
+                    if (!$stmtStudent) {
+                        die('Prepare failed: ' . $conn->error);
                     }
+
+                    while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
+                        $name                        = $data[0] ?? null;
+                        $long_name                   = $data[1] ?? null;
+                        $forename                    = $data[2] ?? null;
+                        $gender                      = $data[3] ?? null;
+                        $birth_date                  = normalizeDate($data[4] ?? null);
+                        $entry_date                  = normalizeDate($data[6] ?? null);
+                        $exit_date                   = normalizeDate($data[7] ?? null);
+                        $description                 = $data[8] ?? null;
+                        $second_ID                   = $data[9] ?? null;
+                        $extern_key                  = $data[10] ?? null;
+                        $email                       = $data[14] ?? null;
+
+                        $stmtStudent->bind_param(
+                            "ssssssssdds",
+                            $name,                       
+                            $long_name,                   
+                            $forename,                   
+                            $gender, 
+                            $birth_date,
+                            $entry_date,
+                            $exit_date,
+                            $description,
+                            $second_ID,
+                            $extern_key,
+                            $email
+                            );
+
+                        $stmtStudent->execute();
+                    }
+
+                    fclose($handle);
+                    $stmtStudent->close();
                 }
+            }
 
                 if ($fileType === 'Transactions') {
                     $filePath = $destination;
