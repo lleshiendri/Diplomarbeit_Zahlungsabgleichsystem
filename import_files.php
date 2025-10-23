@@ -99,32 +99,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
 
                         // Prepare insert statement for STUDENT table
                         $stmtStudent = $conn->prepare("
-                            INSERT INTO STUDENT_TAB (forename, name, long_name, birth_date, left_to_pay, additional_payments_status)
-                            VALUES (?, ?, ?, ?, ?, ?)
+                            INSERT INTO STUDENT_TAB (forename, name, long_name, birth_date, left_to_pay, additional_payments_status, gender, entry_date, exit_date, description, second_ID, extern_key, email)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ");
 
                         while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
                             // Map CSV columns to variables
-                            $forename = $data[0] ?? null;
-                            $name = $data[1] ?? null;
-                            $long_name = $data[2] ?? null;
+                            $forename = $data[2] ?? null;
+                            $name = $data[0] ?? null;
+                            $long_name = $data[1] ?? null;
+                            $gender = $data[3] ?? null;
                             $birth_date = normalizeDate($data[4] ?? null);
-                            $left_to_pay = $data[5] ?? 0;
-                            $additional_payments_status = $data[6] ?? 0;
+                            $left_to_pay = 0;
+                            $additional_payments_status = 0;
+                            $entry_date = normalizeDate($data[6] ?? null);
+                            $exit_date = normalizeDate($data[7] ?? null);
+                            $description = $data[8] ?? null;
+                            $second_id = $data[9] ?? null;
+                            $extern_key = $data[10] ?? null;
+                            $email = $data[14] ?? null;
 
                             $stmtStudent->bind_param(
-                                "ssssdd",
+                                "ssssddssssdds",
                                 $forename,
                                 $name,
                                 $long_name,
                                 $birth_date,
                                 $left_to_pay,
-                                $additional_payments_status
+                                $additional_payments_status,
+                                $gender,
+                                $entry_date,
+                                $exit_date,
+                                $description,
+                                $second_ID,
+                                $extern_key,
+                                $email
                             );
                             $stmtStudent->execute();
                         }
 
                         fclose($handle);
+                        $stmtStudent->close();
                     }
                 }
 
@@ -182,33 +197,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                         // Prepare insert statement for LEGAL_GUARDIAN_TAB
                         $stmtGuardian = $conn->prepare("
                             INSERT INTO LEGAL_GUARDIAN_TAB 
-                                (first_name, last_name, phone, mobile, grade, email, registered_user_names, degree, postgrade, external_key) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                (first_name, last_name, phone, mobile, email, registered_user_names, external_key) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
                         ");
 
-                        while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
-                            $first_name = $data[0] ?? null;
+                        while (($data = fgetcsv($handle, 1000, "\t")) !== FALSE) {
+                            $first_name = $data[2] ?? null;
                             $last_name  = $data[1] ?? null;
-                            $phone      = $data[2] ?? null;
-                            $mobile     = $data[3] ?? null;
-                            $grade      = $data[4] ?? null;
-                            $email      = $data[5] ?? null;
-                            $reg_user   = $data[6] ?? null;
-                            $degree     = $data[7] ?? null;
-                            $postgrade  = $data[8] ?? null;
-                            $external   = $data[9] ?? null;
+                            $phone      = $data[7] ?? null;
+                            $mobile     = $data[8] ?? null;
+                            $email      = $data[6] ?? null;
+                            $reg_user   = $data[9] ?? null;
+                            $external   = $data[10] ?? null;
 
                             $stmtGuardian->bind_param(
-                                "ssssssssss",
+                                "sssssss",
                                 $first_name,
                                 $last_name,
                                 $phone,
                                 $mobile,
-                                $grade,
                                 $email,
                                 $reg_user,
-                                $degree,
-                                $postgrade,
                                 $external
                             );
                             $stmtGuardian->execute();
