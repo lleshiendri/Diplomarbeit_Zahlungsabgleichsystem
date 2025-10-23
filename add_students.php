@@ -231,7 +231,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
                 <div>
                     <label for="left_to_pay">Left to Pay (€)</label>
                     <div class="input-group">
-                        <span class="material-icons-outlined">attach_money</span>
+                        <span class="material-icons-outlined">euro</span>
                         <input type="number" step="0.01" id="left_to_pay" name="left_to_pay">
                     </div>
                 </div>
@@ -239,8 +239,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
             <button type="submit" name="add_student" class="save-btn">SUBMIT</button>
         </form>
     </div>
-</div>
-
 <script>
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("overlay");
