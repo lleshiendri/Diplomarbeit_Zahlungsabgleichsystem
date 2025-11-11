@@ -1,7 +1,7 @@
 <?php
 // Aktuelle Seite erkennen (z. B. "dashboard.php" oder "unconfirmed.php")
 $currentPage = basename($_SERVER['PHP_SELF']);
-require 'filters.html';
+require 'filters.php';
 ?>
 <!DOCTYPE html>
 <html lang="de">
