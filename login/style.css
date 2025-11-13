@@ -1,0 +1,179 @@
+/* Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Montserrat', sans-serif;
+}
+
+html, body {
+    height: 100%;
+    width: 100%;
+}
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #fff;
+    min-height: 100vh;
+}
+
+/* Fullscreen Container */
+.container {
+    display: flex;
+    width: 100%;
+    height: 100vh; /* full height */
+}
+
+/* Left Panel (Red) */
+.left-panel {
+    flex: 0 0 50%;
+    flex-shrink: 0;              /* 45% width of screen */
+    background: #D4463B;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 60px;
+}
+
+.logo-box {
+    max-width: 400px;
+}
+
+.logo-icon {
+    display: block;
+    font-size: 80px;
+    margin: 0 auto 24px;
+    height: 180px;
+    width: 240px;
+}
+
+.logo-box h1 {
+    font-size: 48px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 24px;
+}
+
+.logo-box p {
+    font-size: 20px;
+    line-height: 1.5;
+}
+
+/* Right Panel (White) */
+.right-panel {
+     flex: 0 0 50%;
+    flex-shrink: 0;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 80px;
+}
+
+.right-panel h2 {
+    color: #D4463B;
+    font-size: 36px;
+    margin-bottom: 40px;
+}
+
+/* Input Fields */
+form {
+    width: 100%;
+    max-width: 380px;  /* keeps form centered and not too wide */
+}
+
+.input-group {
+    width: 100%;
+    margin-bottom: 24px;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 16px;
+    border: 1px solid #aaa;
+    border-radius: 5px;
+    font-size: 17px;
+}
+
+.password-group {
+    position: relative;
+}
+
+.password-group .toggle-password {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.password-group .toggle-password img {
+    width: 22px;   /* 👈 set proper size */
+    height: 22px;
+    object-fit: contain;
+    display: block;
+}
+
+/* Button */
+.btn {
+    width: 100%;
+    padding: 16px;
+    background: #D4463B;
+    color: #fff;
+    font-weight: 600;
+    font-size: 18px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.btn:hover {
+    background: #B31E32;
+}
+
+/* Error Message */
+.error {
+    color: red;
+    margin-bottom: 18px;
+    font-size: 15px;
+}
+
+/* Responsive Adjustments for Small Screens */
+@media (max-width: 800px) {
+    .container {
+        flex-direction: column;   /* stack panels vertically */
+    }
+
+    .left-panel, .right-panel {
+        flex: none;
+        width: 100%;
+        height: auto;
+    }
+
+    .left-panel {
+        padding: 40px;
+    }
+
+    .logo-box h1 {
+        font-size: 36px;
+    }
+
+    .logo-box p {
+        font-size: 16px;
+    }
+
+    .right-panel {
+        padding: 40px 20px;
+    }
+
+    .right-panel h2 {
+        font-size: 28px;
+    }
+}
