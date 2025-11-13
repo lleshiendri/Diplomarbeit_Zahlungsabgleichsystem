@@ -249,16 +249,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                         $entry_date                  = normalizeDate($data[6] ?? null);
                         $exit_date                   = normalizeDate($data[7] ?? null);
                         $description                 = $data[8] ?? null;
-                        $second_ID                   = $data[9] ?? null;
-                        $extern_key                  = $data[10] ?? null;
-                        $email                       = $data[14] ?? null;
+                        $second_ID                   = isset($data[9]) ? trim($data[9]) : null;
+                        $extern_key                  = isset($data[10]) ? trim($data[10]) : null;
+                        $email                       = isset($data[14]) ? trim($data[14]) : null;
 
                         $stmtStudent->bind_param(
-                            "ssssssssdds",
-                            $name,                       
-                            $long_name,                   
-                            $forename,                   
-                            $gender, 
+                            "sssssssssss",
+                            $name,
+                            $long_name,
+                            $forename,
+                            $gender,
                             $birth_date,
                             $entry_date,
                             $exit_date,
@@ -266,7 +266,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             $second_ID,
                             $extern_key,
                             $email
-                            );
+                        );
 
                         $stmtStudent->execute();
                     }
