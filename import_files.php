@@ -4,6 +4,128 @@ ini_set('display_errors', 1);
 
 require 'db_connect.php';
 
+function detectDelimiter($filePath, $fileType) {
+    $priorityMap = [
+        'Students'       => ["\t", ";", ",", "|"],
+        'LegalGuardians' => ["\t", ";", ",", "|"],
+        'Transactions'   => [",", ";", "\t", "|"],
+    ];
+    $candidates = $priorityMap[$fileType] ?? [",", "\t", ";", "|"];
+
+    if (!is_readable($filePath)) {
+        return $candidates[0];
+    }
+
+    $handle = fopen($filePath, 'r');
+    if (!$handle) {
+        return $candidates[0];
+    }
+
+    $line = fgets($handle);
+    fclose($handle);
+    if ($line === false) {
+        return $candidates[0];
+    }
+
+    $line = ltrim($line, "\xEF\xBB\xBF");
+    foreach ($candidates as $delimiter) {
+        $columns = str_getcsv($line, $delimiter);
+        if (count($columns) > 1) {
+            return $delimiter;
+        }
+    }
+
+    return $candidates[0];
+}
+
+function validateCSVStructure($filePath, $fileType) {
+    // Expected headers for each type
+    $expectedHeaders = [
+        'Students' => [
+            'name', 'longName', 'foreName', 'gender', 'birthDate',
+            'klasse.name', 'entryDate', 'exitDate', 'text', 'id',
+            'externKey', 'medicalReportDuty', 'schulpflicht', 'majority',
+            'address.email', 'address.mobile', 'address.phone',
+            'address.city', 'address.postCode', 'address.street'
+        ],
+        'Transactions' => [
+            'reference_number', 'beneficiary', 'reference',
+            'transaction_type', 'processing_date', 'amount', 'amount_total'
+        ],
+        'LegalGuardians' => [
+            'id', 'lastName', 'firstName', 'degree', 'grade',
+            'postgrade', 'email', 'phone', 'mobile',
+            'displayRegisteredUserNames', 'externalKey',
+            'studentLastName', 'studentFirstName', 'studentShortName',
+            'studentInternalId', 'studentExternalId',
+            'addressStreet', 'addressCity', 'addressPostCode'
+        ]
+    ];
+
+    // Make sure we know this file type
+    if (!isset($expectedHeaders[$fileType])) {
+        return [
+            'valid' => false,
+            'message' => "Unknown file type: {$fileType}",
+            'missing' => [],
+            'extra' => []
+        ];
+    }
+
+    // Choose delimiter dynamically based on file contents
+    $delimiter = detectDelimiter($filePath, $fileType);
+
+    // Open file
+    $handle = fopen($filePath, "r");
+    if (!$handle) {
+        return [
+            'valid' => false,
+            'message' => "Cannot open uploaded file.",
+            'missing' => [],
+            'extra' => []
+        ];
+    }
+
+    // Read header
+    $header = fgetcsv($handle, 2000, $delimiter);
+    fclose($handle);
+
+    if (!$header) {
+        return [
+            'valid' => false,
+            'message' => "Cannot read header row.",
+            'missing' => [],
+            'extra' => []
+        ];
+    }
+
+    // Normalize
+    $header = array_map('trim', $header);
+    $expected = $expectedHeaders[$fileType];
+
+    // Compare
+    $missing = array_diff($expected, $header);
+    $extra   = array_diff($header, $expected);
+
+    if (empty($missing) && empty($extra)) {
+        return [
+            'valid' => true,
+            'message' => "File structure valid for {$fileType}.",
+            'missing' => [],
+            'extra' => [],
+            'delimiter' => $delimiter
+        ];
+    }
+
+    return [
+        'valid' => false,
+        'message' => "Invalid file structure for {$fileType}.",
+        'missing' => array_values($missing),
+        'extra' => array_values($extra),
+        'delimiter' => $delimiter
+    ];
+}
+
 function normalizeDate($raw) {
     if (!$raw) return null;
 
@@ -31,116 +153,221 @@ function normalizeDate($raw) {
     return null;
 }
 
+function saveFileAndMetadata($conn, $file, $fileType, $uploadDir) {
+    $originalName = basename($file['name']);
+    $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    $allowedExtensions = ['csv','tsv','txt','xls','xlsx'];
+
+    if (!in_array($extension, $allowedExtensions)) {
+        return ['success' => false, 'message' => 'Invalid file type.'];
+    }
+
+    $allowedMimeTypes = [
+        'csv' => ['text/csv', 'text/plain', 'application/vnd.ms-excel', 'application/octet-stream'],
+        'tsv' => ['text/tab-separated-values', 'text/plain', 'application/octet-stream'],
+        'txt' => ['text/plain', 'application/octet-stream'],
+        'xls' => ['application/vnd.ms-excel', 'application/octet-stream'],
+        'xlsx'=> ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/octet-stream'],
+    ];
+
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mimeType = $finfo ? finfo_file($finfo, $file['tmp_name']) : null;
+    if ($finfo) {
+        finfo_close($finfo);
+    }
+
+    if (
+        $mimeType &&
+        isset($allowedMimeTypes[$extension]) &&
+        !in_array($mimeType, $allowedMimeTypes[$extension])
+    ) {
+        return ['success' => false, 'message' => 'Unsupported MIME type: ' . $mimeType];
+    }
+
+    // Generate new name & destination
+    $newFileName = uniqid('import_', true) . '.' . $extension;
+    $relativeDir = rtrim($uploadDir, '/\\') . '/';
+    $storageDir = __DIR__ . '/' . $relativeDir;
+
+    if (!is_dir($storageDir) && !mkdir($storageDir, 0775, true)) {
+        return ['success' => false, 'message' => 'Unable to create upload directory.'];
+    }
+
+    $diskPath = $storageDir . $newFileName;
+    $relativePath = $relativeDir . $newFileName;
+
+    // 🗂️ 1. Save file physically first
+    if (!move_uploaded_file($file['tmp_name'], $diskPath)) {
+        return ['success' => false, 'message' => 'Error saving uploaded file.'];
+    }
+
+    // 🧾 2. Insert metadata record
+    $stmt = $conn->prepare("
+        INSERT INTO IMPORT_DOCUMENT_TAB (filename, filepath, type, user_id)
+        VALUES (?, ?, ?, ?)
+    ");
+    if (!$stmt) {
+        unlink($diskPath); // clean up if DB prepare fails
+        return ['success' => false, 'message' => 'SQL prepare failed: ' . $conn->error];
+    }
+
+    $user_id = 1; // replace later with session user id
+    $stmt->bind_param("sssi", $originalName, $relativePath, $fileType, $user_id);
+
+    if (!$stmt->execute()) {
+        unlink($diskPath);
+        return ['success' => false, 'message' => 'SQL execute failed: ' . $stmt->error];
+    }
+
+    return [
+        'success' => true,
+        'id' => $conn->insert_id,
+        'destination' => $relativePath,
+        'diskPath' => $diskPath,
+        'originalName' => $originalName
+    ];
+}
+
+
+
+
+
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
     $response = ['success' => false, 'message' => ''];
     $fileType = $_POST['type'] ?? 'other';
+    $file = $_FILES['importFile'];
 
     if (isset($_FILES['importFile']) && $_FILES['importFile']['error'] === UPLOAD_ERR_OK) {
-        
+        switch ($fileType) {
+            case 'Students':       $uploadDir = 'student_import_archive/'; break;
+            case 'Transactions':   $uploadDir = 'transaction_import_archive/'; break;
+            case 'LegalGuardians': $uploadDir = 'guardian_import_archive/'; break;
+            default:               $uploadDir = 'other_imports/';
+        }
+     
+        $validation = validateCSVStructure($file['tmp_name'], $fileType);
+        if (!$validation['valid']) {
+            echo json_encode([
+                'success' => false,
+                'message' => $validation['message'],
+                'missingColumns' => $validation['missing'],
+                'unexpectedColumns' => $validation['extra'],
+            ]);
+            exit;
+        }
+        else{
+            $result = saveFileAndMetadata($conn, $file, $fileType, $uploadDir);
+            if (!$result['success']) {
+                echo json_encode($result);
+                exit;
+            }
+        }
+
+        $destination = $result['destination'];
+        $diskPath    = $result['diskPath'] ?? (__DIR__ . '/' . ltrim($destination, '/\\'));
+        $originalName  = $result['originalName'];
+        $id            = $result['id'];
+        $importedBy    = 'admin'; // same as metadata insert
+        $studentImportSummary = null;
 
 
-        if ($fileType === 'Students') {
-        $uploadDir = 'student_import_archive/';
-    } elseif ($fileType === 'Transactions') {
-        $uploadDir = 'transaction_import_archive/';
-    } elseif ($fileType === 'LegalGuardians') {
-        $uploadDir = 'guardian_import_archive/';
-    } else {
-        $uploadDir = 'other_imports/';
-    }
+             if ($fileType === 'Students') {
+                $filePath = $diskPath;
+                $studentDelimiter = $validation['delimiter'] ?? detectDelimiter($filePath, 'Students');
+                if (!is_readable($filePath)) {
+                    echo json_encode(['success' => false, 'message' => 'Uploaded file cannot be read.']);
+                    exit;
+                }
 
-        $originalName = basename($_FILES['importFile']['name']);
-        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-        $allowedExtensions = ['csv','xls','xlsx'];
+                if (($handle = fopen($filePath, "r")) === FALSE) {
+                    echo json_encode(['success' => false, 'message' => 'Unable to reopen uploaded file.']);
+                    exit;
+                }
 
-        if (in_array($extension, $allowedExtensions)) {
-            $newFileName = uniqid('import_', true) . '.' . $extension;
-            $destination = $uploadDir . $newFileName;
+                // Read header row
+                fgetcsv($handle, 4000, $studentDelimiter);
 
-            if (move_uploaded_file($_FILES['importFile']['tmp_name'], $destination)) {
-                $importedBy = 'admin'; // replace with session username if needed
-
-                $stmt = $conn->prepare("
-                    INSERT INTO IMPORT_DOCUMENT_TAB (filename, filepath, type, user_id) 
-                    VALUES (?, ?, ?, ?)
+                // Prepare insert statement for STUDENT table
+                $stmtStudent = $conn->prepare("
+                    INSERT INTO STUDENT_TAB (forename, name, long_name, birth_date, left_to_pay, additional_payments_status, gender, entry_date, exit_date, description, second_ID, extern_key, email)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
 
-                //  Check if prepare succeeded
-                if (!$stmt) {
-                    echo json_encode([
-                        'success' => false,
-                        'message' => 'SQL prepare failed: ' . $conn->error
-                    ]);
+                if (!$stmtStudent) {
+                    fclose($handle);
+                    echo json_encode(['success' => false, 'message' => 'Student insert prepare failed: ' . $conn->error]);
                     exit;
                 }
 
-                // Bind parameters
-                $user_id = 1; //  temporary for testing — replace later with actual session user ID
-                $stmt->bind_param("sssi", $originalName, $destination, $fileType, $user_id);
+                $forename = $name = $long_name = $birth_date = $gender = $entry_date = $exit_date = $description = $second_id = $extern_key = $email = null;
+                $left_to_pay = 0.0;
+                $additional_payments_status = 0.0;
 
-                // Execute and check for execution errors
-                if (!$stmt->execute()) {
-                    echo json_encode([
-                        'success' => false,
-                        'message' => 'SQL execute failed: ' . $stmt->error
-                    ]);
-                    exit;
-                }
+                $stmtStudent->bind_param(
+                    "ssssddsssssss",
+                    $forename,
+                    $name,
+                    $long_name,
+                    $birth_date,
+                    $left_to_pay,
+                    $additional_payments_status,
+                    $gender,
+                    $entry_date,
+                    $exit_date,
+                    $description,
+                    $second_id,
+                    $extern_key,
+                    $email
+                );
 
-                // Get insert ID if needed
-                $id = $conn->insert_id;
+                $rowNumber = 1;
+                $insertedStudents = 0;
+                $studentErrors = [];
 
-                if ($fileType === 'Students') {
-                $filePath = $destination;
-
-                    if (($handle = fopen($filePath, "r")) !== FALSE) {
-                        // Read header row
-                        $header = fgetcsv($handle, 1000, ",");
-
-                        // Prepare insert statement for STUDENT table
-                        $stmtStudent = $conn->prepare("
-                            INSERT INTO STUDENT_TAB (forename, name, long_name, birth_date, left_to_pay, additional_payments_status, gender, entry_date, exit_date, description, second_ID, extern_key, email)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ");
-
-                        while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
-                            // Map CSV columns to variables
-                            $forename = $data[2] ?? null;
-                            $name = $data[0] ?? null;
-                            $long_name = $data[1] ?? null;
-                            $gender = $data[3] ?? null;
-                            $birth_date = normalizeDate($data[4] ?? null);
-                            $left_to_pay = 0;
-                            $additional_payments_status = 0;
-                            $entry_date = normalizeDate($data[6] ?? null);
-                            $exit_date = normalizeDate($data[7] ?? null);
-                            $description = $data[8] ?? null;
-                            $second_id = $data[9] ?? null;
-                            $extern_key = $data[10] ?? null;
-                            $email = $data[14] ?? null;
-
-                            $stmtStudent->bind_param(
-                                "ssssddssssdds",
-                                $forename,
-                                $name,
-                                $long_name,
-                                $birth_date,
-                                $left_to_pay,
-                                $additional_payments_status,
-                                $gender,
-                                $entry_date,
-                                $exit_date,
-                                $description,
-                                $second_ID,
-                                $extern_key,
-                                $email
-                            );
-                            $stmtStudent->execute();
-                        }
-
-                        fclose($handle);
-                        $stmtStudent->close();
+                while (($data = fgetcsv($handle, 4000, $studentDelimiter)) !== FALSE) {
+                    $rowNumber++;
+                    if ($data === null || count(array_filter($data, function ($value) {
+                        return $value !== null && trim($value) !== '';
+                    })) === 0) {
+                        continue;
                     }
+
+                    $forename = isset($data[2]) ? trim($data[2]) : null;
+                    $name = isset($data[0]) ? trim($data[0]) : null;
+                    $long_name = isset($data[1]) ? trim($data[1]) : null;
+                    $birth_date = normalizeDate($data[4] ?? null);
+                    $left_to_pay = 0.0;
+                    $additional_payments_status = 0.0;
+                    $gender = isset($data[3]) ? trim($data[3]) : null;
+                    $entry_date = normalizeDate($data[6] ?? null);
+                    $exit_date = normalizeDate($data[7] ?? null);
+                    $description = isset($data[8]) ? trim($data[8]) : null;
+                    $second_id = isset($data[9]) ? trim($data[9]) : null;
+                    $extern_key = isset($data[10]) ? trim($data[10]) : null;
+                    $email = isset($data[14]) ? trim($data[14]) : null;
+
+                    if (!$stmtStudent->execute()) {
+                        $studentErrors[] = "Row {$rowNumber}: " . $stmtStudent->error;
+                        error_log("STUDENT INSERT ERROR (Row {$rowNumber}): " . $stmtStudent->error);
+                    } else {
+                        $insertedStudents++;
+                    }
+                }
+
+                fclose($handle);
+                $stmtStudent->close();
+
+                if (!empty($studentErrors)) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => $studentErrors[0],
+                        'failedRows' => $studentErrors
+                    ]);
+                    exit;
+                }
+
+                $studentImportSummary = "Imported {$insertedStudents} students.";
                 }
 
                 if ($fileType === 'Transactions') {
@@ -156,7 +383,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 (reference_number,  beneficiary, reference, transaction_type, processing_date, amount, amount_total) 
                             VALUES (?, ?, ?, ?, ?, ?, ?)
                         ");
-                        if (!$stmt) {
+                        if (!$stmtTrans) {
                             error_log("TRANSACTION PREPARE FAILED: " . $conn->error);
                             exit;
                         }
@@ -182,7 +409,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             );
                             $stmtTrans->execute();
                         }
-
                         fclose($handle);
                     }
                 }
@@ -192,13 +418,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
 
                     if (($handle = fopen($filePath, "r")) !== FALSE) {
                         // Read header
-                        $header = fgetcsv($handle, 1000, ",");
+                        $header = fgetcsv($handle, 1000, "\t");
 
                         // Prepare insert statement for LEGAL_GUARDIAN_TAB
                         $stmtGuardian = $conn->prepare("
                             INSERT INTO LEGAL_GUARDIAN_TAB 
-                                (first_name, last_name, phone, mobile, email, registered_user_names, external_key) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                (first_name, last_name, phone, mobile, email, external_key) 
+                            VALUES (?, ?, ?, ?, ?, ?)
                         ");
 
                         while (($data = fgetcsv($handle, 1000, "\t")) !== FALSE) {
@@ -207,28 +433,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             $phone      = $data[7] ?? null;
                             $mobile     = $data[8] ?? null;
                             $email      = $data[6] ?? null;
-                            $reg_user   = $data[9] ?? null;
                             $external   = $data[10] ?? null;
 
                             $stmtGuardian->bind_param(
-                                "sssssss",
+                                "ssssss",
                                 $first_name,
                                 $last_name,
                                 $phone,
                                 $mobile,
                                 $email,
-                                $reg_user,
                                 $external
                             );
                             $stmtGuardian->execute();
+                                 if ($stmtGuardian->error) {
+                                error_log("STUDENT INSERT ERROR: " . $stmtGuardian->error);
+                                echo "ERROR: " . $stmtGuardian->error;
+                            }
                         }
 
                         fclose($handle);
                     }
                 }
 
-                // Return JSON with file info to dynamically insert into table
+
+                   // Return JSON with file info to dynamically insert into table
                 $response['success'] = true;
+                if ($studentImportSummary !== null) {
+                    $response['message'] = $studentImportSummary;
+                }
+
                 $response['file'] = [
                     'id' => $id,
                     'filename' => $originalName,
@@ -237,23 +470,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                     'imported_date' => date('Y-m-d H:i:s'),
                     'type' => $fileType
                 ];
-            } else {
-                $response['message'] = 'Error moving file.';
+
+                echo json_encode($response);
+                exit;
             }
-        } else {
-            $response['message'] = 'Invalid file type.';
         }
-    } else {
-        $response['message'] = 'No file uploaded or upload error.';
-    }
-
-    header('Content-Type: application/json');
-    echo json_encode($response);
-    exit;
-}
-
-require 'navigator.php'; 
 ?>
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
