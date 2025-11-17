@@ -303,7 +303,7 @@ if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
   </main>
 
   <!-- Filter Panel aus externer Datei -->
-  <?php include 'filters.html'; ?>
+  <?php include 'filters.php'; ?>
 
   <script>
     // Sidebar Steuerung
