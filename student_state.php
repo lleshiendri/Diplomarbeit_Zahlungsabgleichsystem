@@ -2,6 +2,7 @@
 require_once __DIR__ . '/auth_check.php';
 $currentPage = basename($_SERVER['PHP_SELF']);
 require_once __DIR__ . '/db_connect.php';
+require __DIR__ . '/filters.php'; 
 
 $alert = "";
 
@@ -13,9 +14,9 @@ if (isset($_GET['delete_id'])) {
         $stmt->bind_param("s", $delete_id);
         $stmt->execute();
         $stmt->close();
-        $alert = "<div class='alert alert-success'>✅ Student successfully deleted.</div>";
+        $alert = "<div class='alert alert-success'>Student successfully deleted.</div>";
     } else {
-        $alert = "<div class='alert alert-error'>❌ Delete failed.</div>";
+        $alert = "<div class='alert alert-error'>Delete failed.</div>";
     }
 }
 
@@ -155,12 +156,12 @@ $result = $conn->query($selectSql);
         .content.shifted { margin-left:260px; }
         #overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.2); opacity:0; visibility:hidden; transition:opacity 0.3s ease; z-index:8; }
         #overlay.show { opacity:1; visibility:visible; }
-        .page-title { font-family:'Space Grotesk',sans-serif; font-weight:700; color:#B31E32; text-align:center; margin-bottom:20px; font-size:28px; }
+        .page-title { font-family:'Space Grotesk',sans-serif; font-weight:700; color:#B31E32; text-align:center; margin-bottom:20px; font-size:28px;  top: 0;}
 
         /* === Table Design === */
         .student-table th { 
             font-family:'Montserrat',sans-serif; 
-            font-weight:600; 
+            font-weight:00; 
             color:#B31E32; 
             background-color:#FAE4D5; 
             text-align:center;
@@ -239,7 +240,7 @@ if (isset($_GET['delete_id'])) {
         $stmt->bind_param("s", $delete_id);
         $stmt->execute();
         $stmt->close();
-        $alert = "<div class='alert alert-success'>✅ Student successfully deleted.</div>";
+        $alert = "<div class='alert alert-success'>Student successfully deleted.</div>";
     } else {
         $alert = "<div class='alert alert-error'>❌ Delete failed.</div>";
     }
