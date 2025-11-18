@@ -1,19 +1,28 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) {
-	session_start();
+    session_start();
 }
 
 $currentPage = basename($_SERVER['PHP_SELF']);
 
 // Skip rendering navigator entirely on the login page
 if ($currentPage === 'login.php') {
-	return;
+    return;
 }
 
 $shouldEnforceAuth = !defined('NAV_STANDALONE') || !NAV_STANDALONE;
 if ($shouldEnforceAuth && !defined('NAV_SKIP_AUTH') && !isset($_SESSION['user_id'])) {
-	header('Location: login/login.php');
-	exit;
+    header('Location: login/login.php');
+    exit;
+}
+
+require "db_connect.php"; // needed for unread counter
+
+// Unread notifications count
+$unreadCount = 0;
+$res = $conn->query("SELECT COUNT(*) AS c FROM NOTIFICATION WHERE is_read = 0");
+if ($row = $res->fetch_assoc()) {
+    $unreadCount = (int)$row['c'];
 }
 ?>
 <?php if (defined('NAV_STANDALONE') && NAV_STANDALONE): ?>
@@ -55,6 +64,27 @@ if ($shouldEnforceAuth && !defined('NAV_SKIP_AUTH') && !isset($_SESSION['user_id
   }
   .menu-icon:hover, .nav-icon:hover { color:var(--red-dark); }
   .logo img{ height:36px; }
+
+  /* BADGE */
+  .nav-icon-wrapper {
+    position: relative;
+    display: inline-block;
+  }
+  .badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: var(--red-dark);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 50%;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border: 2px solid var(--red-main);
+    display:flex; align-items:center; justify-content:center;
+  }
 
   /* SIDEBAR */
   .sidebar {
@@ -111,7 +141,7 @@ if ($shouldEnforceAuth && !defined('NAV_SKIP_AUTH') && !isset($_SESSION['user_id
   }
   .overlay.show { display:block; }
 
-  /* Generic content shift when sidebar is open (used by non-dashboard pages) */
+  /* Content shift when sidebar open */
   #content { transition: margin-left 0.3s ease; }
   #content.shifted { margin-left: 260px; }
   </style>
@@ -124,11 +154,22 @@ if ($shouldEnforceAuth && !defined('NAV_SKIP_AUTH') && !isset($_SESSION['user_id
 <div class="header">
   <div class="nav-left">
     <span class="menu-icon material-icons-outlined" onclick="toggleSidebar()">menu</span>
-    <a href="notifications.php"><span class="nav-icon material-icons-outlined">notifications</span></a>
+
+    <!-- Notifications with badge -->
+    <a href="notifications.php" class="nav-icon-wrapper" style="text-decoration:none;">
+      <span class="nav-icon material-icons-outlined">notifications</span>
+      <?php if ($unreadCount > 0): ?>
+        <span class="badge"><?= $unreadCount ?></span>
+      <?php endif; ?>
+    </a>
+
     <a href="unconfirmed.php"><span class="nav-icon material-icons-outlined">priority_high</span></a>
 
-    <?php if (in_array($currentPage, ['unconfirmed.php','student_state.php'], true)): ?>
-      <span class="nav-icon material-icons-outlined" id="filterToggle">filter_list</span>
+    <?php if ($currentPage !== 'dashboard.php'): ?>
+      <?php if (in_array($currentPage, ['unconfirmed.php','student_state.php'], true)): ?>
+<span id="filterToggle" class="nav-icon-wrapper">
+    <span class="nav-icon material-icons-outlined">filter_list</span>
+</span>      <?php endif; ?>
       <a href="dashboard.php" class="nav-icon material-icons-outlined" style="text-decoration:none;color:white;">home</a>
     <?php endif; ?>
   </div>
@@ -143,7 +184,7 @@ if ($shouldEnforceAuth && !defined('NAV_SKIP_AUTH') && !isset($_SESSION['user_id
       <a href="add_transactions.php"><span class="material-icons-outlined">swap_horiz</span> Add Transaction</a>
       <a href="add_students.php"><span class="material-icons-outlined">group_add</span> Add Students</a>
       <a href="student_state.php"><span class="material-icons-outlined">school</span> Student State</a>
-      <a href="#"><span class="material-icons-outlined">schedule</span> Latencies</a>
+      <a href="latencies.php"><span class="material-icons-outlined">schedule</span> Latencies</a>
       <a href="import_files.php"><span class="material-icons-outlined">upload_file</span> Import File</a>
       <a href="unconfirmed.php"><span class="material-icons-outlined">priority_high</span> Unconfirmed</a>
       <a href="notifications.php"><span class="material-icons-outlined">notifications</span> Notifications</a>
@@ -162,13 +203,12 @@ if ($shouldEnforceAuth && !defined('NAV_SKIP_AUTH') && !isset($_SESSION['user_id
 // Only include filters on specific pages that require them
 $filtersPages = ['unconfirmed.php', 'student_state.php'];
 if (in_array($currentPage, $filtersPages, true)) {
-	define('APP_HAS_OVERLAY', true);
-	include 'filters.php';
+    define('APP_HAS_OVERLAY', true);
+    include 'filters.php';
 }
 ?>
 
 <div id="overlay" class="overlay" onclick="closeSidebar(); closeFilter();"></div>
-
 
 <script>
   const sidebar = document.getElementById("sidebar");
@@ -186,9 +226,13 @@ if (in_array($currentPage, $filtersPages, true)) {
   }
   function closeSidebar(){
     sidebar.classList.remove("open");
-    overlay.classList.remove("show");
     const content = document.getElementById("content");
     if (content) content.classList.remove("shifted");
+
+    // Only hide overlay if filter panel is also closed
+    if (!filterPanel || !filterPanel.classList.contains('open')) {
+      overlay.classList.remove("show");
+    }
   }
   function toggleSidebar(){
     sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
@@ -198,12 +242,34 @@ if (in_array($currentPage, $filtersPages, true)) {
   function closeFilter(){
     if (filterPanel) filterPanel.classList.remove('open');
     if (filterOverlay) filterOverlay.classList.remove('show');
+
+    // Only hide overlay if sidebar is also closed
+    if (!sidebar.classList.contains('open')) {
+      overlay.classList.remove('show');
+    }
   }
 
-  // Do not bind filterToggle here; filters.php handles it to avoid double toggling
+  // Bind filter toggle here so it works on all pages that have it
+  if (filterToggle && filterPanel) {
+    filterToggle.addEventListener('click', () => {
+      const willOpen = !filterPanel.classList.contains('open');
+
+      if (willOpen) {
+        filterPanel.classList.add('open');
+        if (filterOverlay) filterOverlay.classList.add('show');
+        overlay.classList.add('show');
+      } else {
+        filterPanel.classList.remove('open');
+        if (filterOverlay) filterOverlay.classList.remove('show');
+        if (!sidebar.classList.contains('open')) {
+          overlay.classList.remove('show');
+        }
+      }
+    });
+  }
 </script>
+
 <?php if (defined('NAV_STANDALONE') && NAV_STANDALONE): ?>
 </body>
 </html>
-<?php endif; 
-?> 
+<?php endif; ?>
