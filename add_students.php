@@ -7,6 +7,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
 require 'navigator.php'; 
 require 'db_connect.php';
+require_once 'reference_id_generator.php';
 
 $success_message = "";
 $error_message = "";
@@ -37,6 +38,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
         if ($stmt) {
             $stmt->bind_param("ssssssd", $name, $forename, $long_name, $birth_date, $class_id, $additional, $left_to_pay);
             if ($stmt->execute()) {
+                // Generate reference_id after insert
+                $studentId = $conn->insert_id;
+                
+                // Only update if reference_id doesn't already exist
+                $checkRef = $conn->prepare("SELECT reference_id FROM STUDENT_TAB WHERE id = ?");
+                $checkRef->bind_param("i", $studentId);
+                $checkRef->execute();
+                $resultRef = $checkRef->get_result();
+                $rowRef = $resultRef->fetch_assoc();
+                $checkRef->close();
+                
+                if (empty($rowRef['reference_id'])) {
+                    $referenceId = generateReferenceID($studentId, $forename, $name);
+                    $update = $conn->prepare("
+                        UPDATE STUDENT_TAB
+                        SET reference_id = ?
+                        WHERE id = ?
+                    ");
+                    $update->bind_param("si", $referenceId, $studentId);
+                    $update->execute();
+                    $update->close();
+                }
+                
                 $success_message = "Student successfully added.";
             } else {
                 $error_message = "Error while saving: " . $stmt->error;
