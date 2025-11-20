@@ -1,9 +1,94 @@
 <?php 
-require_once 'auth_check.php';
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 require 'db_connect.php';
+
+function validateCSVStructure($filePath, $fileType) {
+    // 1️⃣ Expected header sets
+    $expectedHeaders = [
+        'Students' => [
+            'name', 'longName', 'foreName', 'gender', 'birthDate',
+            'klasse.name', 'entryDate', 'exitDate', 'text', 'id',
+            'externKey', 'medicalReportDuty', 'schulpflicht', 'majority',
+            'address.email', 'address.mobile', 'address.phone',
+            'address.city', 'address.postCode', 'address.street'
+        ],
+        'Transactions' => [
+            'reference_number', 'beneficiary', 'reference',
+            'transaction_type', 'processing_date', 'amount', 'amount_total'
+        ],
+        'LegalGuardians' => [
+            'id', 'lastName', 'firstName', 'degree', 'grade',
+            'postgrade', 'email', 'phone', 'mobile',
+            'displayRegisteredUserNames', 'externalKey',
+            'studentLastName', 'studentFirstName', 'studentShortName',
+            'studentInternalId', 'studentExternalId',
+            'addressStreet', 'addressCity', 'addressPostCode'
+        ]
+    ];
+
+    // 2️⃣ Detect delimiter automatically
+    $firstLine = fgets(fopen($filePath, 'r'));
+    if (strpos($firstLine, "\t") !== false) $delimiter = "\t";
+    elseif (strpos($firstLine, ";") !== false) $delimiter = ";";
+    else $delimiter = ",";
+
+    // 3️⃣ Read header
+    $handle = fopen($filePath, "r");
+    $header = fgetcsv($handle, 1000, $delimiter);
+    fclose($handle);
+
+    if (!$header) {
+        return [
+            'valid' => false,
+            'message' => 'Unable to read header from file.',
+            'missing' => [], 'extra' => [], 'guessedType' => null
+        ];
+    }
+
+    $header = array_map('trim', $header);
+    $expected = $expectedHeaders[$fileType] ?? [];
+
+    // 4️⃣ Compare header with expected columns
+    $missing = array_diff($expected, $header);
+    $extra   = array_diff($header, $expected);
+
+    // ✅ If structure matches → valid
+    if (empty($missing) && empty($extra)) {
+        return [
+            'valid' => true,
+            'message' => "File structure valid for {$fileType}.",
+            'missing' => [], 'extra' => [], 'guessedType' => null
+        ];
+    }
+
+    // 5️⃣ Try to guess which file type it actually is
+    $bestMatch = null;
+    $bestScore = 0;
+    foreach ($expectedHeaders as $type => $cols) {
+        $common = count(array_intersect($cols, $header));
+        $score = $common / max(count($cols), 1);
+        if ($score > $bestScore) {
+            $bestScore = $score;
+            $bestMatch = $type;
+        }
+    }
+
+    // 6️⃣ Build return message
+    $msg = "Invalid file structure for {$fileType}.";
+    if ($bestMatch && $bestMatch !== $fileType && $bestScore > 0.3) {
+        $msg .= " This file looks more like a {$bestMatch} file.";
+    }
+
+    return [
+        'valid' => false,
+        'message' => $msg,
+        'missing' => array_values($missing),
+        'extra' => array_values($extra),
+        'guessedType' => $bestMatch
+    ];
+}
 
 function normalizeDate($raw) {
     if (!$raw) return null;
@@ -91,42 +176,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                 // Get insert ID if needed
                 $id = $conn->insert_id;
 
+                $validation = validateCSVStructure($destination, $fileType);
+                if (!$validation['valid']) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => $validation['message'],
+                        'missingColumns' => $validation['missing'],
+                        'unexpectedColumns' => $validation['extra'],
+                        'guessedType' => $validation['guessedType']
+                    ]);
+                    exit; // Stop script to prevent wrong import
+                }
+
                 if ($fileType === 'Students') {
                 $filePath = $destination;
 
                     if (($handle = fopen($filePath, "r")) !== FALSE) {
                         // Read header row
-                        $header = fgetcsv($handle, 1000, ",");
+                        $header = fgetcsv($handle, 1000, "\t");
 
                         // Prepare insert statement for STUDENT table
                         $stmtStudent = $conn->prepare("
-                            INSERT INTO STUDENT_TAB (forename, name, long_name, birth_date, left_to_pay, additional_payments_status)
-                            VALUES (?, ?, ?, ?, ?, ?)
+                            INSERT INTO STUDENT_TAB (forename, name, long_name, birth_date, left_to_pay, additional_payments_status, gender, entry_date, exit_date, description, second_ID, extern_key, email)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ");
 
-                        while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
+                        while (($data = fgetcsv($handle, 1000, "\t")) !== FALSE) {
                             // Map CSV columns to variables
-                            $forename = $data[0] ?? null;
-                            $name = $data[1] ?? null;
-                            $long_name = $data[2] ?? null;
+                            $forename = $data[2] ?? null;
+                            $name = $data[0] ?? null;
+                            $long_name = $data[1] ?? null;
+                            $gender = $data[3] ?? null;
                             $birth_date = normalizeDate($data[4] ?? null);
-                            $left_to_pay = $data[5] ?? 0;
-                            $additional_payments_status = $data[6] ?? 0;
+                            $left_to_pay = 0;
+                            $additional_payments_status = 0;
+                            $entry_date = normalizeDate($data[6] ?? null);
+                            $exit_date = normalizeDate($data[7] ?? null);
+                            $description = $data[8] ?? null;
+                            $second_id = $data[9] ?? null;
+                            $extern_key = $data[10] ?? null;
+                            $email = $data[14] ?? null;
 
                             $stmtStudent->bind_param(
-                                "ssssdd",
+                                "ssssddssssdds",
                                 $forename,
                                 $name,
                                 $long_name,
                                 $birth_date,
                                 $left_to_pay,
-                                $additional_payments_status
+                                $additional_payments_status,
+                                $gender,
+                                $entry_date,
+                                $exit_date,
+                                $description,
+                                $second_ID,
+                                $extern_key,
+                                $email
                             );
                             $stmtStudent->execute();
                         }
 
                         fclose($handle);
+                        $stmtStudent->close();
                     }
+                }
+
+                $validation = validateCSVStructure($destination, $fileType);
+                if (!$validation['valid']) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => $validation['message'],
+                        'missingColumns' => $validation['missing'],
+                        'unexpectedColumns' => $validation['extra'],
+                        'guessedType' => $validation['guessedType']
+                    ]);
+                    exit; // Stop script to prevent wrong import
                 }
 
                 if ($fileType === 'Transactions') {
@@ -173,43 +297,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                     }
                 }
 
+
+                $validation = validateCSVStructure($destination, $fileType);
+                if (!$validation['valid']) {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => $validation['message'],
+                        'missingColumns' => $validation['missing'],
+                        'unexpectedColumns' => $validation['extra'],
+                        'guessedType' => $validation['guessedType']
+                    ]);
+                    exit; // Stop script to prevent wrong import
+                }
+
                 if ($fileType === 'LegalGuardians') {
                     $filePath = $destination;
 
                     if (($handle = fopen($filePath, "r")) !== FALSE) {
                         // Read header
-                        $header = fgetcsv($handle, 1000, ",");
+                        $header = fgetcsv($handle, 1000, "\t");
 
                         // Prepare insert statement for LEGAL_GUARDIAN_TAB
                         $stmtGuardian = $conn->prepare("
                             INSERT INTO LEGAL_GUARDIAN_TAB 
-                                (first_name, last_name, phone, mobile, grade, email, registered_user_names, degree, postgrade, external_key) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                (first_name, last_name, phone, mobile, email, external_key) 
+                            VALUES (?, ?, ?, ?, ?, ?)
                         ");
 
-                        while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
-                            $first_name = $data[0] ?? null;
+                        while (($data = fgetcsv($handle, 1000, "\t")) !== FALSE) {
+                            $first_name = $data[2] ?? null;
                             $last_name  = $data[1] ?? null;
-                            $phone      = $data[2] ?? null;
-                            $mobile     = $data[3] ?? null;
-                            $grade      = $data[4] ?? null;
-                            $email      = $data[5] ?? null;
-                            $reg_user   = $data[6] ?? null;
-                            $degree     = $data[7] ?? null;
-                            $postgrade  = $data[8] ?? null;
-                            $external   = $data[9] ?? null;
+                            $phone      = $data[7] ?? null;
+                            $mobile     = $data[8] ?? null;
+                            $email      = $data[6] ?? null;
+                            $external   = $data[10] ?? null;
 
                             $stmtGuardian->bind_param(
-                                "ssssssssss",
+                                "ssssss",
                                 $first_name,
                                 $last_name,
                                 $phone,
                                 $mobile,
-                                $grade,
                                 $email,
-                                $reg_user,
-                                $degree,
-                                $postgrade,
                                 $external
                             );
                             $stmtGuardian->execute();
@@ -244,7 +373,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
     exit;
 }
 
-require 'navigator.php'; 
+
 ?>
 <!DOCTYPE html>
 <html lang="de">
