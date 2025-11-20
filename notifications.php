@@ -54,8 +54,7 @@ if ($search !== "") {
         student_id LIKE '%$safe%' OR
         description LIKE '%$safe%' OR
         invoice_id LIKE '%$safe%' OR
-        time_from LIKE '%$safe%'
-    ";
+        time_from LIKE '%$safe%'";
 }
 
 $perPage = 10;
@@ -100,14 +99,10 @@ body {
     background:#FFFFFF;
 }
 
-#content {
-    transition: margin-left 0.3s ease;
-    margin-left: 0;
-    padding: 100px 40px 40px;
-}
-
-#content.shifted {
-    margin-left: 260px;
+#notifContent {
+    padding: 100px 30px 60px;
+    max-width: 1300px;
+    margin: 0 auto;
 }
 
 #overlay {
@@ -126,8 +121,10 @@ body {
     font-size:28px;
     margin-bottom:20px;
     margin-top:5px;
+    text-align:left;
 }
 
+/* Search box */
 .search-wrapper{
     display:flex;
     align-items:center;
@@ -136,12 +133,15 @@ body {
     border-radius:12px;
     border:1px solid #D1D1D1;
     padding:4px 10px;
-    margin-bottom:25px;
+    margin: 0 0 25px 0;
     box-shadow:0 2px 6px rgba(0,0,0,0.08);
 }
 
+/* TABLE */
 .notification-table {
     width:100%;
+    max-width:1300px;
+    margin:0 auto;
     border-collapse:collapse;
     background:white;
     border-radius:12px;
@@ -156,6 +156,7 @@ body {
     font-weight:600;
     padding:14px;
     font-size: 15px;
+    text-align:center;
 }
 
 .notification-table td {
@@ -165,15 +166,19 @@ body {
     text-align: center;
 }
 
+/* ROW COLORS */
 .row-urgent { background:#FDE7E9 !important; }
 .row-warning { background:#FFF4E0 !important; }
 .row-info { background:#F3F3F3 !important; }
 
+/* read */
 .read-row { opacity:0.55; }
 
+/* urgency badge */
 .urgency-badge {
     display:flex;
     align-items:center;
+    justify-content:center;
     gap:6px;
     font-family:'Roboto';
     font-weight:500;
@@ -182,12 +187,37 @@ body {
 .warning { color:#D77F00; }
 .info { color:#555; }
 
+/* BUTTON WRAPPER */
+.mark-read-wrapper {
+    display:flex;
+    justify-content:flex-end;
+    max-width:1300px;
+    margin:20px auto 0 auto;
+}
+
+.mark-read-button {
+    background:#B31E32;
+    border:none;
+    padding:10px 18px;
+    border-radius:8px;
+    color:white;
+    font-family:'Montserrat';
+    font-weight:600;
+    cursor:pointer;
+    font-size:14px;
+}
+.mark-read-button:hover {
+    background:#8d1727;
+}
+
 </style>
 </head>
 
 <body>
+
 <div id="overlay"></div>
-<main id="content">
+
+<main id="notifContent">
 
 <h1 class="page-title">NOTIFICATIONS</h1>
 
@@ -214,7 +244,7 @@ body {
 </thead>
 
 <tbody>
-<?php while ($row = $result->fetch_assoc()): 
+<?php while ($row = $result->fetch_assoc()):
     $isRead = intval($row["is_read"]) === 1;
 
     if ($row["urgency"] === "urgent") {
@@ -260,10 +290,8 @@ body {
 
 </table>
 
-<div style="margin-top:25px; display:flex; justify-content:flex-end;">
-    <button type="button" onclick="markAllSelected()"
-            style="background:#B31E32; border:none; padding:8px 15px; border-radius:8px; 
-                   color:white; font-family:'Montserrat'; font-weight:600; cursor:pointer; font-size:13px;">
+<div class="mark-read-wrapper">
+    <button type="button" class="mark-read-button" onclick="markAllSelected()">
         Mark all selected as read
     </button>
 </div>
@@ -272,22 +300,23 @@ body {
 
 <script>
 
-const sidebar = document.getElementById("sidebar");
-const content = document.getElementById("content");
-const overlay = document.getElementById("overlay");
+/* Fix variable conflicts caused by navigator.php */
+const notifSidebar = document.getElementById("sidebar");
+const notifOverlay = document.getElementById("overlay");
+const notifContent = document.getElementById("notifContent");
 
 function openSidebar(){
-    sidebar.classList.add("open");
-    content.classList.add("shifted");
-    overlay.classList.add("show");
+    notifSidebar.classList.add("open");
+    notifContent.classList.add("shifted");
+    notifOverlay.classList.add("show");
 }
 function closeSidebar(){
-    sidebar.classList.remove("open");
-    content.classList.remove("shifted");
-    overlay.classList.remove("show");
+    notifSidebar.classList.remove("open");
+    notifContent.classList.remove("shifted");
+    notifOverlay.classList.remove("show");
 }
 function toggleSidebar(){
-    sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+    notifSidebar.classList.contains("open") ? closeSidebar() : openSidebar();
 }
 
 /* ============================================================
@@ -318,7 +347,6 @@ function markAllSelected() {
     .then(r => r.text())
     .then(resp => {
         if (resp.trim() === "OK") {
-            alert("The selected notifications have been marked as read.");
             window.location.reload();
         } else {
             alert("Error: " + resp);
