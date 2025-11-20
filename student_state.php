@@ -205,6 +205,9 @@ $result = $conn->query($selectSql);
             color:#ccc;
             border-color:#eee;
         }
+    </style>
+</head>
+<body>
 
         .content {
     display: flex;
@@ -271,6 +274,8 @@ $countRes = $conn->query("SELECT COUNT(*) AS total FROM STUDENT_TAB");
 $totalRows = $countRes->fetch_assoc()['total'] ?? 0;
 $totalPages = ceil($totalRows / $limit);
 
+$result = $conn->query("
+    SELECT id, extern_key AS student_id, long_name AS student_name, name, left_to_pay
 /*  
 ------------------------------------------
  FIX #1 — USE THE REAL COLUMN NAME "id"
@@ -317,6 +322,8 @@ $result = $conn->query("
                     echo '<td>' . number_format($leftToPay, 2, ',', '.') . ' €</td>';
                     echo '<td>' . number_format($totalAmount, 2, ',', '.') . ' €</td>';
                     echo '<td>' . htmlspecialchars($mockDate) . '</td>';
+                    echo '<td style="text-align:center;">
+                            <span class="material-icons-outlined" style="color:#D4463B;" onclick="toggleEdit(\''.$row['student_id'].'\', \''.htmlspecialchars($row['name']).'\', \''.htmlspecialchars($row['student_name']).'\', \''.$row['left_to_pay'].'\')">edit</span>
 
                     // ✳️ CHANGE 1: use studentStateToggleEdit instead of toggleEdit
                     echo '<td style="text-align:center;">
@@ -341,6 +348,7 @@ $result = $conn->query("
                                     <label style="margin-right:5px;">Left to Pay (€):</label>
                                     <input type="number" step="0.01" name="left_to_pay" value="'.htmlspecialchars($row['left_to_pay']).'" style="width:100px;">
                                     <button type="submit" name="update_student">Save</button>
+                                    <button type="button" onclick="toggleEdit(\''.$row['student_id'].'\')">Cancel</button>
                                     <!-- ✳️ CHANGE 2: also use studentStateToggleEdit here -->
                                     <button type="button" onclick="studentStateToggleEdit(\''.$row['student_id'].'\')">Cancel</button>
                                 </form>
@@ -379,6 +387,33 @@ $result = $conn->query("
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
 
 <script>
+    const sidebar = document.getElementById("sidebar");
+    const content = document.querySelector(".content");
+    const overlay = document.getElementById("overlay");
+
+    function openSidebar() {
+        sidebar.classList.add("open");
+        content.classList.add("shifted");
+        overlay.classList.add("show");
+    }
+    function closeSidebar() {
+        sidebar.classList.remove("open");
+        content.classList.remove("shifted");
+        overlay.classList.remove("show");
+    }
+    function toggleSidebar() {
+        sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+    }
+
+    // === INLINE EDIT TOGGLE ===
+    function toggleEdit(id) {
+        const editRow = document.getElementById("edit-" + id);
+        if (!editRow) return;
+        editRow.style.display = (editRow.style.display === "none" || editRow.style.display === "") ? "table-row" : "none";
+    }
+</script>
+</body>
+</html>
    let studentSidebar = document.getElementById("sidebar");
 let studentContent = document.querySelector(".content");
 let studentOverlay = document.getElementById("overlay");
