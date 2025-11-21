@@ -1,8 +1,7 @@
 <?php 
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 
-require 'db_connect.php';
+require_once 'db_connect.php';
+require_once 'reference_id_generator.php';
 
 function validateCSVStructure($filePath, $fileType) {
     // 1️⃣ Expected header sets
@@ -229,11 +228,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 $entry_date,
                                 $exit_date,
                                 $description,
-                                $second_ID,
+                                $second_id,
                                 $extern_key,
                                 $email
                             );
                             $stmtStudent->execute();
+                            
+                            // Generate reference_id after insert
+                            if ($stmtStudent->affected_rows > 0 && $forename && $name) {
+                                $studentId = $conn->insert_id;
+                                
+                                // Only update if reference_id doesn't already exist
+                                $checkRef = $conn->prepare("SELECT reference_id FROM STUDENT_TAB WHERE id = ?");
+                                $checkRef->bind_param("i", $studentId);
+                                $checkRef->execute();
+                                $resultRef = $checkRef->get_result();
+                                $rowRef = $resultRef->fetch_assoc();
+                                $checkRef->close();
+                                
+                                if (empty($rowRef['reference_id'])) {
+                                    $referenceId = generateReferenceID($studentId, $forename, $name);
+                                    $update = $conn->prepare("
+                                        UPDATE STUDENT_TAB
+                                        SET reference_id = ?
+                                        WHERE id = ?
+                                    ");
+                                    $update->bind_param("si", $referenceId, $studentId);
+                                    $update->execute();
+                                    $update->close();
+                                }
+                            }
                         }
 
                         fclose($handle);
