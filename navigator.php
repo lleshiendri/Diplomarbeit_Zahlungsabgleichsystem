@@ -218,16 +218,16 @@ if (in_array($currentPage, $filtersPages, true)) {
 <div id="overlay" class="overlay" onclick="closeSidebar(); closeFilter();"></div>
 
 <script>
-  const sidebar = document.getElementById("sidebar");
-  const overlay = document.getElementById("overlay");
-  const filterPanel = document.getElementById("filterPanel");
-  const filterOverlay = document.getElementById("filterOverlay");
-  const filterToggle = document.getElementById("filterToggle");
+  const navSidebar = document.getElementById("sidebar");
+  const navOverlay = document.getElementById("overlay");
+  const navFilterPanel = document.getElementById("filterPanel");
+  const navFilterOverlay = document.getElementById("filterOverlay");
+  const navFilterToggle = document.getElementById("filterToggle");
 
   // SIDEBAR
   function openSidebar(){
-    sidebar.classList.add("open");
-    overlay.classList.add("show");
+    if (navSidebar) navSidebar.classList.add("open");
+    if (navOverlay) navOverlay.classList.add("show");
     const content = document.getElementById("content");
     if (content) content.classList.add("shifted");
   }
@@ -242,7 +242,8 @@ if (in_array($currentPage, $filtersPages, true)) {
     }
   }
   function toggleSidebar(){
-    sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+    if (!navSidebar) return;
+    navSidebar.classList.contains("open") ? closeSidebar() : openSidebar();
   }
 
   // FILTER Panel
