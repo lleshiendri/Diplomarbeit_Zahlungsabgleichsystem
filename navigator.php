@@ -143,7 +143,7 @@ if ($shouldEnforceAuth && !defined('NAV_SKIP_AUTH') && !isset($_SESSION['user_id
       <a href="add_transactions.php"><span class="material-icons-outlined">swap_horiz</span> Add Transaction</a>
       <a href="add_students.php"><span class="material-icons-outlined">group_add</span> Add Students</a>
       <a href="student_state.php"><span class="material-icons-outlined">school</span> Student State</a>
-      <a href="#"><span class="material-icons-outlined">schedule</span> Latencies</a>
+      <a href="latencies.php"><span class="material-icons-outlined">schedule</span> Latencies</a>
       <a href="import_files.php"><span class="material-icons-outlined">upload_file</span> Import File</a>
       <a href="unconfirmed.php"><span class="material-icons-outlined">priority_high</span> Unconfirmed</a>
       <a href="notifications.php"><span class="material-icons-outlined">notifications</span> Notifications</a>
@@ -171,33 +171,34 @@ if (in_array($currentPage, $filtersPages, true)) {
 
 
 <script>
-  const sidebar = document.getElementById("sidebar");
-  const overlay = document.getElementById("overlay");
-  const filterPanel = document.getElementById("filterPanel");
-  const filterOverlay = document.getElementById("filterOverlay");
-  const filterToggle = document.getElementById("filterToggle");
+  const navSidebar = document.getElementById("sidebar");
+  const navOverlay = document.getElementById("overlay");
+  const navFilterPanel = document.getElementById("filterPanel");
+  const navFilterOverlay = document.getElementById("filterOverlay");
+  const navFilterToggle = document.getElementById("filterToggle");
 
   // SIDEBAR
   function openSidebar(){
-    sidebar.classList.add("open");
-    overlay.classList.add("show");
+    if (navSidebar) navSidebar.classList.add("open");
+    if (navOverlay) navOverlay.classList.add("show");
     const content = document.getElementById("content");
     if (content) content.classList.add("shifted");
   }
   function closeSidebar(){
-    sidebar.classList.remove("open");
-    overlay.classList.remove("show");
+    if (navSidebar) navSidebar.classList.remove("open");
+    if (navOverlay) navOverlay.classList.remove("show");
     const content = document.getElementById("content");
     if (content) content.classList.remove("shifted");
   }
   function toggleSidebar(){
-    sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+    if (!navSidebar) return;
+    navSidebar.classList.contains("open") ? closeSidebar() : openSidebar();
   }
 
   // FILTER Panel
   function closeFilter(){
-    if (filterPanel) filterPanel.classList.remove('open');
-    if (filterOverlay) filterOverlay.classList.remove('show');
+    if (navFilterPanel) navFilterPanel.classList.remove('open');
+    if (navFilterOverlay) navFilterOverlay.classList.remove('show');
   }
 
   // Do not bind filterToggle here; filters.php handles it to avoid double toggling
