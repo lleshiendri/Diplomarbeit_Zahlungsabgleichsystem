@@ -7,6 +7,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
 require 'navigator.php'; 
 require 'db_connect.php';
+require_once 'reference_id_generator.php';
 
 $success_message = "";
 $error_message = "";
@@ -37,6 +38,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
         if ($stmt) {
             $stmt->bind_param("ssssssd", $name, $forename, $long_name, $birth_date, $class_id, $additional, $left_to_pay);
             if ($stmt->execute()) {
+                // Generate reference_id after insert
+                $studentId = $conn->insert_id;
+                
+                // Only update if reference_id doesn't already exist
+                $checkRef = $conn->prepare("SELECT reference_id FROM STUDENT_TAB WHERE id = ?");
+                $checkRef->bind_param("i", $studentId);
+                $checkRef->execute();
+                $resultRef = $checkRef->get_result();
+                $rowRef = $resultRef->fetch_assoc();
+                $checkRef->close();
+                
+                if (empty($rowRef['reference_id'])) {
+                    $referenceId = generateReferenceID($studentId, $forename, $name);
+                    $update = $conn->prepare("
+                        UPDATE STUDENT_TAB
+                        SET reference_id = ?
+                        WHERE id = ?
+                    ");
+                    $update->bind_param("si", $referenceId, $studentId);
+                    $update->execute();
+                    $update->close();
+                }
+                
                 $success_message = "Student successfully added.";
             } else {
                 $error_message = "Error while saving: " . $stmt->error;
@@ -49,28 +73,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
         $error_message = "Please fill in all required fields (Name, Forename, Birth Date, Class).";
     }
 }
-
-// 2) Schüler löschen
-if (isset($_GET['delete_id'])) {
-    $delete_id = (int) $_GET['delete_id'];
-    $stmt = $conn->prepare("DELETE FROM STUDENT_TAB WHERE id = ?");
-    if ($stmt) {
-        $stmt->bind_param("i", $delete_id);
-        if ($stmt->execute()) {
-            $success_message = "Student deleted successfully.";
-        } else {
-            $error_message = "Error while deleting: " . $stmt->error;
-        }
-        $stmt->close();
-    }
-}
-
-// 3) Alle Schüler laden
-$students = [];
-$result = $conn->query("SELECT id, name, forename, class_id, birth_date FROM STUDENT_TAB ORDER BY id DESC");
-if ($result && $result->num_rows > 0) {
-    $students = $result->fetch_all(MYSQLI_ASSOC);
-}
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -78,7 +80,6 @@ if ($result && $result->num_rows > 0) {
     <meta charset="UTF-8" />
     <title>Add Students</title>
 
-    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Montserrat:wght@400;500;600&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
 
@@ -184,40 +185,6 @@ if ($result && $result->num_rows > 0) {
         }
         .success{ background:#E7F7E7; color:#2E7D32; border:1px solid #C8E6C9; }
         .error{ background:#FCE8E6; color:#B71C1C; border:1px solid #F5C6CB; }
-
-        table {
-            width: 100%;
-            max-width: 800px;
-            margin: 0 auto;
-            border-collapse: collapse;
-            background:#fff;
-            border-radius:10px;
-            overflow:hidden;
-            box-shadow:0 1px 3px rgba(0,0,0,.08);
-        }
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom:1px solid #eee;
-            font-size:13px;
-        }
-        th {
-            background: var(--red-light);
-            font-family:'Montserrat',sans-serif;
-            font-weight:600;
-        }
-        td {
-            font-family:'Roboto',sans-serif;
-        }
-        tr:hover td { background:#f9f9f9; }
-
-        .delete-btn {
-            background:none;
-            border:none;
-            color:#B31E32;
-            cursor:pointer;
-        }
-        .delete-btn:hover { color:#7d0f1b; }
     </style>
 </head>
 <body>
@@ -270,7 +237,7 @@ if ($result && $result->num_rows > 0) {
                         <span class="material-icons-outlined">school</span>
                         <select id="class_id" name="class_id" required>
                             <option value="" disabled selected>-- Select Class --</option>
-                                <?php foreach ($classes as $class): ?>
+                            <?php foreach ($classes as $class): ?>
                                 <option value="<?= htmlspecialchars($class['id']) ?>">
                                     <?= htmlspecialchars($class['name']) ?> (ID: <?= htmlspecialchars($class['id']) ?>)
                                 </option>
@@ -288,7 +255,7 @@ if ($result && $result->num_rows > 0) {
                 <div>
                     <label for="left_to_pay">Left to Pay (€)</label>
                     <div class="input-group">
-                        <span class="material-icons-outlined">attach_money</span>
+                        <span class="material-icons-outlined">euro</span>
                         <input type="number" step="0.01" id="left_to_pay" name="left_to_pay">
                     </div>
                 </div>
@@ -296,49 +263,10 @@ if ($result && $result->num_rows > 0) {
             <button type="submit" name="add_student" class="save-btn">SUBMIT</button>
         </form>
     </div>
-
-    <!-- Schülerliste -->
-    <?php if (!empty($students)): ?>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Forename</th>
-                    <th>Class</th>
-                    <th>Birth Date</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($students as $student): ?>
-                    <tr>
-                        <td><?= $student['id'] ?></td>
-                        <td><?= htmlspecialchars($student['name']) ?></td>
-                        <td><?= htmlspecialchars($student['forename']) ?></td>
-                        <td><?= htmlspecialchars($student['class_id']) ?></td>
-                        <td><?= htmlspecialchars($student['birth_date']) ?></td>
-                        <td>
-                            <form method="get" action="" onsubmit="return confirm('Delete this student?');" style="margin:0;">
-                                <input type="hidden" name="delete_id" value="<?= $student['id'] ?>">
-                                <button type="submit" class="delete-btn">
-                                    <span class="material-icons-outlined">delete</span>
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    <?php endif; ?>
-</div>
 <script>
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("overlay");
-  const menuIcon = document.querySelector(".menu-icon");
   const content = document.getElementById("content");
-
-  let clickTimer = null;
 
   function openSidebar() {
     sidebar.classList.add("open");
@@ -353,11 +281,9 @@ if ($result && $result->num_rows > 0) {
   }
 
   function toggleSidebar() {
-    if (sidebar.classList.contains("open")) {
-      closeSidebar();
-    } else {
-      openSidebar();
-    }
+    sidebar.classList.toggle("open");
+    overlay.classList.toggle("show");
+    content.classList.toggle("shifted");
   }
 </script>
 </body>
