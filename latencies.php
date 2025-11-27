@@ -1,4 +1,4 @@
-<?php
+<?php 
 require_once 'auth_check.php';
 require "navigator.php";
 require "db_connect.php";
@@ -68,6 +68,17 @@ require "db_connect.php";
             border-bottom: none;
         }
 
+        /* Days Late column aligned center */
+        .lat-table td.days-late {
+            text-align: center;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        /* Colors for late status */
+        .txt-green { color: #4CAF50; }
+        .txt-orange { color: #FF9800; }
+        .txt-red { color: #F44336; }
     </style>
 </head>
 
@@ -88,73 +99,92 @@ require "db_connect.php";
 
         <tbody>
         <?php
-        // Pagination variables
+        // Pagination
         $perPage = 10;
         $page = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
         $offset = ($page - 1) * $perPage;
 
-        // Get total count of students
         $countResult = $conn->query("SELECT COUNT(*) AS total FROM STUDENT_TAB");
         $totalStudents = $countResult ? (int)$countResult->fetch_assoc()['total'] : 0;
         $totalPages = max(1, (int)ceil($totalStudents / $perPage));
 
-        // Ensure page doesn't exceed total pages
-        if ($page > $totalPages) {
-            $page = $totalPages;
-            $offset = ($page - 1) * $perPage;
-        }
+        // MAIN QUERY
+        $sql = "
+        SELECT
+            s.id AS student_id,
+            s.long_name,
+            MAX(i.processing_date) AS last_transaction,
+            NOW() AS last_import,
+            DATEDIFF(CURDATE(), MAX(i.processing_date)) AS days_since_payment
+        FROM STUDENT_TAB s
+        LEFT JOIN LEGAL_GUARDIAN_STUDENT_TAB lgs 
+            ON lgs.student_id = s.id
+        LEFT JOIN INVOICE_TAB i 
+            ON i.legal_guardian_id = lgs.legal_guardian_id
+        GROUP BY s.id
+        ORDER BY s.long_name ASC
+        LIMIT $perPage OFFSET $offset
+        ";
 
-        // Fetch students with pagination
-        $students = $conn->query("SELECT long_name FROM STUDENT_TAB ORDER BY long_name ASC LIMIT $perPage OFFSET $offset");
+        $result = $conn->query($sql);
 
-        // Mock generator helpers
-        function randDateMock() {
-            $day = rand(1, 28);
-            $month = rand(1, 12);
-            $year = 2025;
-            return sprintf("%02d/%02d/%d", $day, $month, $year);
-        }
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
 
-        while ($s = $students->fetch_assoc()) {
-            $mock_last_transaction = randDateMock();
-            $mock_last_import = randDateMock();
+                $lateText = "—";
+                $lateClass = "txt-orange";
 
-            $days = rand(1, 40);
+                if (!is_null($row['last_transaction'])) {
+                    $days = (int)$row['days_since_payment'];
 
-            echo "
-            <tr>
-                <td>{$s['long_name']}</td>
-                <td>{$mock_last_transaction}</td>
-                <td>{$mock_last_import}</td>
-                <td>{$days} DAYS</td>
-            </tr>";
+                    if ($days <= 5) {
+                        $lateClass = "txt-green";
+                    } elseif ($days <= 10) {
+                        $lateClass = "txt-orange";
+                    } else {
+                        $lateClass = "txt-red";
+                    }
+
+                    $lateText = $days . " DAYS";
+                }
+
+                echo "<tr>";
+                echo "<td>" . htmlspecialchars($row['long_name']) . "</td>";
+                echo "<td>" . ($row['last_transaction'] ?: '—') . "</td>";
+                echo "<td>" . ($row['last_import'] ?: '—') . "</td>";
+                echo "<td class='days-late $lateClass'>$lateText</td>";
+                echo "</tr>";
+            }
         }
         ?>
         </tbody>
     </table>
 
+    <!-- Pagination -->
     <?php if ($totalPages > 1): ?>
     <div style="text-align: center; margin-top: 30px; font-family: 'Roboto', sans-serif;">
         <?php
-        // Build query string preserving existing GET parameters
         $queryParams = $_GET;
+
         $prevPage = max(1, $page - 1);
         $nextPage = min($totalPages, $page + 1);
+
         $queryParams['page'] = $prevPage;
         $prevUrl = '?' . http_build_query($queryParams);
         $queryParams['page'] = $nextPage;
         $nextUrl = '?' . http_build_query($queryParams);
         ?>
+        
         <?php if ($page > 1): ?>
-            <a href="<?php echo htmlspecialchars($prevUrl); ?>" style="text-decoration: none; color: #B31E32; margin-right: 20px; font-weight: 500;">« Prev</a>
+            <a href="<?= htmlspecialchars($prevUrl) ?>" style="text-decoration: none; color: #B31E32; margin-right: 20px; font-weight: 500;">« Prev</a>
         <?php else: ?>
             <span style="color: #999; margin-right: 20px;">« Prev</span>
         <?php endif; ?>
-        
-        <span style="color: #333; margin: 0 20px;">Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
-        
+
+        <span style="color: #333; margin: 0 20px;">Page <?= $page ?> of <?= $totalPages ?></span>
+
         <?php if ($page < $totalPages): ?>
-            <a href="<?php echo htmlspecialchars($nextUrl); ?>" style="text-decoration: none; color: #B31E32; margin-left: 20px; font-weight: 500;">Next »</a>
+            <a href="<?= htmlspecialchars($nextUrl) ?>" style="text-decoration: none; color: #B31E32; margin-left: 20px; font-weight: 500;">Next »</a>
         <?php else: ?>
             <span style="color: #999; margin-left: 20px;">Next »</span>
         <?php endif; ?>
