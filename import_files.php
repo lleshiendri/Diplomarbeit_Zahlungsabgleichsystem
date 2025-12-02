@@ -193,11 +193,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                     if (($handle = fopen($filePath, "r")) !== FALSE) {
                         // Read header row
                         $header = fgetcsv($handle, 1000, "\t");
+                        $referenceIdIndex = null;
+                        if ($header !== false) {
+                            $normalizedHeader = array_map(fn($col) => strtolower(trim($col)), $header);
+                            $referenceIdIndex = array_search('reference_id', $normalizedHeader);
+                        }
 
                         // Prepare insert statement for STUDENT table
                         $stmtStudent = $conn->prepare("
                             INSERT INTO STUDENT_TAB (forename, name, long_name, birth_date, left_to_pay, additional_payments_status, gender, entry_date, exit_date, description, second_ID, extern_key, email)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ");
+                        $updateReferenceStmt = $conn->prepare("
+                            UPDATE STUDENT_TAB
+                            SET reference_id = ?
+                            WHERE id = ?
                         ");
 
                         while (($data = fgetcsv($handle, 1000, "\t")) !== FALSE) {
@@ -216,6 +226,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             $extern_key = $data[10] ?? null;
                             $email = $data[14] ?? null;
 
+                            $csvReferenceId = ($referenceIdIndex !== false && $referenceIdIndex !== null)
+                                ? trim($data[$referenceIdIndex] ?? '')
+                                : '';
+
                             $stmtStudent->bind_param(
                                 "ssssddssssdds",
                                 $forename,
@@ -232,35 +246,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 $extern_key,
                                 $email
                             );
-                            $stmtStudent->execute();
-                            
-                            // Generate reference_id after insert
-                            if ($stmtStudent->affected_rows > 0 && $forename && $name) {
+                            if ($stmtStudent->execute()) {
                                 $studentId = $conn->insert_id;
-                                
-                                // Only update if reference_id doesn't already exist
-                                $checkRef = $conn->prepare("SELECT reference_id FROM STUDENT_TAB WHERE id = ?");
-                                $checkRef->bind_param("i", $studentId);
-                                $checkRef->execute();
-                                $resultRef = $checkRef->get_result();
-                                $rowRef = $resultRef->fetch_assoc();
-                                $checkRef->close();
-                                
-                                if (empty($rowRef['reference_id'])) {
+
+                                if (
+                                    $studentId > 0 &&
+                                    $forename &&
+                                    $name &&
+                                    $updateReferenceStmt &&
+                                    empty($csvReferenceId)
+                                ) {
                                     $referenceId = generateReferenceID($studentId, $forename, $name);
-                                    $update = $conn->prepare("
-                                        UPDATE STUDENT_TAB
-                                        SET reference_id = ?
-                                        WHERE id = ?
-                                    ");
-                                    $update->bind_param("si", $referenceId, $studentId);
-                                    $update->execute();
-                                    $update->close();
+                                    $updateReferenceStmt->bind_param("si", $referenceId, $studentId);
+                                    $updateReferenceStmt->execute();
                                 }
                             }
                         }
 
                         fclose($handle);
+                        if ($updateReferenceStmt) {
+                            $updateReferenceStmt->close();
+                        }
                         $stmtStudent->close();
                     }
 
