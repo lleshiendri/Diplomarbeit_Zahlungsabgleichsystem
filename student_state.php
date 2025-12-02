@@ -26,21 +26,51 @@ if (isset($_GET['delete_id']) && $_GET['delete_id'] !== '') {
    UPDATE STUDENT
    ============================================================ */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_student'])) {
-    $extern_key  = $_POST['extern_key'] ?? '';
+    $extern_key  = $_POST['extern_key'];
+    $student_id  = isset($_POST['student_id']) ? (int)$_POST['student_id'] : 0;
     $name        = htmlspecialchars(trim($_POST['name'] ?? ''), ENT_QUOTES, 'UTF-8');
     $long_name   = htmlspecialchars(trim($_POST['long_name'] ?? ''), ENT_QUOTES, 'UTF-8');
     $left_to_pay = isset($_POST['left_to_pay']) ? (float)$_POST['left_to_pay'] : 0;
 
-    if ($extern_key !== '') {
-        $stmt = $conn->prepare("UPDATE STUDENT_TAB SET name=?, long_name=?, left_to_pay=? WHERE extern_key=?");
-        if ($stmt) {
-            $stmt->bind_param("ssds", $name, $long_name, $left_to_pay, $extern_key);
-            $stmt->execute();
-            $stmt->close();
-            $alert = "<div class='alert alert-success'>Student successfully updated.</div>";
+    // 1) Versuch: über extern_key updaten
+    $stmt = $conn->prepare("
+        UPDATE STUDENT_TAB 
+        SET name = ?, long_name = ?, left_to_pay = ?
+        WHERE extern_key = ?
+    ");
+
+    if ($stmt) {
+        $stmt->bind_param("ssds", $name, $long_name, $left_to_pay, $extern_key);
+        $stmt->execute();
+        $affected = $stmt->affected_rows;
+        $stmt->close();
+    } else {
+        $alert = "<div class='alert alert-error'>Update fehlgeschlagen (extern_key): ".htmlspecialchars($conn->error)."</div>";
+        $affected = -1;
+    }
+
+    // 2) Falls keine Zeile über extern_key geändert wurde, versuche Fallback über id
+    if ($affected === 0 && $student_id > 0) {
+        $stmt2 = $conn->prepare("
+            UPDATE STUDENT_TAB 
+            SET name = ?, long_name = ?, left_to_pay = ?
+            WHERE id = ?
+        ");
+
+        if ($stmt2) {
+            $stmt2->bind_param("ssdi", $name, $long_name, $left_to_pay, $student_id);
+            $stmt2->execute();
+            $affected = $stmt2->affected_rows;
+            $stmt2->close();
         } else {
-            $alert = "<div class='alert alert-error'>Update failed.</div>";
+            $alert = "<div class='alert alert-error'>Update fehlgeschlagen (id): ".htmlspecialchars($conn->error)."</div>";
         }
+    }
+
+    if ($affected > 0) {
+        $alert = "<div class='alert alert-success'>Student updated successfully.</div>";
+    } elseif ($affected === 0) {
+        $alert = "<div class='alert alert-error'>Update hat keine Zeile verändert (weder extern_key noch id gefunden).</div>";
     }
 }
 
@@ -133,13 +163,14 @@ unset($paginationBase['page']);
 $selectSql = "
     SELECT
         s.id AS student_id,
+        s.extern_key AS extern_key,
         s.long_name AS student_name,
         s.name,
         s.left_to_pay
     FROM STUDENT_TAB s
     {$joinSql}
     {$whereSql}
-    GROUP BY s.id, s.long_name, s.name, s.left_to_pay
+    GROUP BY s.id, s.extern_key, s.long_name, s.name, s.left_to_pay
     ORDER BY s.id ASC
     LIMIT {$limit} OFFSET {$offset}
 ";
@@ -273,13 +304,14 @@ $result = $conn->query($selectSql);
                     $mockDate    = date('d/m/Y', mt_rand(strtotime('2025-01-01'), strtotime('2025-11-30')));
 
                     $studentId   = $row['student_id'];
+                    $externKey   = $row['extern_key'];
                     $studentName = $row['student_name'];
 
                     echo '<tr id="row-'.$studentId.'">';
                     echo '<td>' . htmlspecialchars($studentId) . '</td>';
                     echo '<td>' . htmlspecialchars($studentName) . '</td>';
                     echo '<td>' . number_format($amountPaid, 2, ',', '.') . ' €</td>';
-                    echo '<td>' . number_format($leftToPay, 2, ',', '.') . ' €</td>';
+                    echo '<td>' . number_format($row['left_to_pay'], 2, ',', '.') . ' €</td>';
                     echo '<td>' . number_format($totalAmount, 2, ',', '.') . ' €</td>';
                     echo '<td>' . htmlspecialchars($mockDate) . '</td>';
 
@@ -288,7 +320,7 @@ $result = $conn->query($selectSql);
                             <span class="material-icons-outlined" style="color:#D4463B;"
                                   onclick="toggleEdit(\''.$studentId.'\')">edit</span>
                             &nbsp;
-                            <a href="?'.htmlspecialchars(http_build_query(array_merge($paginationBase, ['delete_id' => $studentId]))).'"
+                            <a href="?'.htmlspecialchars(http_build_query(array_merge($paginationBase, ['delete_id' => $externKey]))).'"
                                onclick="return confirm(\'Are you sure you want to delete this student?\');">
                                 <span class="material-icons-outlined" style="color:#B31E32;">delete</span>
                             </a>
@@ -299,7 +331,9 @@ $result = $conn->query($selectSql);
                     echo '<tr class="edit-row" id="edit-'.$studentId.'" style="display:none;">
                             <td colspan="7">
                                 <form method="POST" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                                    <input type="hidden" name="extern_key" value="'.htmlspecialchars($studentId).'">
+                                    <input type="hidden" name="extern_key" value="'.htmlspecialchars($externKey).'">
+                                    <input type="hidden" name="student_id" value="'.htmlspecialchars($studentId).'">
+                                    <input type="hidden" name="update_student" value="1">
 
                                     <label style="margin-right:5px;">Name:</label>
                                     <input type="text" name="name" value="'.htmlspecialchars($row['name']).'" required style="width:120px;">
@@ -310,7 +344,7 @@ $result = $conn->query($selectSql);
                                     <label style="margin-right:5px;">Left to Pay (€):</label>
                                     <input type="number" step="0.01" name="left_to_pay" value="'.htmlspecialchars($row['left_to_pay']).'" style="width:100px;">
 
-                                    <button type="submit" name="update_student">Save</button>
+                                    <button type="submit">Save</button>
                                     <button type="button" onclick="toggleEdit(\''.$studentId.'\')">Cancel</button>
                                 </form>
                             </td>
@@ -374,13 +408,20 @@ $result = $conn->query($selectSql);
         if (!sidebar) return;
         sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
     }
-
-    // Inline-Edit Toggle
-    function toggleEdit(id) {
-        const row = document.getElementById("edit-" + id);
-        if (!row) return;
-        row.style.display = (row.style.display === "none" || row.style.display === "") ? "table-row" : "none";
-    }
 </script>
+
+<script>
+function toggleEdit(id) {
+    const row = document.getElementById("edit-" + id);
+    if (!row) return;
+
+    // Toggle visibility
+    row.style.display =
+        (row.style.display === "none" || row.style.display === "")
+        ? "table-row"
+        : "none";
+}
+</script>
+
 </body>
 </html>
