@@ -182,7 +182,7 @@ if ($row = $res->fetch_assoc()) {
     <header>MENU <span class="close-btn" onclick="closeSidebar()">&times;</span></header>
     <nav>
       <a href="add_transactions.php"><span class="material-icons-outlined">swap_horiz</span> Add Transaction</a>
-      <a href="Transactions.php"><span class="material-icons-outlined">transactions</span> Transactions</a>
+      <a href="Transactions.php"><span class="material-icons-outlined">receipt_long</span> Transactions</a>
       <a href="add_students.php"><span class="material-icons-outlined">group_add</span> Add Students</a>
       <a href="student_state.php"><span class="material-icons-outlined">school</span> Student State</a>
       <a href="latencies.php"><span class="material-icons-outlined">schedule</span> Latencies</a>
