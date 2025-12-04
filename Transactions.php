@@ -68,17 +68,8 @@ unset($paginationBase['page']);
 
 /* ========= SELECT PAGINATED TRANSACTIONS ========= */
 $selectSql = "
-    SELECT 
-        id,
-        reference_number,
-        beneficiary,
-        reference,
-        transaction_type,
-        processing_date,
-        amount,
-        amount_total
+    SELECT id, beneficiary, reference_number, reference, processing_date
     FROM INVOICE_TAB
-    {$whereSql}
     ORDER BY processing_date DESC
     LIMIT {$limit} OFFSET {$offset}
 ";
@@ -88,6 +79,7 @@ $result = $conn->query($selectSql);
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Transactions</title>
 
     <link rel="stylesheet" href="student_state_style.css">
@@ -96,33 +88,77 @@ $result = $conn->query($selectSql);
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
 
     <style>
-        body { font-family: 'Roboto', sans-serif; }
+        body { font-family: 'Roboto', sans-serif; margin:0; }
+        #sidebar a { text-decoration:none; color:#222; transition:0.2s; }
         #sidebar a:hover { background-color:#FAE4D5; color:#B31E32; }
-        .content { transition:margin-left 0.3s; margin-left:0; padding:100px 30px; }
-        .content.shifted { margin-left:260px; }
+
+        /* Main content wrapper (same behavior as other pages) */
+        #content {
+            transition: margin-left 0.3s ease;
+            margin-left: 0;
+            padding: 100px 30px 60px;
+        }
+        #content.shifted { margin-left: 260px; }
 
         .page-title {
-            text-align:center; font-size:28px; 
-            color:#B31E32; font-weight:700;
             font-family:'Space Grotesk',sans-serif;
+            font-weight:700;
+            color:#B31E32;
+            text-align:center;
+            margin-bottom:20px;
+            font-size:28px;
         }
 
-        .student-table th {
-            background:#FAE4D5; color:#B31E32;
-            font-family:'Montserrat'; font-weight:600;
+        .table-wrapper {
+            width:100%;
+            max-width:1300px;
+            margin:0 auto;
         }
-        .student-table td { text-align:center; }
-        .student-table tr:nth-child(even){background:#fff8eb;}
 
-        .material-icons-outlined { cursor:pointer; color:#B31E32; }
-
-        .alert-success {
-            background:#EAF9E6; color:#2E7D32;
-            padding:10px; border-radius:8px; text-align:center;
+        /* === Table Design (identical to student_state) === */
+        .student-table th { 
+            font-family:'Montserrat',sans-serif; 
+            font-weight:600; 
+            color:#B31E32; 
+            background-color:#FAE4D5; 
+            text-align:center;
         }
-        .alert-error {
-            background:#FFE4E1; color:#B71C1C;
-            padding:10px; border-radius:8px; text-align:center;
+        .student-table td { 
+            font-family:'Roboto',sans-serif; 
+            color:#222; 
+            vertical-align:middle;
+            text-align:center;
+        }
+        .student-table tbody tr:nth-child(odd){background-color:#FFFFFF;}
+        .student-table tbody tr:nth-child(even){background-color:#fff8eb;}
+        .student-table tr:hover { background-color:#FAE4D5; transition:0.2s; }
+
+        .material-icons-outlined { font-size:24px; vertical-align:middle; cursor:pointer; }
+
+        .alert { max-width:600px; margin:0 auto 20px auto; padding:10px 15px; border-radius:8px; font-weight:500; text-align:center; }
+        .alert-success { background:#EAF9E6; color:#2E7D32; border:1px solid #C5E1A5; }
+        .alert-error { background:#FFE4E1; color:#B71C1C; border:1px solid #FFAB91; }
+
+        /* === Pagination Styling (identical to student_state) === */
+        .pagination { font-family:'Montserrat',sans-serif; }
+        .pagination .page-link {
+            color:#B31E32;
+            border:1px solid #FAE4D5;
+            background-color:#fff;
+            font-weight:500;
+        }
+        .pagination .page-link:hover {
+            background-color:#FAE4D5;
+            color:#B31E32;
+        }
+        .pagination .active .page-link {
+            background-color:#B31E32;
+            border-color:#B31E32;
+            color:#fff;
+        }
+        .pagination .disabled .page-link {
+            color:#ccc;
+            border-color:#eee;
         }
     </style>
 </head>
@@ -130,51 +166,45 @@ $result = $conn->query($selectSql);
 
 <?php require __DIR__ . '/navigator.php'; ?>
 
-<div class="content">
+<div id="content">
     <h1 class="page-title">TRANSACTIONS</h1>
     <?= $alert ?>
 
-    <!-- TABLE -->
-    <table class="student-table" style="width:100%; border-collapse:collapse;">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Reference Nr</th>
-                <th>Beneficiary</th>
-                <th>Description</th>
-                <th>Type</th>
-                <th>Processing Date</th>
-                <th>Amount</th>
-                <th>Amount Total</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-        <?php 
-        if ($result && $result->num_rows > 0) {
-            while ($t = $result->fetch_assoc()) {
-                echo "<tr>";
-                echo "<td>".htmlspecialchars($t['id'])."</td>";
-                echo "<td>".htmlspecialchars($t['reference_number'])."</td>";
-                echo "<td>".htmlspecialchars($t['beneficiary'])."</td>";
-                echo "<td>".htmlspecialchars($t['reference'])."</td>";
-                echo "<td>".htmlspecialchars($t['transaction_type'])."</td>";
-                echo "<td>".htmlspecialchars($t['processing_date'])."</td>";
-                echo "<td>".number_format($t['amount'],2,',','.')."€</td>";
-                echo "<td>".number_format($t['amount_total'],2,',','.')."€</td>";
-                echo "<td>
-                        <a href='?delete_id=".$t['id']."' onclick='return confirm(\"Delete transaction?\")'>
-                            <span class='material-icons-outlined'>delete</span>
-                        </a>
-                      </td>";
-                echo "</tr>";
+    <div class="table-wrapper">
+        <!-- TABLE -->
+        <table class="student-table" style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr>
+                    <th>Beneficiary</th>
+                    <th>Reference Nr</th>
+                    <th>Reference</th>
+                    <th>Processing Date</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php 
+            if ($result && $result->num_rows > 0) {
+                while ($t = $result->fetch_assoc()) {
+                    echo "<tr>";
+                    echo "<td>".htmlspecialchars($t['beneficiary'])."</td>";
+                    echo "<td>".htmlspecialchars($t['reference_number'])."</td>";
+                    echo "<td>".htmlspecialchars($t['reference'])."</td>";
+                    echo "<td>".htmlspecialchars($t['processing_date'])."</td>";
+                    echo "<td>
+                            <a href='?delete_id=".$t['id']."' onclick='return confirm(\"Delete transaction?\")'>
+                                <span class='material-icons-outlined' style='color:#B31E32;'>delete</span>
+                            </a>
+                          </td>";
+                    echo "</tr>";
+                }
+            } else {
+                echo "<tr><td colspan='5' style='text-align:center;color:#888;'>No transactions found</td></tr>";
             }
-        } else {
-            echo "<tr><td colspan='9' style='text-align:center;color:#888;'>No transactions found</td></tr>";
-        }
-        ?>
-        </tbody>
-    </table>
+            ?>
+            </tbody>
+        </table>
+    </div>
 
     <!-- PAGINATION -->
     <?php if ($totalPages > 1): ?>
@@ -204,7 +234,6 @@ $result = $conn->query($selectSql);
         </ul>
     </nav>
     <?php endif; ?>
-
 </div>
 
 </body>
