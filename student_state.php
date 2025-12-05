@@ -31,16 +31,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_student'])) {
     $name        = htmlspecialchars(trim($_POST['name'] ?? ''), ENT_QUOTES, 'UTF-8');
     $long_name   = htmlspecialchars(trim($_POST['long_name'] ?? ''), ENT_QUOTES, 'UTF-8');
     $left_to_pay = isset($_POST['left_to_pay']) ? (float)$_POST['left_to_pay'] : 0;
+    $additional_payments_status = isset($_POST['additional_payments_status']) ? (float)$_POST['additional_payments_status'] : 0;
 
     // 1) Versuch: über extern_key updaten
     $stmt = $conn->prepare("
         UPDATE STUDENT_TAB 
-        SET name = ?, long_name = ?, left_to_pay = ?
+        SET name = ?, long_name = ?, left_to_pay = ?, additional_payments_status = ?
         WHERE extern_key = ?
     ");
 
     if ($stmt) {
-        $stmt->bind_param("ssds", $name, $long_name, $left_to_pay, $extern_key);
+        $stmt->bind_param("ssdds", $name, $long_name, $left_to_pay, $additional_payments_status, $extern_key);
         $stmt->execute();
         $affected = $stmt->affected_rows;
         $stmt->close();
@@ -53,12 +54,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_student'])) {
     if ($affected === 0 && $student_id > 0) {
         $stmt2 = $conn->prepare("
             UPDATE STUDENT_TAB 
-            SET name = ?, long_name = ?, left_to_pay = ?
+            SET name = ?, long_name = ?, left_to_pay = ?, additional_payments_status = ?
             WHERE id = ?
         ");
 
         if ($stmt2) {
-            $stmt2->bind_param("ssdi", $name, $long_name, $left_to_pay, $student_id);
+            $stmt2->bind_param("ssddi", $name, $long_name, $left_to_pay, $additional_payments_status, $student_id);
             $stmt2->execute();
             $affected = $stmt2->affected_rows;
             $stmt2->close();
@@ -316,7 +317,11 @@ $result = $conn->query($selectSql);
                     echo '<td>' . number_format($row['left_to_pay'], 2, ',', '.') . ' €</td>';
                     echo '<td>' . number_format($totalAmount, 2, ',', '.') . ' €</td>';
                     echo '<td>' . htmlspecialchars($mockDate) . '</td>';
-                    echo '<td>' . htmlspecialchars($row['additional_payments_status'] ?? '', ENT_QUOTES, 'UTF-8') . '</td>';
+                    echo '<td>';
+                    echo isset($row['additional_payments_status'])
+                        ? number_format((float)$row['additional_payments_status'], 2, ',', '.') . " €"
+                        : "";
+                    echo '</td>';
 
                     // Actions
                     echo '<td style="text-align:center;">
@@ -346,6 +351,9 @@ $result = $conn->query($selectSql);
 
                                     <label style="margin-right:5px;">Left to Pay (€):</label>
                                     <input type="number" step="0.01" name="left_to_pay" value="'.htmlspecialchars($row['left_to_pay']).'" style="width:100px;">
+
+                                    <label style="margin-right:5px;">Additional Payments Status (€):</label>
+                                    <input type="number" step="0.01" name="additional_payments_status" value="'.htmlspecialchars($row['additional_payments_status'] ?? '0', ENT_QUOTES, 'UTF-8').'" style="width:150px;" required>
 
                                     <button type="submit">Save</button>
                                     <button type="button" onclick="toggleEdit(\''.$studentId.'\')">Cancel</button>
