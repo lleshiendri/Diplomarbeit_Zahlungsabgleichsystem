@@ -166,11 +166,12 @@ $selectSql = "
         s.extern_key AS extern_key,
         s.long_name AS student_name,
         s.name,
-        s.left_to_pay
+        s.left_to_pay,
+        s.additional_payments_status
     FROM STUDENT_TAB s
     {$joinSql}
     {$whereSql}
-    GROUP BY s.id, s.extern_key, s.long_name, s.name, s.left_to_pay
+    GROUP BY s.id, s.extern_key, s.long_name, s.name, s.left_to_pay, s.additional_payments_status
     ORDER BY s.id ASC
     LIMIT {$limit} OFFSET {$offset}
 ";
@@ -289,6 +290,7 @@ $result = $conn->query($selectSql);
                     <th>Left to Pay</th>
                     <th>Total Amount</th>
                     <th>Last Transaction</th>
+                    <th>Additional Payment Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -314,6 +316,7 @@ $result = $conn->query($selectSql);
                     echo '<td>' . number_format($row['left_to_pay'], 2, ',', '.') . ' €</td>';
                     echo '<td>' . number_format($totalAmount, 2, ',', '.') . ' €</td>';
                     echo '<td>' . htmlspecialchars($mockDate) . '</td>';
+                    echo '<td>' . htmlspecialchars($row['additional_payments_status'] ?? '', ENT_QUOTES, 'UTF-8') . '</td>';
 
                     // Actions
                     echo '<td style="text-align:center;">
@@ -329,7 +332,7 @@ $result = $conn->query($selectSql);
 
                     // Inline-Edit-Zeile
                     echo '<tr class="edit-row" id="edit-'.$studentId.'" style="display:none;">
-                            <td colspan="7">
+                            <td colspan="8">
                                 <form method="POST" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                                     <input type="hidden" name="extern_key" value="'.htmlspecialchars($externKey).'">
                                     <input type="hidden" name="student_id" value="'.htmlspecialchars($studentId).'">
@@ -351,7 +354,7 @@ $result = $conn->query($selectSql);
                           </tr>';
                 }
             } else {
-                echo '<tr><td colspan="7" style="text-align:center; color:#888;">No students found</td></tr>';
+                echo '<tr><td colspan="8" style="text-align:center; color:#888;">No students found</td></tr>';
             }
             ?>
             </tbody>
