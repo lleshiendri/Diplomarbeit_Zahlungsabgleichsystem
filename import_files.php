@@ -1,4 +1,7 @@
 <?php 
+require_once 'auth_check.php';
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
 require_once 'db_connect.php';
 require_once 'reference_id_generator.php';
@@ -14,8 +17,8 @@ function validateCSVStructure($filePath, $fileType) {
             'address.city', 'address.postCode', 'address.street'
         ],
         'Transactions' => [
-            'reference_number', 'beneficiary', 'reference',
-            'transaction_type', 'processing_date', 'amount', 'amount_total'
+            'No', 'Value Date', 'Reference Number', 'Beneficairy/Ordering name and account number', 'Description',
+            'Reference','Transaction Type', 'Processing Date', 'Amount', 'Amount Total'
         ],
         'LegalGuardians' => [
             'id', 'lastName', 'firstName', 'degree', 'grade',
@@ -35,7 +38,21 @@ function validateCSVStructure($filePath, $fileType) {
 
     // 3️⃣ Read header
     $handle = fopen($filePath, "r");
-    $header = fgetcsv($handle, 1000, $delimiter);
+
+    if ($fileType === 'Students' || $fileType === 'LegalGuardians') {
+    
+        // These file types always have a normal header on the first line.
+        $header = fgetcsv($handle, 1000, $delimiter);
+    
+    } else {
+    
+        // Transactions CSV: skip metadata until the header row starting with "No"
+        do {
+            $header = fgetcsv($handle, 2000, $delimiter);
+            if (!$header) break;  // safety check
+        } while (trim($header[0]) !== "No");
+    }
+    
     fclose($handle);
 
     if (!$header) {
@@ -139,10 +156,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
         $allowedExtensions = ['csv','xls','xlsx'];
 
         if (in_array($extension, $allowedExtensions)) {
+            $tmpPath = $_FILES['importFile']['tmp_name'];
+
+            // Validate CSV structure before moving or inserting metadata
+            $validation = validateCSVStructure($tmpPath, $fileType);
+            if (!$validation['valid']) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => $validation['message'],
+                    'missingColumns' => $validation['missing'],
+                    'unexpectedColumns' => $validation['extra'],
+                    'guessedType' => $validation['guessedType']
+                ]);
+                exit;
+            }
+
             $newFileName = uniqid('import_', true) . '.' . $extension;
             $destination = $uploadDir . $newFileName;
 
-            if (move_uploaded_file($_FILES['importFile']['tmp_name'], $destination)) {
+            if (move_uploaded_file($tmpPath, $destination)) {
                 $importedBy = 'admin'; // replace with session username if needed
 
                 $stmt = $conn->prepare("
@@ -175,18 +207,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                 // Get insert ID if needed
                 $id = $conn->insert_id;
 
-                $validation = validateCSVStructure($destination, $fileType);
-                if (!$validation['valid']) {
-                    echo json_encode([
-                        'success' => false,
-                        'message' => $validation['message'],
-                        'missingColumns' => $validation['missing'],
-                        'unexpectedColumns' => $validation['extra'],
-                        'guessedType' => $validation['guessedType']
-                    ]);
-                    exit; // Stop script to prevent wrong import
-                }
-
                 if ($fileType === 'Students') {
                 $filePath = $destination;
 
@@ -199,6 +219,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             INSERT INTO STUDENT_TAB (forename, name, long_name, birth_date, left_to_pay, additional_payments_status, gender, entry_date, exit_date, description, second_ID, extern_key, email)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ");
+                        if (!$stmtStudent) {
+                            echo json_encode([
+                                'success' => false,
+                                'message' => 'Student import prepare failed: ' . $conn->error
+                            ]);
+                            exit;
+                        }
 
                         while (($data = fgetcsv($handle, 1000, "\t")) !== FALSE) {
                             // Map CSV columns to variables
@@ -232,30 +259,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 $extern_key,
                                 $email
                             );
-                            $stmtStudent->execute();
-                            
-                            // Generate reference_id after insert
-                            if ($stmtStudent->affected_rows > 0 && $forename && $name) {
-                                $studentId = $conn->insert_id;
-                                
-                                // Only update if reference_id doesn't already exist
-                                $checkRef = $conn->prepare("SELECT reference_id FROM STUDENT_TAB WHERE id = ?");
-                                $checkRef->bind_param("i", $studentId);
-                                $checkRef->execute();
-                                $resultRef = $checkRef->get_result();
-                                $rowRef = $resultRef->fetch_assoc();
-                                $checkRef->close();
-                                
-                                if (empty($rowRef['reference_id'])) {
-                                    $referenceId = generateReferenceID($studentId, $forename, $name);
-                                    $update = $conn->prepare("
-                                        UPDATE STUDENT_TAB
-                                        SET reference_id = ?
-                                        WHERE id = ?
-                                    ");
-                                    $update->bind_param("si", $referenceId, $studentId);
-                                    $update->execute();
-                                    $update->close();
+                            if (!$stmtStudent->execute()) {
+                                if ($stmtStudent->errno === 1062) {
+                                    continue;
+                                } else {
+                                    error_log("Student insert error ({$stmtStudent->errno}): {$stmtStudent->error}");
                                 }
                             }
                         }
@@ -300,25 +308,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                 }
             }
 
-                $validation = validateCSVStructure($destination, $fileType);
-                if (!$validation['valid']) {
-                    echo json_encode([
-                        'success' => false,
-                        'message' => $validation['message'],
-                        'missingColumns' => $validation['missing'],
-                        'unexpectedColumns' => $validation['extra'],
-                        'guessedType' => $validation['guessedType']
-                    ]);
-                    exit; // Stop script to prevent wrong import
-                }
-            }
-
                 if ($fileType === 'Transactions') {
                     $filePath = $destination;
 
                     if (($handle = fopen($filePath, "r")) !== FALSE) {
-                        // Read header
-                        $header = fgetcsv($handle, 1000, ",");
+                        // Skip metadata rows until we find the real header row (first column === "No")
+                        $header = null;
+                        while (($row = fgetcsv($handle, 1000, ",")) !== FALSE) {
+                            if (isset($row[0]) && trim($row[0]) === "No") {
+                                $header = $row;
+                                break;
+                            }
+                        }
+
+                        // If header not found, exit
+                        if ($header === null) {
+                            fclose($handle);
+                            error_log("TRANSACTION HEADER NOT FOUND: Expected row with 'No' as first column");
+                            return;
+                        }
 
                         // Prepare insert statement for INVOICE_TAB
                         $stmtTrans = $conn->prepare("
@@ -326,12 +334,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 (reference_number,  beneficiary, reference, transaction_type, processing_date, amount, amount_total) 
                             VALUES (?, ?, ?, ?, ?, ?, ?)
                         ");
-                        if (!$stmt) {
+                        if (!$stmtTrans) {
                             error_log("TRANSACTION PREPARE FAILED: " . $conn->error);
-                            exit;
+                            fclose($handle);
+                            return;
                         }
 
+                        // Parse only valid transaction rows
+                        $started = false;
                         while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
+                            // Check if first column exists and get its value
+                            $firstCol = isset($data[0]) ? trim($data[0]) : '';
+
+                            // Start parsing when first column is exactly "1"
+                            if ($firstCol === "1" && !$started) {
+                                $started = true;
+                            }
+
+                            // If parsing hasn't started yet, skip this row
+                            if (!$started) {
+                                continue;
+                            }
+
+                            // Stop parsing if first column is empty or non-numeric
+                            if ($firstCol === '' || !ctype_digit($firstCol)) {
+                                break;
+                            }
+
+                            // Only parse rows where first column is numeric (valid transaction rows)
                             $reference_number = $data[2] ?? null;
                             $beneficiary      = $data[3] ?? null;
                             $reference        = $data[5] ?? null;
@@ -353,23 +383,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             $stmtTrans->execute();
                         }
 
+                        $stmtTrans->close();
                         fclose($handle);
                     }
                 }
-
-
-                $validation = validateCSVStructure($destination, $fileType);
-                if (!$validation['valid']) {
-                    echo json_encode([
-                        'success' => false,
-                        'message' => $validation['message'],
-                        'missingColumns' => $validation['missing'],
-                        'unexpectedColumns' => $validation['extra'],
-                        'guessedType' => $validation['guessedType']
-                    ]);
-                    exit; // Stop script to prevent wrong import
-                }
-
                 if ($fileType === 'LegalGuardians') {
                     $filePath = $destination;
 
@@ -383,6 +400,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 (first_name, last_name, phone, mobile, email, external_key) 
                             VALUES (?, ?, ?, ?, ?, ?)
                         ");
+                        if (!$stmtGuardian) {
+                            echo json_encode([
+                                'success' => false,
+                                'message' => 'Guardian import prepare failed: ' . $conn->error
+                            ]);
+                            exit;
+                        }
 
                         while (($data = fgetcsv($handle, 1000, "\t")) !== FALSE) {
                             $first_name = $data[2] ?? null;
@@ -390,7 +414,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             $phone      = $data[7] ?? null;
                             $mobile     = $data[8] ?? null;
                             $email      = $data[6] ?? null;
-                            $external   = $data[10] ?? null;
+                            $external_key = $data[10] ?? null;
 
                             $stmtGuardian->bind_param(
                                 "ssssss",
@@ -399,9 +423,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 $phone,
                                 $mobile,
                                 $email,
-                                $external
+                                $external_key
                             );
-                            $stmtGuardian->execute();
+                            if (!$stmtGuardian->execute()) {
+                                if ($stmtGuardian->errno === 1062) {
+                                    continue;
+                                } else {
+                                    error_log("Guardian insert error ({$stmtGuardian->errno}): {$stmtGuardian->error}");
+                                }
+                            }
                         }
 
                         fclose($handle);
@@ -433,7 +463,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
     exit;
 }
 
-
+require_once 'navigator.php';
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -566,37 +596,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
         }
         .import-button:hover{ background:var(--red-dark); }
 
-        /* Sidebar (von navigator) */
-        .sidebar {
-            position: fixed;
-            top: 70px;
-            left: 0;
-            bottom: 0;
-            width: var(--sidebar-w);
-            background: var(--off-white);
-            border-right: 1px solid var(--gray-light);
-            transform: translateX(-100%);
-            transition: transform 0.3s ease;
-            z-index: 1200;
-            overflow-y:auto;
-        }
-        .sidebar.open {
-            transform: translateX(0);
-        }
-
-        /* Overlay */
-        #overlay {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0,0,0,0.2);
-            display: none;
-            z-index: 1100;
-        }
-        #overlay.show {
-            display: block;
-        }
-
         /* Home icon styling (in navbar) */
         .nav-home {
             display: flex;
@@ -614,10 +613,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
         }
     </style>
 </head>
-<body>
-
-<!-- OVERLAY -->
-<div id="overlay" onclick="closeSidebar()"></div>
+<body class="imports-page">
 
 <!-- PAGE CONTENT -->
 <div id="content">
@@ -777,25 +773,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
         });
     });
 
-    // Sidebar toggle
-    const sidebar   = document.getElementById("sidebar");
-    const content   = document.getElementById("content");
-    const overlay   = document.getElementById("overlay");
-
-    function openSidebar(){
-        sidebar.classList.add("open");
-        content.classList.add("shifted");
-        overlay.classList.add("show");
-    }
-    function closeSidebar(){
-        sidebar.classList.remove("open");
-        content.classList.remove("shifted");
-        overlay.classList.remove("show");
-    }
-    function toggleSidebar(){ 
-        sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); 
-    }
-     document.querySelectorAll('.upload-form').forEach(form => {
+    document.querySelectorAll('.upload-form').forEach(form => {
         const fileInput = form.querySelector('input[type=file]');
         const button = form.querySelector('.import-button');
         const type = form.dataset.type;
