@@ -10,19 +10,38 @@ if (isset($_SESSION['user_id'])) {
 	exit;
 }
 
+// Initialize tracking
+if (!isset($_SESSION['login_attempts'])) {
+	$_SESSION['login_attempts'] = 0;
+	$_SESSION['last_attempt'] = time();
+}
+
+$lockout = false;
+$remaining = 0;
+
+if ($_SESSION['login_attempts'] >= 5) {
+	$elapsed = time() - $_SESSION['last_attempt'];
+
+	if ($elapsed < 600) { // 600 seconds = 10 minutes
+		$lockout = true;
+		$remaining = 600 - $elapsed; // seconds remaining in lockout
+	} else {
+		// Reset attempts after timeout
+		$_SESSION['login_attempts'] = 0;
+	}
+}
+
 // Initialize error message
 $error = "";
 
 // Handle form submission
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
-	// Get and sanitize inputs
-	$username = trim($_POST['username'] ?? ''); // this field captures email or username
+if ($_SERVER["REQUEST_METHOD"] === "POST" && !$lockout) {
+	// Get inputs
+	$username = trim($_POST['username'] ?? '');
 	$password = trim($_POST['password'] ?? '');
-	$sanitizedUsername = htmlspecialchars($username, ENT_QUOTES, 'UTF-8');
-	$sanitizedPassword = htmlspecialchars($password, ENT_QUOTES, 'UTF-8');
 
 	if ($username !== '' && $password !== '') {
-		// Try to find user by email first
+		// Try to find user by email first, then by username
 		$user = null;
 		$stmt = $conn->prepare("SELECT id, email, password, role FROM USER_TAB WHERE email = ? LIMIT 1");
 		if ($stmt) {
@@ -35,7 +54,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 			$stmt->close();
 		}
 
-		// If not found by email, try by username (if such a column exists)
+		// If not found by email, try by username
 		if ($user === null) {
 			$stmt2 = $conn->prepare("SELECT id, email, password, role FROM USER_TAB WHERE username = ? LIMIT 1");
 			if ($stmt2) {
@@ -50,51 +69,46 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 		}
 
 		if ($user !== null) {
-			$storedPassword = (string)$user['password'];
-			$authOk = false;
+			$storedHash = (string)$user['password'];
 
-			// Primary: verify using password_hash
-			if (password_verify($password, $storedPassword)) {
-				$authOk = true;
-				// Optionally rehash if algorithm parameters changed
-				if (password_needs_rehash($storedPassword, PASSWORD_DEFAULT)) {
-					$newHash = password_hash($password, PASSWORD_DEFAULT);
-					$rehashStmt = $conn->prepare("UPDATE USER_TAB SET password = ? WHERE id = ?");
-					if ($rehashStmt) {
-						$rehashStmt->bind_param('si', $newHash, $user['id']);
-						$rehashStmt->execute();
-						$rehashStmt->close();
-					}
-				}
-			} else {
-				// Fallback for legacy plaintext passwords stored in DB
-				if (hash_equals($storedPassword, $password)) {
-					$authOk = true;
-					// Immediately upgrade to a secure hash
-					$newHash = password_hash($password, PASSWORD_DEFAULT);
-					$upgradeStmt = $conn->prepare("UPDATE USER_TAB SET password = ? WHERE id = ?");
-					if ($upgradeStmt) {
-						$upgradeStmt->bind_param('si', $newHash, $user['id']);
-						$upgradeStmt->execute();
-						$upgradeStmt->close();
-					}
-				}
-			}
+			// Secure password verification
+			if (password_verify($password, $storedHash)) {
+				// Reset attempts on successful login
+				$_SESSION['login_attempts'] = 0;
 
-			if ($authOk) {
-				// Authentication successful: store user data in session
+				// Optional: Automatically rehash passwords if needed
+				if (password_needs_rehash($storedHash, PASSWORD_DEFAULT)) {
+					$newHash = password_hash($password, PASSWORD_DEFAULT);
+
+					$u = $conn->prepare("UPDATE USER_TAB SET password = ? WHERE id = ?");
+					$u->bind_param("si", $newHash, $user['id']);
+					$u->execute();
+					$u->close();
+				}
+
+				// Secure session handling - regenerate session ID to prevent fixation
+				session_regenerate_id(true);
+				
+				// Store user data in session
 				$_SESSION['user_id'] = (int)$user['id'];
-				$_SESSION['username'] = $sanitizedUsername; // store sanitized identifier
+				$_SESSION['username'] = htmlspecialchars($username, ENT_QUOTES, 'UTF-8');
 				$_SESSION['role'] = isset($user['role']) && $user['role'] !== null ? $user['role'] : 'Reader';
 
 				// Redirect to dashboard
-				header('Location: ../dashboard.php');
+				header("Location: ../dashboard.php");
 				exit;
+			} else {
+				// Record failed attempt
+				$_SESSION['login_attempts']++;
+				$_SESSION['last_attempt'] = time();
+				$error = "Wrong username or password.";
 			}
+		} else {
+			// User not found → also record attempt
+			$_SESSION['login_attempts']++;
+			$_SESSION['last_attempt'] = time();
+			$error = "Wrong username or password.";
 		}
-
-		// Authentication failed
-		$error = 'Invalid username or password.';
 	} else {
 		$error = 'Please enter username and password.';
 	}
@@ -109,6 +123,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     <title>Login - Shkolla Austriake</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        .lockout-message {
+            background: #ffe3e3;
+            color: #b30000;
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        #login-form input[disabled],
+        #login-form button[disabled] {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -128,17 +159,29 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 <p class="error"><?= htmlspecialchars($error) ?></p>
             <?php endif; ?>
 
-            <form method="post" action="">
+          <?php if ($lockout): ?>
+                <div class="lockout-message">
+                    <p><strong>Too many attempts.</strong></p>
+                    <p>Please wait <span id="lockout-timer"></span> before trying again.</p>
+                </div>
+            <?php endif; ?>
+
+            <form method="post" action="" id="login-form">
 				<div class="input-group">
-					<input type="text" name="username" placeholder="Username or Email" required>
+					<input type="text" name="username" placeholder="Username or Email" required
+						<?php if ($lockout) echo 'disabled'; ?>>
 				</div>
                 <div class="input-group password-group">
-                    <input type="password" name="password" placeholder="Password" required>
+                    <input type="password" name="password" placeholder="Password" required
+						<?php if ($lockout) echo 'disabled'; ?>>
                     <span class="toggle-password">
                         <img src="eye.png" alt="Show password">
                     </span>
                 </div>
-                <button type="submit" class="btn">LOG IN</button>
+                <button type="submit" class="btn"
+					<?php if ($lockout) echo 'disabled'; ?>>
+					LOG IN
+				</button>
             </form>
         </div>
     </div>
@@ -149,6 +192,28 @@ document.querySelector(".toggle-password").addEventListener("click", function(){
     const passField = document.querySelector("input[name='password']");
     passField.type = passField.type === "password" ? "text" : "password";
 });
+
+<?php if ($lockout): ?>
+    let remaining = <?php echo $remaining; ?>;
+    let timerElem = document.getElementById("lockout-timer");
+
+    function updateTimer() {
+        let m = Math.floor(remaining / 60);
+        let s = remaining % 60;
+        if (s < 10) s = "0" + s;
+
+        timerElem.textContent = m + ":" + s;
+
+        if (remaining <= 0) {
+            location.reload();
+        } else {
+            remaining--;
+            setTimeout(updateTimer, 1000);
+        }
+    }
+
+    updateTimer();
+<?php endif; ?>
 </script>
 </body>
 </html>
