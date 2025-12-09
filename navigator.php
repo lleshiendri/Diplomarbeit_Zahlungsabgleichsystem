@@ -186,7 +186,6 @@ if ($row = $res->fetch_assoc()) {
     <nav>
     <?php if ($isAdmin): ?> 
       <a href="add_transactions.php"><span class="material-icons-outlined">swap_horiz</span> Add Transaction</a>
-      <a href="Transactions.php"><span class="material-icons-outlined">receipt_long</span> Transactions</a>
       <a href="add_students.php"><span class="material-icons-outlined">group_add</span> Add Students</a>
       <a href="import_files.php"><span class="material-icons-outlined">upload_file</span> Import File</a>
       <a href="unconfirmed.php"><span class="material-icons-outlined">priority_high</span> Unconfirmed</a>
