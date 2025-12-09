@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
                 $checkRef->close();
                 
                 if (empty($rowRef['reference_id'])) {
-                    $referenceId = generateReferenceID($studentId, $forename, $name);
+                    $referenceId = generateReferenceID($studentId, $name, $forename);
                     $update = $conn->prepare("
                         UPDATE STUDENT_TAB
                         SET reference_id = ?

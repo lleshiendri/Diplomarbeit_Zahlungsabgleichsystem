@@ -1,13 +1,16 @@
 <?php
 require_once __DIR__ . '/auth_check.php';
-$currentPage = basename($_SERVER['PHP_SELF']);
 require_once __DIR__ . '/db_connect.php';
 
+$currentPage = basename($_SERVER['PHP_SELF']);
 $alert = "";
 
-// ===== DELETE STUDENT =====
-if (isset($_GET['delete_id'])) {
+/* ============================================================
+   DELETE STUDENT
+   ============================================================ */
+if (isset($_GET['delete_id']) && $_GET['delete_id'] !== '') {
     $delete_id = $_GET['delete_id'];
+
     $stmt = $conn->prepare("DELETE FROM STUDENT_TAB WHERE extern_key = ?");
     if ($stmt) {
         $stmt->bind_param("s", $delete_id);
@@ -19,21 +22,56 @@ if (isset($_GET['delete_id'])) {
     }
 }
 
-// ===== UPDATE STUDENT =====
+/* ============================================================
+   UPDATE STUDENT
+   ============================================================ */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_student'])) {
     $extern_key  = $_POST['extern_key'];
+    $student_id  = isset($_POST['student_id']) ? (int)$_POST['student_id'] : 0;
     $name        = htmlspecialchars(trim($_POST['name'] ?? ''), ENT_QUOTES, 'UTF-8');
     $long_name   = htmlspecialchars(trim($_POST['long_name'] ?? ''), ENT_QUOTES, 'UTF-8');
     $left_to_pay = isset($_POST['left_to_pay']) ? (float)$_POST['left_to_pay'] : 0;
+    $additional_payments_status = isset($_POST['additional_payments_status']) ? (float)$_POST['additional_payments_status'] : 0;
 
-    $stmt = $conn->prepare("UPDATE STUDENT_TAB SET name=?, long_name=?, left_to_pay=? WHERE extern_key=?");
+    // 1) Versuch: über extern_key updaten
+    $stmt = $conn->prepare("
+        UPDATE STUDENT_TAB 
+        SET name = ?, long_name = ?, left_to_pay = ?, additional_payments_status = ?
+        WHERE extern_key = ?
+    ");
+
     if ($stmt) {
-        $stmt->bind_param("ssds", $name, $long_name, $left_to_pay, $extern_key);
+        $stmt->bind_param("ssdds", $name, $long_name, $left_to_pay, $additional_payments_status, $extern_key);
         $stmt->execute();
+        $affected = $stmt->affected_rows;
         $stmt->close();
-        $alert = "<div class='alert alert-success'>Student successfully updated.</div>";
     } else {
-        $alert = "<div class='alert alert-error'>Update failed.</div>";
+        $alert = "<div class='alert alert-error'>Update fehlgeschlagen (extern_key): ".htmlspecialchars($conn->error)."</div>";
+        $affected = -1;
+    }
+
+    // 2) Falls keine Zeile über extern_key geändert wurde, versuche Fallback über id
+    if ($affected === 0 && $student_id > 0) {
+        $stmt2 = $conn->prepare("
+            UPDATE STUDENT_TAB 
+            SET name = ?, long_name = ?, left_to_pay = ?, additional_payments_status = ?
+            WHERE id = ?
+        ");
+
+        if ($stmt2) {
+            $stmt2->bind_param("ssddi", $name, $long_name, $left_to_pay, $additional_payments_status, $student_id);
+            $stmt2->execute();
+            $affected = $stmt2->affected_rows;
+            $stmt2->close();
+        } else {
+            $alert = "<div class='alert alert-error'>Update fehlgeschlagen (id): ".htmlspecialchars($conn->error)."</div>";
+        }
+    }
+
+    if ($affected > 0) {
+        $alert = "<div class='alert alert-success'>Student updated successfully.</div>";
+    } elseif ($affected === 0) {
+        $alert = "<div class='alert alert-error'>Update hat keine Zeile verändert (weder extern_key noch id gefunden).</div>";
     }
 }
 
@@ -50,25 +88,29 @@ $filterApplied = isset($_GET['applied']);
 $clauses = [];
 $needsInvoiceJoin = false;
 
+/* STUDENT NAME */
 if ($filterStudent !== '') {
     $like = "%" . $conn->real_escape_string($filterStudent) . "%";
     $clauses[] = "(s.name LIKE '{$like}' OR s.long_name LIKE '{$like}' OR s.forename LIKE '{$like}')";
 }
 
+/* CLASS */
 if ($filterClass !== '' && ctype_digit($filterClass)) {
     $clauses[] = "s.class_id = " . (int)$filterClass;
 }
 
+/* STATUS via left_to_pay */
 if ($filterStatus === "open") {
     $clauses[] = "s.left_to_pay > 0";
 } elseif ($filterStatus === "paid") {
     $clauses[] = "s.left_to_pay = 0";
 } elseif ($filterStatus === "overdue") {
-    $clauses[] = "s.left_to_pay > 0 AND s.exit_date < NOW()";
+    $clauses[] = "s.left_to_pay > 0 AND s.exit_date < CURDATE()";
 } elseif ($filterStatus === "partial") {
     $clauses[] = "s.left_to_pay > 0";
 }
 
+/* DATE / AMOUNT filters require INVOICE_TAB */
 if ($filterFrom !== '') {
     $needsInvoiceJoin = true;
     $clauses[] = "i.processing_date >= '" . $conn->real_escape_string($filterFrom) . "'";
@@ -86,17 +128,15 @@ if ($filterMax !== '' && is_numeric($filterMax)) {
     $clauses[] = "i.amount_total <= " . (float)$filterMax;
 }
 
+/* Build JOIN only if needed */
 $joinSql = "";
 if ($needsInvoiceJoin) {
     $joinSql = "
-        LEFT JOIN LEGAL_GUARDIAN_STUDENT_TAB lgs ON lgs.student_id = s.id
-        LEFT JOIN INVOICE_TAB i ON i.legal_guardian_id = lgs.legal_guardian_id
+        LEFT JOIN INVOICE_TAB i ON i.student_id = s.id
     ";
 }
 
 $whereSql = empty($clauses) ? "" : "WHERE " . implode(" AND ", $clauses);
-
-// ===== PAGINATION =====
 $limit = 10;
 $page = isset($_GET['page']) && is_numeric($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 
@@ -108,6 +148,7 @@ $countSql = "
 ";
 $countRes = $conn->query($countSql);
 $totalRows = $countRes ? (int)($countRes->fetch_assoc()['total'] ?? 0) : 0;
+
 $totalPages = max(1, (int)ceil($totalRows / $limit));
 if ($page > $totalPages) {
     $page = $totalPages;
@@ -117,21 +158,27 @@ $offset = ($page - 1) * $limit;
 $paginationBase = $_GET;
 unset($paginationBase['page']);
 
+/* ============================================================
+   HAUPT-SELECT (GEFILTERT!)
+   ============================================================ */
 $selectSql = "
     SELECT
-        s.id,
-        s.extern_key AS student_id,
+        s.id AS student_id,
+        s.extern_key AS extern_key,
         s.long_name AS student_name,
         s.name,
-        s.left_to_pay
+        s.left_to_pay,
+        s.additional_payments_status
     FROM STUDENT_TAB s
     {$joinSql}
     {$whereSql}
-    GROUP BY s.id, s.extern_key, s.long_name, s.name, s.left_to_pay
+    GROUP BY s.id, s.extern_key, s.long_name, s.name, s.left_to_pay, s.additional_payments_status
     ORDER BY s.id ASC
     LIMIT {$limit} OFFSET {$offset}
 ";
+
 $result = $conn->query($selectSql);
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -155,19 +202,20 @@ $result = $conn->query($selectSql);
         .content.shifted { margin-left:260px; }
         #overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.2); opacity:0; visibility:hidden; transition:opacity 0.3s ease; z-index:8; }
         #overlay.show { opacity:1; visibility:visible; }
+
         .page-title { font-family:'Space Grotesk',sans-serif; font-weight:700; color:#B31E32; text-align:center; margin-bottom:20px; font-size:28px; }
 
         /* === Table Design === */
-        .student-table th { 
-            font-family:'Montserrat',sans-serif; 
-            font-weight:600; 
-            color:#B31E32; 
-            background-color:#FAE4D5; 
+        .student-table th {
+            font-family:'Montserrat',sans-serif;
+            font-weight:600;
+            color:#B31E32;
+            background-color:#FAE4D5;
             text-align:center;
         }
-        .student-table td { 
-            font-family:'Roboto',sans-serif; 
-            color:#222; 
+        .student-table td {
+            font-family:'Roboto',sans-serif;
+            color:#222;
             vertical-align:middle;
             text-align:center;
         }
@@ -205,95 +253,35 @@ $result = $conn->query($selectSql);
             color:#ccc;
             border-color:#eee;
         }
-    </style>
-</head>
-<body>
 
         .content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;     
-    text-align: center;     
-}
-.table-wrapper {
-    width: 100%;
-    max-width: 1300px;      
-    margin: 0 auto;
-}
-.student-table {
-    margin: 0 auto;         
-}
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .table-wrapper {
+            width: 100%;
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+        .student-table {
+            margin: 0 auto;
+        }
     </style>
 </head>
 <body>
 <?php require __DIR__ . '/navigator.php'; ?>
 
-<?php
-require "db_connect.php";
-require "navigator.php";
-
-$alert = "";
-
-// ===== DELETE STUDENT =====
-if (isset($_GET['delete_id'])) {
-    $delete_id = $_GET['delete_id'];
-    $stmt = $conn->prepare("DELETE FROM STUDENT_TAB WHERE extern_key = ?");
-    if ($stmt) {
-        $stmt->bind_param("s", $delete_id);
-        $stmt->execute();
-        $stmt->close();
-        $alert = "<div class='alert alert-success'>✅ Student successfully deleted.</div>";
-    } else {
-        $alert = "<div class='alert alert-error'>❌ Delete failed.</div>";
-    }
-}
-
-// ===== UPDATE STUDENT =====
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_student'])) {
-    $extern_key  = $_POST['extern_key'];
-    $name        = htmlspecialchars(trim($_POST['name'] ?? ''), ENT_QUOTES, 'UTF-8');
-    $long_name   = htmlspecialchars(trim($_POST['long_name'] ?? ''), ENT_QUOTES, 'UTF-8');
-    $left_to_pay = isset($_POST['left_to_pay']) ? (float)$_POST['left_to_pay'] : 0;
-
-    $stmt = $conn->prepare("UPDATE STUDENT_TAB SET name=?, long_name=?, left_to_pay=? WHERE extern_key=?");
-    if ($stmt) {
-        $stmt->bind_param("ssds", $name, $long_name, $left_to_pay, $extern_key);
-        $stmt->execute();
-        $stmt->close();
-        $alert = "<div class='alert alert-success'>Student successfully updated.</div>";
-    } else {
-        $alert = "<div class='alert alert-error'>Update failed.</div>";
-    }
-}
-
-// ===== FETCH TABLE =====
-$limit = 10;
-$page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
-$offset = ($page - 1) * $limit;
-$countRes = $conn->query("SELECT COUNT(*) AS total FROM STUDENT_TAB");
-$totalRows = $countRes->fetch_assoc()['total'] ?? 0;
-$totalPages = ceil($totalRows / $limit);
-
-$result = $conn->query("
-    SELECT id, extern_key AS student_id, long_name AS student_name, name, left_to_pay
-/*  
-------------------------------------------
- FIX #1 — USE THE REAL COLUMN NAME "id"
-------------------------------------------
-*/
-$result = $conn->query("
-    SELECT id AS student_id, long_name AS student_name, name, left_to_pay
-    FROM STUDENT_TAB
-    ORDER BY id ASC
-    LIMIT $limit OFFSET $offset
-");
-?>
+<div id="overlay"></div>
 
 <div class="content">
     <h1 class="page-title">STUDENT STATE</h1>
     <?= $alert ?>
 
-    <div class="table-wrapper">
+    <?php require __DIR__ . '/filters.php'; ?>
+
+    <div class="table-wrapper" style="margin-top:25px;">
         <table class="student-table" style="width:100%; border-collapse:collapse;">
             <thead>
                 <tr>
@@ -303,6 +291,7 @@ $result = $conn->query("
                     <th>Left to Pay</th>
                     <th>Total Amount</th>
                     <th>Last Transaction</th>
+                    <th>Additional Payment Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -310,53 +299,70 @@ $result = $conn->query("
             <?php
             if ($result && $result->num_rows > 0) {
                 while ($row = $result->fetch_assoc()) {
+
+                    // 📌 Hier sind deine Mock-Werte – kannst du später durch echte DB-Werte ersetzen
                     $totalAmount = 1300;
                     $amountPaid  = rand(0, $totalAmount);
                     $leftToPay   = $totalAmount - $amountPaid;
                     $mockDate    = date('d/m/Y', mt_rand(strtotime('2025-01-01'), strtotime('2025-11-30')));
 
-                    echo '<tr id="row-'.$row['student_id'].'">';
-                    echo '<td>' . htmlspecialchars($row['student_id']) . '</td>';
-                    echo '<td>' . htmlspecialchars($row['student_name']) . '</td>';
+                    $studentId   = $row['student_id'];
+                    $externKey   = $row['extern_key'];
+                    $studentName = $row['student_name'];
+
+                    echo '<tr id="row-'.$studentId.'">';
+                    echo '<td>' . htmlspecialchars($studentId) . '</td>';
+                    echo '<td>' . htmlspecialchars($studentName) . '</td>';
                     echo '<td>' . number_format($amountPaid, 2, ',', '.') . ' €</td>';
-                    echo '<td>' . number_format($leftToPay, 2, ',', '.') . ' €</td>';
+                    echo '<td>' . number_format($row['left_to_pay'], 2, ',', '.') . ' €</td>';
                     echo '<td>' . number_format($totalAmount, 2, ',', '.') . ' €</td>';
                     echo '<td>' . htmlspecialchars($mockDate) . '</td>';
-                    echo '<td style="text-align:center;">
-                            <span class="material-icons-outlined" style="color:#D4463B;" onclick="toggleEdit(\''.$row['student_id'].'\', \''.htmlspecialchars($row['name']).'\', \''.htmlspecialchars($row['student_name']).'\', \''.$row['left_to_pay'].'\')">edit</span>
+                    echo '<td>';
+                    echo isset($row['additional_payments_status'])
+                        ? number_format((float)$row['additional_payments_status'], 2, ',', '.') . " €"
+                        : "";
+                    echo '</td>';
 
-                    // ✳️ CHANGE 1: use studentStateToggleEdit instead of toggleEdit
+                    // Actions
                     echo '<td style="text-align:center;">
-                            <span class="material-icons-outlined" style="color:#D4463B;" onclick="studentStateToggleEdit(\''.$row['student_id'].'\')">edit</span>
+                            <span class="material-icons-outlined" style="color:#D4463B;"
+                                  onclick="toggleEdit(\''.$studentId.'\')">edit</span>
                             &nbsp;
-                            <a href="?delete_id=' . urlencode($row['student_id']) . '" onclick="return confirm(\'Are you sure you want to delete this student?\');">
+                            <a href="?'.htmlspecialchars(http_build_query(array_merge($paginationBase, ['delete_id' => $externKey]))).'"
+                               onclick="return confirm(\'Are you sure you want to delete this student?\');">
                                 <span class="material-icons-outlined" style="color:#B31E32;">delete</span>
                             </a>
                           </td>';
-
                     echo '</tr>';
 
-                    // Hidden inline edit row
-                    echo '<tr class="edit-row" id="edit-'.$row['student_id'].'" style="display:none;">
-                            <td colspan="7">
+                    // Inline-Edit-Zeile
+                    echo '<tr class="edit-row" id="edit-'.$studentId.'" style="display:none;">
+                            <td colspan="8">
                                 <form method="POST" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                                    <input type="hidden" name="extern_key" value="'.$row['student_id'].'">
+                                    <input type="hidden" name="extern_key" value="'.htmlspecialchars($externKey).'">
+                                    <input type="hidden" name="student_id" value="'.htmlspecialchars($studentId).'">
+                                    <input type="hidden" name="update_student" value="1">
+
                                     <label style="margin-right:5px;">Name:</label>
                                     <input type="text" name="name" value="'.htmlspecialchars($row['name']).'" required style="width:120px;">
+
                                     <label style="margin-right:5px;">Long Name:</label>
-                                    <input type="text" name="long_name" value="'.htmlspecialchars($row['student_name']).'" style="width:150px;">
+                                    <input type="text" name="long_name" value="'.htmlspecialchars($studentName).'" style="width:150px;">
+
                                     <label style="margin-right:5px;">Left to Pay (€):</label>
                                     <input type="number" step="0.01" name="left_to_pay" value="'.htmlspecialchars($row['left_to_pay']).'" style="width:100px;">
-                                    <button type="submit" name="update_student">Save</button>
-                                    <button type="button" onclick="toggleEdit(\''.$row['student_id'].'\')">Cancel</button>
-                                    <!-- ✳️ CHANGE 2: also use studentStateToggleEdit here -->
-                                    <button type="button" onclick="studentStateToggleEdit(\''.$row['student_id'].'\')">Cancel</button>
+
+                                    <label style="margin-right:5px;">Additional Payments Status (€):</label>
+                                    <input type="number" step="0.01" name="additional_payments_status" value="'.htmlspecialchars($row['additional_payments_status'] ?? '0', ENT_QUOTES, 'UTF-8').'" style="width:150px;" required>
+
+                                    <button type="submit">Save</button>
+                                    <button type="button" onclick="toggleEdit(\''.$studentId.'\')">Cancel</button>
                                 </form>
                             </td>
                           </tr>';
                 }
             } else {
-                echo '<tr><td colspan="7" style="text-align:center; color:#888;">No students found</td></tr>';
+                echo '<tr><td colspan="8" style="text-align:center; color:#888;">No students found</td></tr>';
             }
             ?>
             </tbody>
@@ -366,16 +372,23 @@ $result = $conn->query("
     <?php if ($totalPages > 1): ?>
     <nav aria-label="Student pagination" style="margin-top:20px;">
         <ul class="pagination justify-content-center">
+            <?php
+            // Helper für Link mit Filtern
+            function buildPageLink($pageNum, $base) {
+                $base['page'] = $pageNum;
+                return '?' . http_build_query($base);
+            }
+            ?>
             <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
-                <a class="page-link" href="?page=<?= max(1, $page - 1) ?>">Previous</a>
+                <a class="page-link" href="<?= ($page <= 1) ? '#' : htmlspecialchars(buildPageLink($page - 1, $paginationBase)) ?>">Previous</a>
             </li>
             <?php for ($i = 1; $i <= $totalPages; $i++): ?>
                 <li class="page-item <?= ($i == $page) ? 'active' : '' ?>">
-                    <a class="page-link" href="?page=<?= $i ?>"><?= $i ?></a>
+                    <a class="page-link" href="<?= htmlspecialchars(buildPageLink($i, $paginationBase)) ?>"><?= $i ?></a>
                 </li>
             <?php endfor; ?>
             <li class="page-item <?= ($page >= $totalPages) ? 'disabled' : '' ?>">
-                <a class="page-link" href="?page=<?= min($totalPages, $page + 1) ?>">Next</a>
+                <a class="page-link" href="<?= ($page >= $totalPages) ? '#' : htmlspecialchars(buildPageLink($page + 1, $paginationBase)) ?>">Next</a>
             </li>
         </ul>
     </nav>
@@ -387,61 +400,39 @@ $result = $conn->query("
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
 
 <script>
+    // Sidebar (falls du sie aus navigator.php nutzt)
     const sidebar = document.getElementById("sidebar");
     const content = document.querySelector(".content");
     const overlay = document.getElementById("overlay");
 
     function openSidebar() {
-        sidebar.classList.add("open");
-        content.classList.add("shifted");
-        overlay.classList.add("show");
+        if (sidebar) sidebar.classList.add("open");
+        if (content) content.classList.add("shifted");
+        if (overlay) overlay.classList.add("show");
     }
     function closeSidebar() {
-        sidebar.classList.remove("open");
-        content.classList.remove("shifted");
-        overlay.classList.remove("show");
+        if (sidebar) sidebar.classList.remove("open");
+        if (content) content.classList.remove("shifted");
+        if (overlay) overlay.classList.remove("show");
     }
     function toggleSidebar() {
+        if (!sidebar) return;
         sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
     }
-
-    // === INLINE EDIT TOGGLE ===
-    function toggleEdit(id) {
-        const editRow = document.getElementById("edit-" + id);
-        if (!editRow) return;
-        editRow.style.display = (editRow.style.display === "none" || editRow.style.display === "") ? "table-row" : "none";
-    }
 </script>
-</body>
-</html>
-   let studentSidebar = document.getElementById("sidebar");
-let studentContent = document.querySelector(".content");
-let studentOverlay = document.getElementById("overlay");
-function openSidebar() {
-    if (studentSidebar) studentSidebar.classList.add("open");
-    if (studentContent) studentContent.classList.add("shifted");
-    if (studentOverlay) studentOverlay.classList.add("show");
-}
-function closeSidebar() {
-    if (studentSidebar) studentSidebar.classList.remove("open");
-    if (studentContent) studentContent.classList.remove("shifted");
-    if (studentOverlay) studentOverlay.classList.remove("show");
-}
-function toggleSidebar() {
-    if (!studentSidebar) return;
-    studentSidebar.classList.contains("open") ? closeSidebar() : openSidebar();
-}
 
+<script>
+function toggleEdit(id) {
+    const row = document.getElementById("edit-" + id);
+    if (!row) return;
 
-    // ✳️ CHANGE 3: unique function name to avoid collisions
-    function studentStateToggleEdit(id) {
-        const editRow = document.getElementById("edit-" + id);
-        if (!editRow) return;
-        editRow.style.display =
-            (editRow.style.display === "none" || editRow.style.display === "")
-            ? "table-row"
-            : "none";
-    }
+    // Toggle visibility
+    row.style.display =
+        (row.style.display === "none" || row.style.display === "")
+        ? "table-row"
+        : "none";
+}
 </script>
+
 </body>
 </html>
