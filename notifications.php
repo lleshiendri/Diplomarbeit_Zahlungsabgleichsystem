@@ -239,7 +239,9 @@ body {
     <th>Invoice ID</th>
     <th>Urgency</th>
     <th>Timestamp</th>
+    <?php if ($isAdmin): ?>
     <th style="width:140px;">Mark as read</th>
+    <?php endif; ?>
 </tr>
 </thead>
 
@@ -279,11 +281,12 @@ body {
 
     <td><?= htmlspecialchars($row["time_from"]) ?></td>
 
+    <?php if ($isAdmin): ?>
     <td>
         <input type="checkbox" class="bulk-check" value="<?= $row['id'] ?>"
                style="width:16px; height:16px; cursor:pointer;">
     </td>
-
+    <?php endif; ?>
 </tr>
 <?php endwhile; ?>
 </tbody>
@@ -291,10 +294,13 @@ body {
 </table>
 
 <div class="mark-read-wrapper">
+    <?php if ($isAdmin): ?>
     <button type="button" class="mark-read-button" onclick="markAllSelected()">
         Mark all selected as read
     </button>
+    <?php endif; ?>
 </div>
+
 
 </main>
 

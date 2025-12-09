@@ -179,7 +179,9 @@ $result = $conn->query($selectSql);
                     <th>Reference Nr</th>
                     <th>Reference</th>
                     <th>Processing Date</th>
-                    <th>Actions</th>
+                    <?php if ($isAdmin): ?>
+                        <th>Actions</th>
+                    <?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -191,12 +193,15 @@ $result = $conn->query($selectSql);
                     echo "<td>".htmlspecialchars($t['reference_number'])."</td>";
                     echo "<td>".htmlspecialchars($t['reference'])."</td>";
                     echo "<td>".htmlspecialchars($t['processing_date'])."</td>";
+                    if ($isAdmin) {
                     echo "<td>
                             <a href='?delete_id=".$t['id']."' onclick='return confirm(\"Delete transaction?\")'>
                                 <span class='material-icons-outlined' style='color:#B31E32;'>delete</span>
-                            </a>
-                          </td>";
+                            </a>";
+                    }
+                    echo "</td>";
                     echo "</tr>";
+               
                 }
             } else {
                 echo "<tr><td colspan='5' style='text-align:center;color:#888;'>No transactions found</td></tr>";
