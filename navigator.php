@@ -186,6 +186,7 @@ if ($row = $res->fetch_assoc()) {
     <nav>
     <?php if ($isAdmin): ?> 
       <a href="add_transactions.php"><span class="material-icons-outlined">swap_horiz</span> Add Transaction</a>
+      <a href="Transactions.php"><span class="material-icons-outlined">receipt_long</span> Transactions</a>
       <a href="add_students.php"><span class="material-icons-outlined">group_add</span> Add Students</a>
       <a href="import_files.php"><span class="material-icons-outlined">upload_file</span> Import File</a>
       <a href="unconfirmed.php"><span class="material-icons-outlined">priority_high</span> Unconfirmed</a>
@@ -218,16 +219,16 @@ if (in_array($currentPage, $filtersPages, true)) {
 <div id="overlay" class="overlay" onclick="closeSidebar(); closeFilter();"></div>
 
 <script>
-  const navSidebar = document.getElementById("sidebar");
-  const navOverlay = document.getElementById("overlay");
-  const navFilterPanel = document.getElementById("filterPanel");
-  const navFilterOverlay = document.getElementById("filterOverlay");
-  const navFilterToggle = document.getElementById("filterToggle");
+  const sidebar = document.getElementById("sidebar");
+  const overlay = document.getElementById("overlay");
+  const filterPanel = document.getElementById("filterPanel");
+  const filterOverlay = document.getElementById("filterOverlay");
+  const filterToggle = document.getElementById("filterToggle");
 
   // SIDEBAR
   function openSidebar(){
-    if (navSidebar) navSidebar.classList.add("open");
-    if (navOverlay) navOverlay.classList.add("show");
+    sidebar.classList.add("open");
+    overlay.classList.add("show");
     const content = document.getElementById("content");
     if (content) content.classList.add("shifted");
   }
@@ -242,8 +243,7 @@ if (in_array($currentPage, $filtersPages, true)) {
     }
   }
   function toggleSidebar(){
-    if (!navSidebar) return;
-    navSidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+    sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
   }
 
   // FILTER Panel
