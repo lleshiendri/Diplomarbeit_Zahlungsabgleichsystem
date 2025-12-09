@@ -3,6 +3,7 @@ if (!isset($conn) || !($conn instanceof mysqli)) {
     require_once __DIR__ . "/db_connect.php";
 }
 
+/* Filter lesen */
 $g_student = trim($_GET['student'] ?? '');
 $g_class   = trim($_GET['class']   ?? '');
 $g_status  = trim($_GET['status']  ?? '');

@@ -32,12 +32,17 @@ $last_import_res = $conn->query("SELECT MAX(processing_date) AS last FROM INVOIC
 $last_import = $last_import_res->fetch_assoc()['last'] ?? null;
 $last_import_display = $last_import ? date("d.m.Y", strtotime($last_import)) : "Keine Daten";
 
-$delay_res = $conn->query("
-    SELECT AVG(DATEDIFF(processing_date, CURDATE())) AS avg_delay 
-    FROM INVOICE_TAB 
+// === MONTHLY REPORT ===
+$month_processed_res = $conn->query("
+    SELECT COUNT(*) AS c, IFNULL(SUM(amount_total),0) AS total
+    FROM INVOICE_TAB
     WHERE processing_date IS NOT NULL
+    AND YEAR(processing_date) = YEAR(CURDATE())
+    AND MONTH(processing_date) = MONTH(CURDATE())
 ");
-$avg_delay = round($delay_res->fetch_assoc()['avg_delay'] ?? 0, 1);
+$month_data = $month_processed_res->fetch_assoc();
+$month_count = $month_data['c'] ?? 0;
+$month_total = $month_data['total'] ?? 0;
 
 $chart_data = [];
 for ($m = 1; $m <= 12; $m++) {
@@ -216,7 +221,8 @@ for ($m = 1; $m <= 12; $m++) {
           <div class="box panel">
             <h3>Transaction Summary</h3>
             <hr>
-            <p>Average payment delay: <?= $avg_delay ?> days</p>
+<p>Processed payments this month: <?= $month_count ?></p>
+<p>Total amount processed: <?= number_format($month_total, 2, ',', '.') ?> €</p>
           </div>
         </div>
 
@@ -323,9 +329,24 @@ document.addEventListener("DOMContentLoaded", () => {
         plugins: { legend: { display: false }, tooltip: { enabled: true } },
         layout: { padding: 0 },
         scales: {
-          y: { beginAtZero: true, ticks: { stepSize: 20, font: { size: 11 } }, grid: { color: "rgba(0,0,0,.08)" } },
-          x: { ticks: { font: { size: 11 } }, grid: { display: false } }
-        }
+  y: {
+    beginAtZero: true,
+    title: {
+      display: true,
+      text: "Total Amount (€)"
+    },
+    ticks: { stepSize: 20, font: { size: 11 } },
+    grid: { color: "rgba(0,0,0,.08)" }
+  },
+  x: {
+    title: {
+      display: true,
+      text: "Months"
+    },
+    ticks: { font: { size: 11 } },
+    grid: { display: false }
+  }
+}
       }
     });
   } catch (e) {

@@ -21,13 +21,12 @@ require_once __DIR__ . '/db_connect.php';
  * Attempts to match a transaction with a student based on reference ID prefix.
  * 
  * @param int $transactionId The ID of the transaction in INVOICE_TAB
- * @return array Returns ['success' => true, 'student_id' => X] if matched, ['success' => false] if not
+ * @param mysqli $conn The database connection object
+ * @return array Returns ['success' => true, 'student_id' => X, 'guardian_id' => Y] if matched, ['success' => false] if not
  */
-function attemptMatch($transactionId) {
-    global $conn;
-    
-    // Load transaction data from INVOICE_TAB
-    $stmt = $conn->prepare("SELECT reference, beneficiary FROM INVOICE_TAB WHERE id = ?");
+function attemptMatch($transactionId, $conn) {
+    // Load transaction data from INVOICE_TAB (including amount_total)
+    $stmt = $conn->prepare("SELECT reference, beneficiary, amount_total FROM INVOICE_TAB WHERE id = ?");
     if (!$stmt) {
         return ['success' => false];
     }
@@ -58,24 +57,60 @@ function attemptMatch($transactionId) {
     }
     
     // Match student by reference ID
-    $studentId = matchStudentByReferenceId($referenceId);
+    $studentId = matchStudentByReferenceId($referenceId, $conn);
     
     if ($studentId === null) {
         return ['success' => false];
     }
     
-    // Log the match in MATCHING_HISTORY_TAB
-    $historyStmt = $conn->prepare("
-        INSERT INTO MATCHING_HISTORY_TAB (transaction_id, student_id, matched_by, confidence_score)
-        VALUES (?, ?, 'reference', 100)
-    ");
-    if ($historyStmt) {
-        $historyStmt->bind_param("ii", $transactionId, $studentId);
-        $historyStmt->execute();
-        $historyStmt->close();
+    // Try to find legal guardian for this student
+    $guardianId = null;
+    $guardianStmt = $conn->prepare("SELECT legal_guardian_id FROM LEGAL_GUARDIAN_STUDENT_TAB WHERE student_id = ? LIMIT 1");
+    if ($guardianStmt) {
+        $guardianStmt->bind_param("i", $studentId);
+        $guardianStmt->execute();
+        $guardianResult = $guardianStmt->get_result();
+        if ($guardianRow = $guardianResult->fetch_assoc()) {
+            $guardianId = (int)$guardianRow['legal_guardian_id'];
+        }
+        $guardianStmt->close();
     }
     
-    return ['success' => true, 'student_id' => $studentId];
+    // Fetch transaction amount
+    $amount = (float)($transaction['amount_total'] ?? 0);
+    
+    // Update INVOICE_TAB with student_id, legal_guardian_id, and amount_paid
+    if ($guardianId !== null) {
+        $updateStmt = $conn->prepare("UPDATE INVOICE_TAB SET student_id = ?, legal_guardian_id = ?, amount_paid = ? WHERE id = ?");
+        if ($updateStmt) {
+            $updateStmt->bind_param("iidi", $studentId, $guardianId, $amount, $transactionId);
+            $updateStmt->execute();
+            $updateStmt->close();
+        }
+    } else {
+        $updateStmt = $conn->prepare("UPDATE INVOICE_TAB SET student_id = ?, legal_guardian_id = NULL, amount_paid = ? WHERE id = ?");
+        if ($updateStmt) {
+            $updateStmt->bind_param("idi", $studentId, $amount, $transactionId);
+            $updateStmt->execute();
+            $updateStmt->close();
+        }
+    }
+    
+    // Log the match in MATCHING_HISTORY_TAB (if table exists)
+    $tableCheck = $conn->query("SHOW TABLES LIKE 'MATCHING_HISTORY_TAB'");
+    if ($tableCheck && $tableCheck->num_rows > 0) {
+        $historyStmt = $conn->prepare("
+            INSERT INTO MATCHING_HISTORY_TAB (transaction_id, student_id, matched_by, confidence_score)
+            VALUES (?, ?, 'reference', 100)
+        ");
+        if ($historyStmt) {
+            $historyStmt->bind_param("ii", $transactionId, $studentId);
+            $historyStmt->execute();
+            $historyStmt->close();
+        }
+    }
+    
+    return ['success' => true, 'student_id' => $studentId, 'guardian_id' => $guardianId];
 }
 
 /**
@@ -151,9 +186,7 @@ function extractReferenceIdFromDescription($description) {
  * @param string $referenceId The reference ID to search for (format: HTL-ABCXYZ123-A5)
  * @return int|null The student ID if found, null otherwise
  */
-function matchStudentByReferenceId($referenceId) {
-    global $conn;
-    
+function matchStudentByReferenceId($referenceId, $conn) {
     if (empty($referenceId)) {
         return null;
     }

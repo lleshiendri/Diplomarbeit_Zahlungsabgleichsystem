@@ -3,8 +3,7 @@ require_once 'auth_check.php';
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-require_once 'db_connect.php';
-require_once 'reference_id_generator.php';
+require 'db_connect.php';
 
 function validateCSVStructure($filePath, $fileType) {
     // 1️⃣ Expected header sets
@@ -271,42 +270,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                         fclose($handle);
                         $stmtStudent->close();
                     }
-
-                    while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
-                        $name                        = $data[0] ?? null;
-                        $long_name                   = $data[1] ?? null;
-                        $forename                    = $data[2] ?? null;
-                        $gender                      = $data[3] ?? null;
-                        $birth_date                  = normalizeDate($data[4] ?? null);
-                        $entry_date                  = normalizeDate($data[6] ?? null);
-                        $exit_date                   = normalizeDate($data[7] ?? null);
-                        $description                 = $data[8] ?? null;
-                        $second_ID                   = isset($data[9]) ? trim($data[9]) : null;
-                        $extern_key                  = isset($data[10]) ? trim($data[10]) : null;
-                        $email                       = isset($data[14]) ? trim($data[14]) : null;
-
-                        $stmtStudent->bind_param(
-                            "sssssssssss",
-                            $name,
-                            $long_name,
-                            $forename,
-                            $gender,
-                            $birth_date,
-                            $entry_date,
-                            $exit_date,
-                            $description,
-                            $second_ID,
-                            $extern_key,
-                            $email
-                        );
-
-                        $stmtStudent->execute();
-                    }
-
-                    fclose($handle);
-                    $stmtStudent->close();
                 }
-            }
 
                 if ($fileType === 'Transactions') {
                     $filePath = $destination;
