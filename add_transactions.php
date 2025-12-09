@@ -31,6 +31,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // bind_param sichert Parameterbindung 
             $stmt->bind_param("ssssd", $ref_number, $ordering_name, $description, $transaction_date, $amount); 
             if ($stmt->execute()) {
+                // Get the inserted transaction ID and attempt matching
+                $newTransactionId = $conn->insert_id;
+                if ($newTransactionId > 0) {
+                    require_once __DIR__ . '/matching_engine.php';
+                    $match = attemptMatch($newTransactionId, $conn);
+                    // Note: attemptMatch() now handles all INVOICE_TAB updates internally
+                }
                 $success_message = "Transaction was successfully added.";
             } else {
                 $error_message = "Error while saving: " . $stmt->error;
