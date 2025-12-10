@@ -110,21 +110,19 @@ require "db_connect.php";
 
         // MAIN QUERY
         $sql = "
-        SELECT
-            s.id AS student_id,
-            s.long_name,
-            MAX(i.processing_date) AS last_transaction,
-            NOW() AS last_import,
-            DATEDIFF(CURDATE(), MAX(i.processing_date)) AS days_since_payment
-        FROM STUDENT_TAB s
-        LEFT JOIN LEGAL_GUARDIAN_STUDENT_TAB lgs 
-            ON lgs.student_id = s.id
-        LEFT JOIN INVOICE_TAB i 
-            ON i.legal_guardian_id = lgs.legal_guardian_id
-        GROUP BY s.id
-        ORDER BY s.long_name ASC
-        LIMIT $perPage OFFSET $offset
-        ";
+    SELECT
+        s.id AS student_id,
+        s.long_name,
+        MAX(i.processing_date) AS last_transaction,
+        NOW() AS last_import,
+        DATEDIFF(CURDATE(), MAX(i.processing_date)) AS days_since_payment
+    FROM STUDENT_TAB s
+    LEFT JOIN INVOICE_TAB i 
+        ON i.student_id = s.id
+    GROUP BY s.id
+    ORDER BY s.long_name ASC
+    LIMIT $perPage OFFSET $offset
+";
 
         $result = $conn->query($sql);
 
