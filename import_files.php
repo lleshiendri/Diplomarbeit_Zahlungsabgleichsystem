@@ -304,6 +304,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             return;
                         }
 
+                        // Load matching engine for automatic matching
+                        require_once __DIR__ . '/matching_engine.php';
+
                         // Parse only valid transaction rows
                         $started = false;
                         while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
@@ -345,6 +348,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 $amount_total
                             );
                             $stmtTrans->execute();
+                            
+                            // Get the inserted transaction ID and attempt automatic matching
+                            $insertedTransactionId = $conn->insert_id;
+                            if ($insertedTransactionId > 0) {
+                                attemptMatch($insertedTransactionId, $conn);
+                                // Note: attemptMatch() handles all INVOICE_TAB updates internally
+                            }
                         }
 
                         $stmtTrans->close();

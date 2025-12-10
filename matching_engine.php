@@ -13,6 +13,14 @@
  * );
  * 
  * Note: matched_by values: 'reference', 'fallback', 'manual', 'unconfirmed'
+ * 
+ * AUTOMATIC MATCHING SYSTEM:
+ * This function is called automatically after transaction inserts in:
+ * - add_transactions.php (manual transaction entry)
+ * - import_files.php (bulk CSV import)
+ * 
+ * All matching logic runs ONLY in PHP. No database triggers or stored procedures are used.
+ * This is the single source of truth for transaction-to-student matching.
  */
 
 require_once __DIR__ . '/db_connect.php';
