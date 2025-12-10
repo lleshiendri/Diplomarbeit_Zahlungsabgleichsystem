@@ -304,6 +304,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             return;
                         }
 
+                        // Load matching engine for automatic reference-based matching
+                        require_once __DIR__ . '/matching_engine.php';
+
                         // Parse only valid transaction rows
                         $started = false;
                         while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
@@ -345,6 +348,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 $amount_total
                             );
                             $stmtTrans->execute();
+                            
+                            // Attempt automatic reference-based matching after each invoice insert
+                            $insertedInvoiceId = $conn->insert_id;
+                            if ($insertedInvoiceId > 0) {
+                                attemptReferenceMatch($insertedInvoiceId, $conn);
+                            }
                         }
 
                         $stmtTrans->close();
