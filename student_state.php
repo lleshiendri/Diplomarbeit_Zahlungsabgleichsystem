@@ -292,7 +292,9 @@ $result = $conn->query($selectSql);
                     <th>Total Amount</th>
                     <th>Last Transaction</th>
                     <th>Additional Payment Status</th>
-                    <th>Actions</th>
+                    <?php if ($isAdmin): ?>
+                        <th>Actions</th>
+                    <?php endif; ?>
                 </tr>
             </thead>
             <tbody>
@@ -322,7 +324,7 @@ $result = $conn->query($selectSql);
                         ? number_format((float)$row['additional_payments_status'], 2, ',', '.') . " €"
                         : "";
                     echo '</td>';
-
+                    if ($isAdmin) {
                     // Actions
                     echo '<td style="text-align:center;">
                             <span class="material-icons-outlined" style="color:#D4463B;"
@@ -360,6 +362,7 @@ $result = $conn->query($selectSql);
                                 </form>
                             </td>
                           </tr>';
+                    }
                 }
             } else {
                 echo '<tr><td colspan="8" style="text-align:center; color:#888;">No students found</td></tr>';

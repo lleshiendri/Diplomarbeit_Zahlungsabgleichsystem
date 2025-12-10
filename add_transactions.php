@@ -31,6 +31,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // bind_param sichert Parameterbindung 
             $stmt->bind_param("ssssd", $ref_number, $ordering_name, $description, $transaction_date, $amount); 
             if ($stmt->execute()) {
+                // Attempt automatic reference-based matching after insert
+                $newInvoiceId = $conn->insert_id;
+                if ($newInvoiceId > 0) {
+                    require_once __DIR__ . '/matching_engine.php';
+                    attemptReferenceMatch($newInvoiceId, $conn);
+                }
                 $success_message = "Transaction was successfully added.";
             } else {
                 $error_message = "Error while saving: " . $stmt->error;
