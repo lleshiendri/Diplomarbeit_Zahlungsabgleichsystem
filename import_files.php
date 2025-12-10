@@ -304,7 +304,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             return;
                         }
 
-                        // Load matching engine for automatic matching
+                        // Load matching engine for automatic reference-based matching
                         require_once __DIR__ . '/matching_engine.php';
 
                         // Parse only valid transaction rows
@@ -349,11 +349,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             );
                             $stmtTrans->execute();
                             
-                            // Get the inserted transaction ID and attempt automatic matching
-                            $insertedTransactionId = $conn->insert_id;
-                            if ($insertedTransactionId > 0) {
-                                attemptMatch($insertedTransactionId, $conn);
-                                // Note: attemptMatch() handles all INVOICE_TAB updates internally
+                            // Attempt automatic reference-based matching after each invoice insert
+                            $insertedInvoiceId = $conn->insert_id;
+                            if ($insertedInvoiceId > 0) {
+                                attemptReferenceMatch($insertedInvoiceId, $conn);
                             }
                         }
 
