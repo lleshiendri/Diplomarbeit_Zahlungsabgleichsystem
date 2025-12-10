@@ -19,6 +19,26 @@ if (!isset($_SESSION['user_id'])) {
     exit; // Stop script execution to prevent any further output
 }
 
+
+$role = $_SESSION['role'] ?? 'Reader';
+
+// 🔴 Pages that Reader-role users must not access
+$restrictedPages = [
+    'add_students.php',
+    'add_transactions.php',
+    'unconfirmed.php',
+    'import_files.php'
+];
+
+// Get the current page name
+$currentPage = basename($_SERVER['PHP_SELF']);
+
+// 🔴 If Reader tries to open a restricted page → redirect
+if ($role === 'Reader' && in_array($currentPage, $restrictedPages, true)) {
+    header("Location: dashboard.php");
+    exit;
+}
+
 // If we reach this point, the user is authenticated and can proceed
 // No additional action needed - the protected page will continue loading
 ?>
