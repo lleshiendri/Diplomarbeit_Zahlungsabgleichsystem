@@ -14,6 +14,7 @@ $error_message = "";
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // htmlspecialchars zum Schutz gegen XSS
     $ref_number       = htmlspecialchars(trim($_POST['ref_number'] ?? ''), ENT_QUOTES, 'UTF-8');  
+    $reference    = htmlspecialchars(trim($_POST['reference'] ?? ''), ENT_QUOTES, 'UTF-8'); 
     $ordering_name    = htmlspecialchars(trim($_POST['ordering_name'] ?? ''), ENT_QUOTES, 'UTF-8');  
     $transaction_date = htmlspecialchars($_POST['transaction_date'] ?? '', ENT_QUOTES, 'UTF-8');  
     $description      = htmlspecialchars(trim($_POST['description'] ?? ''), ENT_QUOTES, 'UTF-8');  
@@ -23,32 +24,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Prepared Statement verhindert SQL-Injection
         $stmt = $conn->prepare("
             INSERT INTO INVOICE_TAB 
-                (reference_number, beneficiary, description, processing_date, amount_total) 
+                (reference_number, reference, beneficiary, processing_date,  description, amount_total) 
             VALUES (?, ?, ?, ?, ?)
         ");  
 
         if ($stmt) {
             // bind_param sichert Parameterbindung 
-            $stmt->bind_param("ssssd", $ref_number, $ordering_name, $description, $transaction_date, $amount); 
+            $stmt->bind_param("ssssd", $ref_number, $reference, $ordering_name, $description, $transaction_date, $amount); 
             if ($stmt->execute()) {
                 // Attempt automatic reference-based matching after insert
                 $newInvoiceId = $conn->insert_id;
                 if ($newInvoiceId > 0) {
-                    // Safe matching engine call – prevent blank page
-try {
-    require_once __DIR__ . '/matching_engine.php';
-
-    if (function_exists('attemptReferenceMatch')) {
-        ob_start();  // catch ANY unexpected output
-        attemptReferenceMatch($newInvoiceId, $conn);
-        ob_end_clean(); // discard it so no HTML breaks
-    }
-
-} catch (Throwable $e) {
-    // Optional: log it, but NEVER echo anything
-    error_log("Matching engine error: " . $e->getMessage());
-}
-
+require_once __DIR__ . '/matching_engine.php';
+attemptReferenceMatch($newInvoiceId, $conn);
                 }
                 $success_message = "Transaction was successfully added.";
             } else {
@@ -202,6 +190,13 @@ try {
                     </div>
                 </div>
                 <div>
+                    <label for="reference">Reference</label>
+                    <div class="input-group">
+                        <span class="material-icons-outlined">tag</span>
+                        <input type="text" id="reference" name="reference" placeholder="Enter Reference" required>
+                    </div>
+                </div>
+                <div>
                     <label for="ordering_name">Ordering Name</label>
                     <div class="input-group">
                         <span class="material-icons-outlined">person</span>
@@ -215,11 +210,11 @@ try {
                         <input type="date" id="transaction_date" name="transaction_date" required>
                     </div>
                 </div>
-                <div>
+                <div class="full-width">
                     <label for="description">Description</label>
                     <div class="input-group" style="align-items:flex-start;">
                         <span class="material-icons-outlined">description</span>
-                        <textarea id="description" name="description" placeholder="Enter Description..."></textarea>
+                        <textarea id="description" name="description" placeholder="Enter Description"></textarea>
                     </div>
                 </div>
                 <div class="full-width">

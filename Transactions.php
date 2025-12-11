@@ -122,6 +122,7 @@ $selectSql = "
         t.beneficiary,
         t.description,
         t.reference,
+        t.reference_number,
         t.processing_date
     FROM INVOICE_TAB t
     {$joinSql}
@@ -234,6 +235,7 @@ $result = $conn->query($selectSql);
             <thead>
                 <tr>
                     <th>Beneficiary</th>
+                    <th>Reference</th>
                     <th>Reference Nr</th>
                     <th>Description</th>
                     <th>Processing Date</th>
@@ -249,6 +251,7 @@ $result = $conn->query($selectSql);
                     echo "<tr>";
                     echo "<td>".htmlspecialchars($t['beneficiary'])."</td>";
                     echo "<td>".htmlspecialchars($t['reference'])."</td>";
+                    echo "<td>".htmlspecialchars($t['reference_number'])."</td>";
                     echo "<td>".htmlspecialchars($t['description'])."</td>";
                     echo "<td>".htmlspecialchars($t['processing_date'])."</td>";
                     if ($isAdmin) {
