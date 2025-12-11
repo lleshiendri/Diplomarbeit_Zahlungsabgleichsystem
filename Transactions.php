@@ -19,60 +19,117 @@ if (isset($_GET['delete_id'])) {
     }
 }
 
-/* ========= FILTERS ========= */
-$filterReference = trim($_GET['reference'] ?? '');
-$filterType      = trim($_GET['type'] ?? '');
-$filterFrom      = trim($_GET['from'] ?? '');
-$filterTo        = trim($_GET['to'] ?? '');
-$filterMin       = trim($_GET['min'] ?? '');
-$filterMax       = trim($_GET['max'] ?? '');
+/* ========= FILTER INPUTS (aus filters.php) ========= */
+$filterStudent = trim($_GET['student'] ?? '');
+$filterClass   = trim($_GET['class']   ?? '');
+$filterStatus  = trim($_GET['status']  ?? '');
+$filterFrom    = trim($_GET['from']    ?? '');
+$filterTo      = trim($_GET['to']      ?? '');
+$filterMin     = trim($_GET['amount_min'] ?? '');
+$filterMax     = trim($_GET['amount_max'] ?? '');
 
 $clauses = [];
+$joinSql = "";
+$needsStudentJoin = false;
 
-if ($filterReference !== "") {
-    $like = "%" . $conn->real_escape_string($filterReference) . "%";
-    $clauses[] = "(reference_number LIKE '{$like}' OR reference LIKE '{$like}' OR beneficiary LIKE '{$like}')";
-}
-if ($filterType !== "") {
-    $clauses[] = "transaction_type = '" . $conn->real_escape_string($filterType) . "'";
-}
-if ($filterFrom !== "") {
-    $clauses[] = "processing_date >= '" . $conn->real_escape_string($filterFrom) . "'";
-}
-if ($filterTo !== "") {
-    $clauses[] = "processing_date <= '" . $conn->real_escape_string($filterTo) . "'";
-}
-if ($filterMin !== "" && is_numeric($filterMin)) {
-    $clauses[] = "amount_total >= " . (float)$filterMin;
-}
-if ($filterMax !== "" && is_numeric($filterMax)) {
-    $clauses[] = "amount_total <= " . (float)$filterMax;
+/* ========= STUDENT NAME FILTER ========= */
+if ($filterStudent !== '') {
+    $needsStudentJoin = true;
+    $like = "%" . $conn->real_escape_string($filterStudent) . "%";
+    $clauses[] = "(st.name LIKE '{$like}'
+                OR st.long_name LIKE '{$like}'
+                OR st.forename LIKE '{$like}')";
 }
 
+/* ========= CLASS FILTER ========= */
+if ($filterClass !== '' && ctype_digit($filterClass)) {
+    $needsStudentJoin = true;
+    $clauses[] = "st.class_id = " . (int)$filterClass;
+}
+
+/* ========= STATUS FILTER (wie in student_state.php) ========= */
+if ($filterStatus !== '') {
+    $needsStudentJoin = true;
+
+    if ($filterStatus === 'paid') {
+        $clauses[] = "st.left_to_pay = 0";
+    }
+    elseif ($filterStatus === 'open') {
+        $clauses[] = "st.left_to_pay > 0";
+    }
+    elseif ($filterStatus === 'overdue') {
+        $clauses[] = "st.left_to_pay > 0 AND st.exit_date < CURDATE()";
+    }
+    elseif ($filterStatus === 'partial') {
+        $clauses[] = "st.left_to_pay > 0";
+    }
+}
+
+/* ========= DATE RANGE FILTER ========= */
+if ($filterFrom !== '') {
+    $clauses[] = "t.processing_date >= '" . $conn->real_escape_string($filterFrom) . "'";
+}
+if ($filterTo !== '') {
+    $clauses[] = "t.processing_date <= '" . $conn->real_escape_string($filterTo) . "'";
+}
+
+/* ========= AMOUNT RANGE FILTER ========= */
+if ($filterMin !== '' && is_numeric($filterMin)) {
+    $clauses[] = "t.amount_total >= " . (float)$filterMin;
+}
+if ($filterMax !== '' && is_numeric($filterMax)) {
+    $clauses[] = "t.amount_total <= " . (float)$filterMax;
+}
+
+/* ========= JOINS AKTIVIEREN, FALLS SCHÜLERFILTER GENUTZT ========= */
+if ($needsStudentJoin) {
+    $joinSql = "
+        LEFT JOIN STUDENT_TAB st ON st.id = t.student_id
+        LEFT JOIN CLASS_TAB c ON c.id = st.class_id
+    ";
+}
+
+/* ========= WHERE-BEDINGUNG ========= */
 $whereSql = empty($clauses) ? "" : "WHERE " . implode(" AND ", $clauses);
 
 /* ========= PAGINATION ========= */
 $limit = 10;
 $page = isset($_GET['page']) && is_numeric($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 
-$countSql = "SELECT COUNT(*) AS total FROM INVOICE_TAB {$whereSql}";
+/* ========= GEFILTERTE ANZAHL ZEILEN ========= */
+$countSql = "
+    SELECT COUNT(*) AS total
+    FROM INVOICE_TAB t
+    {$joinSql}
+    {$whereSql}
+";
 $countRes = $conn->query($countSql);
 $totalRows = $countRes ? (int)$countRes->fetch_assoc()['total'] : 0;
+
 $totalPages = max(1, ceil($totalRows / $limit));
 
 if ($page > $totalPages) $page = $totalPages;
+
 $offset = ($page - 1) * $limit;
 
 $paginationBase = $_GET;
 unset($paginationBase['page']);
 
-/* ========= SELECT PAGINATED TRANSACTIONS ========= */
+/* ========= HAUPT-SELECT (GEFILTERT + PAGINIERT) ========= */
 $selectSql = "
-    SELECT id, beneficiary, reference_number, reference, processing_date
-    FROM INVOICE_TAB
-    ORDER BY processing_date DESC
+    SELECT 
+        t.id,
+        t.beneficiary,
+        t.description,
+        t.reference,
+        t.processing_date
+    FROM INVOICE_TAB t
+    {$joinSql}
+    {$whereSql}
+    ORDER BY t.processing_date DESC
     LIMIT {$limit} OFFSET {$offset}
 ";
+
 $result = $conn->query($selectSql);
 ?>
 <!DOCTYPE html>
@@ -92,7 +149,7 @@ $result = $conn->query($selectSql);
         #sidebar a { text-decoration:none; color:#222; transition:0.2s; }
         #sidebar a:hover { background-color:#FAE4D5; color:#B31E32; }
 
-        /* Main content wrapper (same behavior as other pages) */
+        /* Main content wrapper */
         #content {
             transition: margin-left 0.3s ease;
             margin-left: 0;
@@ -115,7 +172,6 @@ $result = $conn->query($selectSql);
             margin:0 auto;
         }
 
-        /* === Table Design (identical to student_state) === */
         .student-table th { 
             font-family:'Montserrat',sans-serif; 
             font-weight:600; 
@@ -139,7 +195,7 @@ $result = $conn->query($selectSql);
         .alert-success { background:#EAF9E6; color:#2E7D32; border:1px solid #C5E1A5; }
         .alert-error { background:#FFE4E1; color:#B71C1C; border:1px solid #FFAB91; }
 
-        /* === Pagination Styling (identical to student_state) === */
+        /* Pagination */
         .pagination { font-family:'Montserrat',sans-serif; }
         .pagination .page-link {
             color:#B31E32;
@@ -170,14 +226,16 @@ $result = $conn->query($selectSql);
     <h1 class="page-title">TRANSACTIONS</h1>
     <?= $alert ?>
 
+    <?php require __DIR__ . '/filters.php'; ?>
+
     <div class="table-wrapper">
-        <!-- TABLE -->
+
         <table class="student-table" style="width:100%; border-collapse:collapse;">
             <thead>
                 <tr>
                     <th>Beneficiary</th>
                     <th>Reference Nr</th>
-                    <th>Reference</th>
+                    <th>Description</th>
                     <th>Processing Date</th>
                     <?php if ($isAdmin): ?>
                         <th>Actions</th>
@@ -190,8 +248,8 @@ $result = $conn->query($selectSql);
                 while ($t = $result->fetch_assoc()) {
                     echo "<tr>";
                     echo "<td>".htmlspecialchars($t['beneficiary'])."</td>";
-                    echo "<td>".htmlspecialchars($t['reference_number'])."</td>";
                     echo "<td>".htmlspecialchars($t['reference'])."</td>";
+                    echo "<td>".htmlspecialchars($t['description'])."</td>";
                     echo "<td>".htmlspecialchars($t['processing_date'])."</td>";
                     if ($isAdmin) {
                     echo "<td>
@@ -211,7 +269,6 @@ $result = $conn->query($selectSql);
         </table>
     </div>
 
-    <!-- PAGINATION -->
     <?php if ($totalPages > 1): ?>
     <nav aria-label="Trans pagination" style="margin-top:20px;">
         <ul class="pagination justify-content-center">

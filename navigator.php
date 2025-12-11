@@ -169,7 +169,7 @@ if ($row = $res->fetch_assoc()) {
     <a href="unconfirmed.php"><span class="nav-icon material-icons-outlined">priority_high</span></a>
 
     <?php if ($currentPage !== 'dashboard.php'): ?>
-      <?php if (in_array($currentPage, ['unconfirmed.php','student_state.php'], true)): ?>
+      <?php if (in_array($currentPage, ['unconfirmed.php','student_state.php,', 'Transactions.php'], true)): ?>
 <span id="filterToggle" class="nav-icon-wrapper">
     <span class="nav-icon material-icons-outlined">filter_list</span>
 </span>      <?php endif; ?>
@@ -208,7 +208,7 @@ if ($row = $res->fetch_assoc()) {
 <!-- FILTER PANEL -->
 <?php
 // Only include filters on specific pages that require them
-$filtersPages = ['unconfirmed.php', 'student_state.php'];
+$filtersPages = ['unconfirmed.php', 'student_state.php', 'Transactions.php'];
 if (in_array($currentPage, $filtersPages, true)) {
     define('APP_HAS_OVERLAY', true);
     include 'filters.php';

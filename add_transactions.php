@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Prepared Statement verhindert SQL-Injection
         $stmt = $conn->prepare("
             INSERT INTO INVOICE_TAB 
-                (reference_number, beneficiary, reference, processing_date, amount_total) 
+                (reference_number, beneficiary, description, processing_date, amount_total) 
             VALUES (?, ?, ?, ?, ?)
         ");  
 
@@ -34,8 +34,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Attempt automatic reference-based matching after insert
                 $newInvoiceId = $conn->insert_id;
                 if ($newInvoiceId > 0) {
-                    require_once __DIR__ . '/matching_engine.php';
-                    attemptReferenceMatch($newInvoiceId, $conn);
+                    // Safe matching engine call – prevent blank page
+try {
+    require_once __DIR__ . '/matching_engine.php';
+
+    if (function_exists('attemptReferenceMatch')) {
+        ob_start();  // catch ANY unexpected output
+        attemptReferenceMatch($newInvoiceId, $conn);
+        ob_end_clean(); // discard it so no HTML breaks
+    }
+
+} catch (Throwable $e) {
+    // Optional: log it, but NEVER echo anything
+    error_log("Matching engine error: " . $e->getMessage());
+}
+
                 }
                 $success_message = "Transaction was successfully added.";
             } else {
