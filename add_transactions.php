@@ -13,29 +13,31 @@ $error_message = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // htmlspecialchars zum Schutz gegen XSS
-    $ref_number       = htmlspecialchars(trim($_POST['ref_number'] ?? ''), ENT_QUOTES, 'UTF-8');  
-    $ordering_name    = htmlspecialchars(trim($_POST['ordering_name'] ?? ''), ENT_QUOTES, 'UTF-8');  
-    $transaction_date = htmlspecialchars($_POST['transaction_date'] ?? '', ENT_QUOTES, 'UTF-8');  
+    $ref_number       = htmlspecialchars(trim($_POST['reference_number'] ?? ''), ENT_QUOTES, 'UTF-8');  
+    $reference    = htmlspecialchars(trim($_POST['reference'] ?? ''), ENT_QUOTES, 'UTF-8'); 
+    $ordering_name    = htmlspecialchars(trim($_POST['beneficiary'] ?? ''), ENT_QUOTES, 'UTF-8');  
+    $processing_date = htmlspecialchars($_POST['processing_date'] ?? '', ENT_QUOTES, 'UTF-8');  
     $description      = htmlspecialchars(trim($_POST['description'] ?? ''), ENT_QUOTES, 'UTF-8');  
     $amount           = isset($_POST['amount']) ? (float) $_POST['amount'] : 0;
 
-    if ($ref_number && $ordering_name && $transaction_date && $amount) {
+    if ($ref_number && $reference && $ordering_name && $processing_date && $amount) {
         // Prepared Statement verhindert SQL-Injection
         $stmt = $conn->prepare("
             INSERT INTO INVOICE_TAB 
-                (reference_number, beneficiary, reference, processing_date, amount_total) 
-            VALUES (?, ?, ?, ?, ?)
+                (reference_number, reference, beneficiary, processing_date,  description, amount_total) 
+            VALUES (?, ?, ?, ?, ?, ?)
         ");  
 
         if ($stmt) {
             // bind_param sichert Parameterbindung 
-            $stmt->bind_param("ssssd", $ref_number, $ordering_name, $description, $transaction_date, $amount); 
+            // Order matches INSERT: reference_number, reference, beneficiary, processing_date, description, amount_total
+            $stmt->bind_param("sssssd", $ref_number, $reference, $ordering_name, $processing_date, $description, $amount); 
             if ($stmt->execute()) {
                 // Attempt automatic reference-based matching after insert
                 $newInvoiceId = $conn->insert_id;
                 if ($newInvoiceId > 0) {
-                    require_once __DIR__ . '/matching_engine.php';
-                    attemptReferenceMatch($newInvoiceId, $conn);
+require_once __DIR__ . '/matching_engine.php';
+attemptReferenceMatch($newInvoiceId, $conn);
                 }
                 $success_message = "Transaction was successfully added.";
             } else {
@@ -182,31 +184,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <form method="post" action="">
             <div class="form-grid">
                 <div>
-                    <label for="ref_number">Reference Number</label>
+                    <label for="reference_number">Reference Number</label>
                     <div class="input-group">
                         <span class="material-icons-outlined">tag</span>
-                        <input type="text" id="ref_number" name="ref_number" placeholder="Enter Reference Number" required>
+                        <input type="text" id="reference_number" name="reference_number" placeholder="Enter Reference Number" required>
                     </div>
                 </div>
                 <div>
-                    <label for="ordering_name">Ordering Name</label>
+                    <label for="reference">Reference</label>
+                    <div class="input-group">
+                        <span class="material-icons-outlined">tag</span>
+                        <input type="text" id="reference" name="reference" placeholder="Enter Reference" required>
+                    </div>
+                </div>
+                <div>
+                    <label for="beneficiary">Ordering Name (Beneficiary)</label>
                     <div class="input-group">
                         <span class="material-icons-outlined">person</span>
-                        <input type="text" id="ordering_name" name="ordering_name" placeholder="Enter Ordering Name" required>
+                        <input type="text" id="beneficiary" name="beneficiary" placeholder="Enter Ordering Name" required>
                     </div>
                 </div>
                 <div>
-                    <label for="transaction_date">Transaction Date</label>
+                    <label for="processing_date">Processing Date</label>
                     <div class="input-group">
                         <span class="material-icons-outlined">event</span>
-                        <input type="date" id="transaction_date" name="transaction_date" required>
+                        <input type="date" id="processing_date" name="processing_date" required>
                     </div>
                 </div>
-                <div>
+                <div class="full-width">
                     <label for="description">Description</label>
                     <div class="input-group" style="align-items:flex-start;">
                         <span class="material-icons-outlined">description</span>
-                        <textarea id="description" name="description" placeholder="Enter Description..."></textarea>
+                        <textarea id="description" name="description" placeholder="Enter Description"></textarea>
                     </div>
                 </div>
                 <div class="full-width">

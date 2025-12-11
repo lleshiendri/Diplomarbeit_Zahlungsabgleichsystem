@@ -169,7 +169,7 @@ if ($row = $res->fetch_assoc()) {
     <a href="unconfirmed.php"><span class="nav-icon material-icons-outlined">priority_high</span></a>
 
     <?php if ($currentPage !== 'dashboard.php'): ?>
-      <?php if (in_array($currentPage, ['unconfirmed.php','student_state.php'], true)): ?>
+      <?php if (in_array($currentPage, ['unconfirmed.php','student_state.php,', 'Transactions.php'], true)): ?>
 <span id="filterToggle" class="nav-icon-wrapper">
     <span class="nav-icon material-icons-outlined">filter_list</span>
 </span>      <?php endif; ?>
@@ -186,6 +186,7 @@ if ($row = $res->fetch_assoc()) {
     <nav>
     <?php if ($isAdmin): ?> 
       <a href="add_transactions.php"><span class="material-icons-outlined">swap_horiz</span> Add Transaction</a>
+      <a href="Transactions.php"><span class="material-icons-outlined">receipt_long</span> Transactions</a>
       <a href="add_students.php"><span class="material-icons-outlined">group_add</span> Add Students</a>
       <a href="import_files.php"><span class="material-icons-outlined">upload_file</span> Import File</a>
       <a href="unconfirmed.php"><span class="material-icons-outlined">priority_high</span> Unconfirmed</a>
@@ -208,7 +209,7 @@ if ($row = $res->fetch_assoc()) {
 <!-- FILTER PANEL -->
 <?php
 // Only include filters on specific pages that require them
-$filtersPages = ['unconfirmed.php', 'student_state.php'];
+$filtersPages = ['unconfirmed.php', 'student_state.php', 'Transactions.php'];
 if (in_array($currentPage, $filtersPages, true)) {
     define('APP_HAS_OVERLAY', true);
     include 'filters.php';
