@@ -167,12 +167,15 @@ $selectSql = "
         s.extern_key AS extern_key,
         s.long_name AS student_name,
         s.name,
+        s.amount_paid,
         s.left_to_pay,
-        s.additional_payments_status
+        s.additional_payments_status,
+        MAX(i.processing_date) AS last_transaction_date 
     FROM STUDENT_TAB s
+    LEFT JOIN INVOICE_TAB i ON i.student_id = s.id 
     {$joinSql}
     {$whereSql}
-    GROUP BY s.id, s.extern_key, s.long_name, s.name, s.left_to_pay, s.additional_payments_status
+    GROUP BY s.id, s.extern_key, s.long_name, s.name, s.left_to_pay, s.amount_paid, s.additional_payments_status
     ORDER BY s.id ASC
     LIMIT {$limit} OFFSET {$offset}
 ";
@@ -289,7 +292,6 @@ $result = $conn->query($selectSql);
                     <th>Student Name</th>
                     <th>Amount Paid</th>
                     <th>Left to Pay</th>
-                    <th>Total Amount</th>
                     <th>Last Transaction</th>
                     <th>Additional Payment Status</th>
                     <?php if ($isAdmin): ?>
@@ -303,10 +305,9 @@ $result = $conn->query($selectSql);
                 while ($row = $result->fetch_assoc()) {
 
                     // 📌 Hier sind deine Mock-Werte – kannst du später durch echte DB-Werte ersetzen
-                    $totalAmount = 1300;
-                    $amountPaid  = rand(0, $totalAmount);
-                    $leftToPay   = $totalAmount - $amountPaid;
-                    $mockDate    = date('d/m/Y', mt_rand(strtotime('2025-01-01'), strtotime('2025-11-30')));
+                    $amountPaid  = $row['amount_paid'];
+                    $leftToPay   = $row['left_to_pay'];
+                    $lastDate = $row['last_transaction_date'] ? date('d/m/Y', strtotime($row['last_transaction_date'])) : '-';
 
                     $studentId   = $row['student_id'];
                     $externKey   = $row['extern_key'];
@@ -317,8 +318,7 @@ $result = $conn->query($selectSql);
                     echo '<td>' . htmlspecialchars($studentName) . '</td>';
                     echo '<td>' . number_format($amountPaid, 2, ',', '.') . ' €</td>';
                     echo '<td>' . number_format($row['left_to_pay'], 2, ',', '.') . ' €</td>';
-                    echo '<td>' . number_format($totalAmount, 2, ',', '.') . ' €</td>';
-                    echo '<td>' . htmlspecialchars($mockDate) . '</td>';
+                    echo '<td>' . htmlspecialchars($lastDate) . '</td>';
                     echo '<td>';
                     echo isset($row['additional_payments_status'])
                         ? number_format((float)$row['additional_payments_status'], 2, ',', '.') . " €"
