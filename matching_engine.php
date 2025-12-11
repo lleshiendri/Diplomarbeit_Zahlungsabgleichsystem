@@ -21,7 +21,7 @@
  */
 function attemptReferenceMatch($invoiceId, $conn) {
     // Load invoice data - using 'reference' column (contains description text) and amount_total
-    $stmt = $conn->prepare("SELECT id, reference, description,beneficiary, amount_total FROM INVOICE_TAB WHERE id = ?");
+    $stmt = $conn->prepare("SELECT id, reference, description, beneficiary, amount_total FROM INVOICE_TAB WHERE id = ?");
     if (!$stmt) {
         return ['success' => false];
     }
@@ -37,7 +37,7 @@ function attemptReferenceMatch($invoiceId, $conn) {
     }
     
     // Combine reference and beneficiary fields for extraction
-    $descriptionText = trim(($invoice['reference'] ?? '') . ' ' . ($invoice['beneficiary'] ?? '' . ($invoice['description'] ?? ''));
+    $descriptionText = trim(($invoice['reference'] ?? '') . ' ' . ($invoice['beneficiary'] ?? '').' ' . ($invoice['description'] ?? ''));
     
     // Extract reference ID from combined text
     $referenceId = null;
