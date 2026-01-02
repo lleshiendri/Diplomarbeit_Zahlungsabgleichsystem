@@ -210,7 +210,7 @@ for ($m = 1; $m <= 12; $m++) {
       <section class="dashboard-grid">
         <div class="chart-cell">
           <div class="box chart-box">
-            <div class="chart-title">Payments Left</div>
+            <div class="chart-title">Payments</div>
             <div class="chart-inner">
               <canvas id="paymentsChart"></canvas>
             </div>
