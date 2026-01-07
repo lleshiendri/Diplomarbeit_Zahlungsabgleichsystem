@@ -8,7 +8,6 @@ $isAdmin = ($userRole === 'Admin');
 
 $currentPage = basename($_SERVER['PHP_SELF']);
 
-// Skip rendering navigator entirely on the login page
 if ($currentPage === 'login.php') {
     return;
 }
@@ -27,6 +26,40 @@ $res = $conn->query("SELECT COUNT(*) AS c FROM NOTIFICATION WHERE is_read = 0");
 if ($row = $res->fetch_assoc()) {
     $unreadCount = (int)$row['c'];
 }
+
+// --- School year info (current school year) ---
+$schoolYearLabel  = '–';
+$schoolYearAmount = null;
+$schoolYearId     = null;
+
+$month = (int)date('n');
+$year  = (int)date('Y');
+
+
+// If before September → belong to previous school year
+if ($month < 9) {
+    $schoolYearStart = $year - 1;
+} else {
+    $schoolYearStart = $year;
+}
+
+// assumes values like "2024/2025" or "2024-2025"
+$schoolYearPattern = $schoolYearStart . '%';
+
+$syRes = $conn->query("
+    SELECT id, schoolyear, total_amount
+    FROM SCHOOLYEAR_TAB
+    WHERE schoolyear LIKE '{$schoolYearPattern}'
+    LIMIT 1
+");
+
+if ($syRes && $syRes->num_rows === 1) {
+    $syRow = $syRes->fetch_assoc();
+    $schoolYearId     = (int)$syRow['id'];
+    $schoolYearLabel  = $syRow['schoolyear'];
+    $schoolYearAmount = (float)$syRow['total_amount'];
+}
+
 ?>
 <?php if (defined('NAV_STANDALONE') && NAV_STANDALONE): ?>
 <!DOCTYPE html>
@@ -147,6 +180,112 @@ if ($row = $res->fetch_assoc()) {
   /* Content shift when sidebar open */
   #content { transition: margin-left 0.3s ease; }
   #content.shifted { margin-left: 260px; }
+
+    /* SCHOOL YEAR POPUP */
+  .schoolyear-modal {
+    position: fixed;
+    top: 95px;          
+    right: 30px;
+    background: #fff;
+    border: 1px solid var(--gray-light);
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+    padding: 16px 18px 14px;
+    min-width: 260px;
+    z-index: 1400;
+    display: none;
+    font-family: 'Roboto', sans-serif;
+  }
+  .schoolyear-modal.show {
+    display: block;
+  }
+  .schoolyear-modal-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom: 8px;
+  }
+  .schoolyear-modal-title {
+    font-family:'Montserrat', sans-serif;
+    font-size:16px;
+    font-weight:600;
+    color:var(--red-dark);
+  }
+  .schoolyear-modal-close {
+    cursor:pointer;
+    font-size:20px;
+    line-height:1;
+    color:#666;
+  }
+  .schoolyear-modal p {
+    margin:4px 0;
+    font-size:14px;
+  }
+  .schoolyear-modal strong {
+    font-weight:600;
+  }
+
+    .schoolyear-edit-toggle {
+    margin-top: 8px;
+    font-size: 12px;
+    border: none;
+    background: transparent;
+    color: var(--red-main);
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+  }
+
+  .schoolyear-edit-form {
+    margin-top: 8px;
+    display: none;
+  }
+
+  .schoolyear-edit-form.show {
+    display: block;
+  }
+
+  .schoolyear-edit-form label {
+    display:block;
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+
+  .schoolyear-edit-form input[type="number"],
+  .schoolyear-edit-form input[type="text"] {
+    width: 100%;
+    padding: 4px 6px;
+    font-size: 13px;
+    box-sizing: border-box;
+  }
+
+  .schoolyear-edit-form-actions {
+    margin-top: 6px;
+    display:flex;
+    justify-content:flex-end;
+    gap:6px;
+  }
+
+  .schoolyear-edit-save,
+  .schoolyear-edit-cancel {
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--gray-light);
+    cursor: pointer;
+  }
+
+  .schoolyear-edit-save {
+    background: var(--red-main);
+    color: #fff;
+    border-color: var(--red-main);
+  }
+
+  .schoolyear-edit-cancel {
+    background: #fff;
+    color: #333;
+  }
+
   </style>
 <?php if (defined('NAV_STANDALONE') && NAV_STANDALONE): ?>
 </head>
@@ -167,6 +306,10 @@ if ($row = $res->fetch_assoc()) {
     </a>
 
     <a href="unconfirmed.php"><span class="nav-icon material-icons-outlined">priority_high</span></a>
+  <!-- School Year info -->
+    <span id="schoolYearToggle" class="nav-icon-wrapper" style="cursor:pointer;" title="Schuljahr">
+      <span class="nav-icon material-icons-outlined">event</span>
+    </span>
 
     <?php if ($currentPage !== 'dashboard.php'): ?>
       <?php if (in_array($currentPage, ['unconfirmed.php','student_state.php,', 'Transactions.php'], true)): ?>
@@ -206,6 +349,65 @@ if ($row = $res->fetch_assoc()) {
   </div>
 </aside>
 
+<!-- SCHOOL YEAR POPUP -->
+<div id="schoolYearModal" class="schoolyear-modal" aria-hidden="true">
+  <div class="schoolyear-modal-header">
+    <div class="schoolyear-modal-title">School Year</div>
+    <span class="schoolyear-modal-close" onclick="closeSchoolYearModal()">&times;</span>
+  </div>
+
+  <p>
+    <strong>Current School Year:</strong>
+    <?= htmlspecialchars($schoolYearLabel, ENT_QUOTES, 'UTF-8') ?>
+  </p>
+
+    <?php if ($schoolYearAmount !== null): ?>
+    <p>
+      <strong>Total Amount:</strong>
+      <?= number_format($schoolYearAmount, 2, ',', '.') ?> €
+    </p>
+  <?php else: ?>
+    <p><em>No school year was found.</em></p>
+  <?php endif; ?>
+
+  <?php if ($isAdmin && $schoolYearId !== null): ?>
+    <button type="button"
+            class="schoolyear-edit-toggle"
+            id="schoolYearEditToggle">
+      Edit amount
+    </button>
+
+    <form id="schoolYearEditForm"
+          class="schoolyear-edit-form"
+          method="post"
+          action="update_schoolyear.php">
+      <input type="hidden" name="schoolyear_id" value="<?= (int)$schoolYearId ?>">
+
+      <label for="schoolyear_amount_input">New total amount (€)</label>
+      <input
+        id="schoolyear_amount_input"
+        name="total_amount"
+        type="number"
+        step="0.01"
+        value="<?= htmlspecialchars(number_format($schoolYearAmount ?? 0, 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>"
+        required
+      >
+
+      <div class="schoolyear-edit-form-actions">
+        <button type="button"
+                class="schoolyear-edit-cancel"
+                onclick="closeSchoolYearEditForm()">
+          Cancel
+        </button>
+        <button type="submit"
+                class="schoolyear-edit-save">
+          Save
+        </button>
+      </div>
+    </form>
+  <?php endif; ?>
+</div>
+
 <!-- FILTER PANEL -->
 <?php
 // Only include filters on specific pages that require them
@@ -224,6 +426,10 @@ if (in_array($currentPage, $filtersPages, true)) {
   const filterPanel = document.getElementById("filterPanel");
   const filterOverlay = document.getElementById("filterOverlay");
   const filterToggle = document.getElementById("filterToggle");
+
+    const schoolYearToggle = document.getElementById("schoolYearToggle");
+  const schoolYearModal  = document.getElementById("schoolYearModal");
+
 
   // SIDEBAR
   function openSidebar(){
@@ -275,6 +481,75 @@ if (in_array($currentPage, $filtersPages, true)) {
       }
     });
   }
+
+    // SCHOOL YEAR POPUP
+  function openSchoolYearModal() {
+    if (!schoolYearModal) return;
+    schoolYearModal.classList.add('show');
+    schoolYearModal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeSchoolYearModal() {
+    if (!schoolYearModal) return;
+    schoolYearModal.classList.remove('show');
+    schoolYearModal.setAttribute('aria-hidden', 'true');
+  }
+
+  if (schoolYearToggle && schoolYearModal) {
+    schoolYearToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (schoolYearModal.classList.contains('show')) {
+        closeSchoolYearModal();
+      } else {
+        openSchoolYearModal();
+      }
+    });
+  }
+
+  // Close when clicking outside or pressing ESC
+  document.addEventListener('click', (e) => {
+    if (!schoolYearModal || !schoolYearModal.classList.contains('show')) return;
+    if (!schoolYearModal.contains(e.target) && e.target !== schoolYearToggle) {
+      closeSchoolYearModal();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && schoolYearModal && schoolYearModal.classList.contains('show')) {
+      closeSchoolYearModal();
+    }
+  });
+
+    function openSchoolYearEditForm() {
+    if (!schoolYearEditForm) return;
+    schoolYearEditForm.classList.add('show');
+  }
+
+  function closeSchoolYearEditForm() {
+    if (!schoolYearEditForm) return;
+    schoolYearEditForm.classList.remove('show');
+  }
+
+  if (schoolYearEditToggle && schoolYearEditForm) {
+    schoolYearEditToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = schoolYearEditForm.classList.contains('show');
+      if (isOpen) {
+        closeSchoolYearEditForm();
+      } else {
+        openSchoolYearEditForm();
+      }
+    });
+  }
+
+  // when closing the popup, also close the edit form
+  function closeSchoolYearModal() {
+    if (!schoolYearModal) return;
+    schoolYearModal.classList.remove('show');
+    schoolYearModal.setAttribute('aria-hidden', 'true');
+    closeSchoolYearEditForm();
+  }
+
 </script>
 
 <?php if (defined('NAV_STANDALONE') && NAV_STANDALONE): ?>
