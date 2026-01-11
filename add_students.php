@@ -248,14 +248,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
                 <div>
                     <label for="additional_payments_status">Additional Payments Status</label>
                     <div class="input-group">
-                        <span class="material-icons-outlined">euro</span>
+                        <span class="material-icons-outlined">payments</span>
                         <input type="text" id="additional_payments_status" name="additional_payments_status">
                     </div>
                 </div>
                 <div>
-                    <label for="left_to_pay">Left to Pay (€)</label>
+                    <label for="left_to_pay">Left to Pay (<?= CURRENCY ?>)</label>
                     <div class="input-group">
-                        <span class="material-icons-outlined">euro</span>
+                        <span class="material-icons-outlined">payments</span>
                         <input type="number" step="0.01" id="left_to_pay" name="left_to_pay">
                     </div>
                 </div>
