@@ -3,6 +3,9 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+$userRole = $_SESSION['role'] ?? 'Reader';
+$isAdmin = ($userRole === 'Admin');
+
 $currentPage = basename($_SERVER['PHP_SELF']);
 
 // Skip rendering navigator entirely on the login page
@@ -166,7 +169,7 @@ if ($row = $res->fetch_assoc()) {
     <a href="unconfirmed.php"><span class="nav-icon material-icons-outlined">priority_high</span></a>
 
     <?php if ($currentPage !== 'dashboard.php'): ?>
-      <?php if (in_array($currentPage, ['unconfirmed.php','student_state.php'], true)): ?>
+      <?php if (in_array($currentPage, ['unconfirmed.php','student_state.php,', 'Transactions.php'], true)): ?>
 <span id="filterToggle" class="nav-icon-wrapper">
     <span class="nav-icon material-icons-outlined">filter_list</span>
 </span>      <?php endif; ?>
@@ -181,13 +184,17 @@ if ($row = $res->fetch_assoc()) {
   <div class="sidebar-inner">
     <header>MENU <span class="close-btn" onclick="closeSidebar()">&times;</span></header>
     <nav>
+    <?php if ($isAdmin): ?> 
       <a href="add_transactions.php"><span class="material-icons-outlined">swap_horiz</span> Add Transaction</a>
       <a href="Transactions.php"><span class="material-icons-outlined">receipt_long</span> Transactions</a>
       <a href="add_students.php"><span class="material-icons-outlined">group_add</span> Add Students</a>
-      <a href="student_state.php"><span class="material-icons-outlined">school</span> Student State</a>
-      <a href="latencies.php"><span class="material-icons-outlined">schedule</span> Latencies</a>
       <a href="import_files.php"><span class="material-icons-outlined">upload_file</span> Import File</a>
       <a href="unconfirmed.php"><span class="material-icons-outlined">priority_high</span> Unconfirmed</a>
+      <?php endif; ?>
+
+      <a href="Transactions.php"><span class="material-icons-outlined">receipt_long</span> Transactions</a>
+      <a href="student_state.php"><span class="material-icons-outlined">school</span> Student State</a>
+      <a href="latencies.php"><span class="material-icons-outlined">schedule</span> Latencies</a>
       <a href="notifications.php"><span class="material-icons-outlined">notifications</span> Notifications</a>
       <a href="#"><span class="material-icons-outlined">help_outline</span> Help & Tutorial</a>
     </nav>
@@ -202,7 +209,7 @@ if ($row = $res->fetch_assoc()) {
 <!-- FILTER PANEL -->
 <?php
 // Only include filters on specific pages that require them
-$filtersPages = ['unconfirmed.php', 'student_state.php'];
+$filtersPages = ['unconfirmed.php', 'student_state.php', 'Transactions.php'];
 if (in_array($currentPage, $filtersPages, true)) {
     define('APP_HAS_OVERLAY', true);
     include 'filters.php';
