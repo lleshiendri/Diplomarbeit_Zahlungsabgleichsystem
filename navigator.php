@@ -1,4 +1,5 @@
 <?php
+const CURRENCY = 'Lek';
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
