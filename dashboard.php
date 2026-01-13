@@ -222,7 +222,7 @@ for ($m = 1; $m <= 12; $m++) {
             <h3>Transaction Summary</h3>
             <hr>
 <p>Processed payments this month: <?= $month_count ?></p>
-<p>Total amount processed: <?= number_format($month_total, 2, ',', '.') ?> €</p>
+<p>Total amount processed: <?= number_format($month_total, 2, ',', '.') ?> <?= CURRENCY ?></p>
           </div>
         </div>
 
@@ -252,7 +252,7 @@ for ($m = 1; $m <= 12; $m++) {
             <div class="box widget"><div class="label">Number of Students</div><div class="val"><?= $students ?></div></div>
             <div class="box widget"><div class="label">Critical Cases</div><div class="val"><?= $critical ?></div></div>
             <div class="box widget"><div class="label">Total Transactions</div><div class="val"><?= $total_transactions ?></div></div>
-            <div class="box widget"><div class="label">Left to pay</div><div class="val"><?= number_format($left_to_pay, 2, ',', '.') ?> €</div></div>
+            <div class="box widget"><div class="label">Left to pay</div><div class="val"><?= number_format($left_to_pay, 2, ',', '.') ?> <?= CURRENCY ?></div></div>
           </div>
         </aside>
       </section>
@@ -333,7 +333,7 @@ document.addEventListener("DOMContentLoaded", () => {
     beginAtZero: true,
     title: {
       display: true,
-      text: "Total Amount (€)"
+      text: "Total Amount (<?= CURRENCY ?>)"
     },
     ticks: { stepSize: 20, font: { size: 11 } },
     grid: { color: "rgba(0,0,0,.08)" }

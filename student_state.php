@@ -316,12 +316,12 @@ $result = $conn->query($selectSql);
                     echo '<tr id="row-'.$studentId.'">';
                     echo '<td>' . htmlspecialchars($studentId) . '</td>';
                     echo '<td>' . htmlspecialchars($studentName) . '</td>';
-                    echo '<td>' . number_format($amountPaid, 2, ',', '.') . ' €</td>';
-                    echo '<td>' . number_format($row['left_to_pay'], 2, ',', '.') . ' €</td>';
+                    echo '<td>' . number_format($amountPaid, 2, ',', '.') . ' Lek' . '</td>';
+                    echo '<td>' . number_format($row['left_to_pay'], 2, ',', '.') . ' Lek' . '</td>';
                     echo '<td>' . htmlspecialchars($lastDate) . '</td>';
                     echo '<td>';
                     echo isset($row['additional_payments_status'])
-                        ? number_format((float)$row['additional_payments_status'], 2, ',', '.') . " €"
+                        ? number_format((float)$row['additional_payments_status'], 2, ',', '.') . " Lek"
                         : "";
                     echo '</td>';
                     if ($isAdmin) {

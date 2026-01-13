@@ -10,7 +10,7 @@ require 'db_connect.php';
 $transactions_sql = "
     SELECT 
         reference_number,
-        beneficairy,              -- in DB mit Tippfehler so vorhanden!
+        beneficairy,             
         reference,
         amount_total,
         processing_date
@@ -48,11 +48,9 @@ $suggestion_res = $conn->query($suggestion_sql);
 if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
     $ordering_name = trim($row['beneficairy']);
     if (!empty($ordering_name)) {
-        // Nachname aus dem Ordering Name extrahieren (letztes Wort)
+        
         $last_name_parts = preg_split('/\s+/', $ordering_name);
         $last_name = end($last_name_parts);
-
-        // Student suchen: anhand von long_name
         $student_sql = "
             SELECT long_name
             FROM STUDENT_TAB
@@ -65,7 +63,6 @@ if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
             $reason_text = "Student and ordering party share the same last name.";
         }
 
-        // Legal Guardian suchen: anhand von last_name
         $guardian_sql = "
             SELECT CONCAT(first_name, ' ', last_name) AS fullname
             FROM LEGAL_GUARDIAN_TAB
@@ -312,9 +309,10 @@ if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
     const overlay   = document.getElementById("overlay");
     function openSidebar(){ sidebar.classList.add("open"); content.classList.add("shifted"); overlay.classList.add("show"); }
     function closeSidebar(){ sidebar.classList.remove("open"); content.classList.remove("shifted"); overlay.classList.remove("show"); }
-    function toggleSidebar(){ sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); }
+    function toggleSidebar(){
+       sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); 
+      }
 
-    // Filter-Icon dynamisch einfügen & Steuerung aktivieren
     document.addEventListener('DOMContentLoaded', () => {
       const navLeft = document.querySelector('.nav-left');
       if (navLeft && !document.getElementById('filterToggle')) {
