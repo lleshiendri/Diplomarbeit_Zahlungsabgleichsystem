@@ -252,7 +252,7 @@ for ($m = 1; $m <= 12; $m++) {
             <div class="box widget"><div class="label">Number of Students</div><div class="val"><?= $students ?></div></div>
             <div class="box widget"><div class="label">Critical Cases</div><div class="val"><?= $critical ?></div></div>
             <div class="box widget"><div class="label">Total Transactions</div><div class="val"><?= $total_transactions ?></div></div>
-            <div class="box widget"><div class="label">Left to pay</div><div class="val"><?= number_format($left_to_pay, 2, ',', '.') ?> €</div></div>
+            <div class="box widget"><div class="label">Left to pay</div><div class="val"><?= number_format($left_to_pay, 2, ',', '.') ?> CURRENCY</div></div>
           </div>
         </aside>
       </section>
