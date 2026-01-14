@@ -19,6 +19,47 @@ if (isset($_GET['delete_id'])) {
     }
 }
 
+/* ========= UPDATE TRANSACTION (INLINE EDIT) ========= */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_transaction'])) {
+
+    $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+
+    $description = htmlspecialchars(trim($_POST['description'] ?? ''), ENT_QUOTES, 'UTF-8');
+
+    // amount: wenn leer -> nimm amount_total (damit amount nie NULL bleibt)
+    $amountInput = trim($_POST['amount'] ?? '');
+    $amount = ($amountInput === '') ? null : (float)$amountInput;
+
+    if ($id <= 0) {
+        $alert = "<div class='alert alert-error'>Invalid transaction id.</div>";
+    } elseif ($amount !== null && $amount < 0) {
+        $alert = "<div class='alert alert-error'>Amount must be >= 0.</div>";
+    } else {
+
+        $stmt = $conn->prepare("
+            UPDATE INVOICE_TAB
+            SET amount = CASE WHEN ? IS NULL THEN amount_total ELSE ? END,
+                description = ?
+            WHERE id = ?
+        ");
+
+        if ($stmt) {
+            $stmt->bind_param("ddsi", $amount, $amount, $description, $id);
+            $stmt->execute();
+            $affected = $stmt->affected_rows;
+            $stmt->close();
+
+            if ($affected > 0) {
+                $alert = "<div class='alert alert-success'>Transaction updated successfully.</div>";
+            } else {
+                $alert = "<div class='alert alert-error'>No changes were made.</div>";
+            }
+        } else {
+            $alert = "<div class='alert alert-error'>Update failed: " . htmlspecialchars($conn->error) . "</div>";
+        }
+    }
+}
+
 /* ========= FILTER INPUTS (aus filters.php) ========= */
 $filterStudent = trim($_GET['student'] ?? '');
 $filterClass   = trim($_GET['class']   ?? '');
@@ -32,7 +73,6 @@ $clauses = [];
 $joinSql = "";
 $needsStudentJoin = false;
 
-/* ========= STUDENT NAME FILTER ========= */
 if ($filterStudent !== '') {
     $needsStudentJoin = true;
     $like = "%" . $conn->real_escape_string($filterStudent) . "%";
@@ -41,7 +81,6 @@ if ($filterStudent !== '') {
                 OR st.forename LIKE '{$like}')";
 }
 
-/* ========= CLASS FILTER ========= */
 if ($filterClass !== '' && ctype_digit($filterClass)) {
     $needsStudentJoin = true;
     $clauses[] = "st.class_id = " . (int)$filterClass;
@@ -123,13 +162,16 @@ $selectSql = "
         t.description,
         t.reference,
         t.reference_number,
-        t.processing_date
+        t.processing_date,
+        t.amount,
+        t.amount_total
     FROM INVOICE_TAB t
     {$joinSql}
     {$whereSql}
     ORDER BY t.processing_date DESC
     LIMIT {$limit} OFFSET {$offset}
 ";
+
 
 $result = $conn->query($selectSql);
 ?>
@@ -146,78 +188,151 @@ $result = $conn->query($selectSql);
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
 
     <style>
-        body { font-family: 'Roboto', sans-serif; margin:0; }
-        #sidebar a { text-decoration:none; color:#222; transition:0.2s; }
-        #sidebar a:hover { background-color:#FAE4D5; color:#B31E32; }
+    body {
+        font-family: 'Roboto', sans-serif;
+        margin: 0;
+    }
 
-        /* Main content wrapper */
-        #content {
-            transition: margin-left 0.3s ease;
-            margin-left: 0;
-            padding: 100px 30px 60px;
-        }
-        #content.shifted { margin-left: 260px; }
+    #sidebar a {
+        text-decoration: none;
+        color: #222;
+        transition: 0.2s;
+    }
+    #sidebar a:hover {
+        background-color: #FAE4D5;
+        color: #B31E32;
+    }
 
-        .page-title {
-            font-family:'Space Grotesk',sans-serif;
-            font-weight:700;
-            color:#B31E32;
-            text-align:center;
-            margin-bottom:20px;
-            font-size:28px;
-        }
+    /* Main content wrapper */
+    #content {
+        transition: margin-left 0.3s ease;
+        margin-left: 0;
+        padding: 100px 30px 60px;
+    }
+    #content.shifted {
+        margin-left: 260px;
+    }
 
-        .table-wrapper {
-            width:100%;
-            max-width:1300px;
-            margin:0 auto;
-        }
+    .page-title {
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 700;
+        color: #B31E32;
+        text-align: center;
+        margin-bottom: 20px;
+        font-size: 28px;
+    }
 
-        .student-table th { 
-            font-family:'Montserrat',sans-serif; 
-            font-weight:600; 
-            color:#B31E32; 
-            background-color:#FAE4D5; 
-            text-align:center;
-        }
-        .student-table td { 
-            font-family:'Roboto',sans-serif; 
-            color:#222; 
-            vertical-align:middle;
-            text-align:center;
-        }
-        .student-table tbody tr:nth-child(odd){background-color:#FFFFFF;}
-        .student-table tbody tr:nth-child(even){background-color:#fff8eb;}
-        .student-table tr:hover { background-color:#FAE4D5; transition:0.2s; }
+    .table-wrapper {
+        width: 100%;
+        max-width: 1300px;
+        margin: 0 auto;
+    }
 
-        .material-icons-outlined { font-size:24px; vertical-align:middle; cursor:pointer; }
+    /* ================= TABLE ================= */
+    .student-table th {
+        font-family: 'Montserrat', sans-serif;
+        font-weight: 600;
+        color: #B31E32;
+        background-color: #FAE4D5;
+        text-align: center;
+    }
 
-        .alert { max-width:600px; margin:0 auto 20px auto; padding:10px 15px; border-radius:8px; font-weight:500; text-align:center; }
-        .alert-success { background:#EAF9E6; color:#2E7D32; border:1px solid #C5E1A5; }
-        .alert-error { background:#FFE4E1; color:#B71C1C; border:1px solid #FFAB91; }
+    .student-table td {
+        font-family: 'Roboto', sans-serif;
+        color: #222;
+        vertical-align: middle;
+        text-align: center;
+    }
 
-        /* Pagination */
-        .pagination { font-family:'Montserrat',sans-serif; }
-        .pagination .page-link {
-            color:#B31E32;
-            border:1px solid #FAE4D5;
-            background-color:#fff;
-            font-weight:500;
-        }
-        .pagination .page-link:hover {
-            background-color:#FAE4D5;
-            color:#B31E32;
-        }
-        .pagination .active .page-link {
-            background-color:#B31E32;
-            border-color:#B31E32;
-            color:#fff;
-        }
-        .pagination .disabled .page-link {
-            color:#ccc;
-            border-color:#eee;
-        }
-    </style>
+ .student-table tbody tr.row-odd  { background-color:#FFFFFF; }
+.student-table tbody tr.row-even { background-color:#FFF8EB; }
+
+
+    /* Hover */
+    .student-table tr:hover {
+        background-color: #FAE4D5;
+        transition: 0.2s;
+    }
+
+    .material-icons-outlined {
+        font-size: 24px;
+        vertical-align: middle;
+        cursor: pointer;
+    }
+
+    /* ================= ALERTS ================= */
+    .alert {
+        max-width: 600px;
+        margin: 0 auto 20px auto;
+        padding: 10px 15px;
+        border-radius: 8px;
+        font-weight: 500;
+        text-align: center;
+    }
+    .alert-success {
+        background: #EAF9E6;
+        color: #2E7D32;
+        border: 1px solid #C5E1A5;
+    }
+    .alert-error {
+        background: #FFE4E1;
+        color: #B71C1C;
+        border: 1px solid #FFAB91;
+    }
+
+    /* ================= PAGINATION ================= */
+    .pagination {
+        font-family: 'Montserrat', sans-serif;
+    }
+    .pagination .page-link {
+        color: #B31E32;
+        border: 1px solid #FAE4D5;
+        background-color: #fff;
+        font-weight: 500;
+    }
+    .pagination .page-link:hover {
+        background-color: #FAE4D5;
+        color: #B31E32;
+    }
+    .pagination .active .page-link {
+        background-color: #B31E32;
+        border-color: #B31E32;
+        color: #fff;
+    }
+    .pagination .disabled .page-link {
+        color: #ccc;
+        border-color: #eee;
+    }
+
+    /* ================= INLINE EDIT ================= */
+   .edit-row td {
+    background: inherit;
+    border-top: 2px solid #D4463B;
+    padding: 15px;
+}
+
+
+    .edit-row input {
+        background-color: #FFFFFF;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        padding: 5px 8px;
+    }
+
+    .edit-row button {
+        background: #D4463B;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 5px 12px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .edit-row button:hover {
+        background: #B31E32;
+    }
+</style>
 </head>
 <body>
 
@@ -239,6 +354,7 @@ $result = $conn->query($selectSql);
                     <th>Reference Nr</th>
                     <th>Description</th>
                     <th>Processing Date</th>
+                    <th>Amount</th>
                     <?php if ($isAdmin): ?>
                         <th>Actions</th>
                     <?php endif; ?>
@@ -247,26 +363,66 @@ $result = $conn->query($selectSql);
             <tbody>
             <?php 
             if ($result && $result->num_rows > 0) {
-                while ($t = $result->fetch_assoc()) {
-                    echo "<tr>";
-                    echo "<td>".htmlspecialchars($t['beneficiary'])."</td>";
-                    echo "<td>".htmlspecialchars($t['reference'])."</td>";
-                    echo "<td>".htmlspecialchars($t['reference_number'])."</td>";
-                    echo "<td>".htmlspecialchars($t['description'])."</td>";
-                    echo "<td>".htmlspecialchars($t['processing_date'])."</td>";
-                    if ($isAdmin) {
-                    echo "<td>
-                            <a href='?delete_id=".$t['id']."' onclick='return confirm(\"Delete transaction?\")'>
-                                <span class='material-icons-outlined' style='color:#B31E32;'>delete</span>
-                            </a>";
-                    }
-                    echo "</td>";
-                    echo "</tr>";
-               
-                }
-            } else {
-                echo "<tr><td colspan='5' style='text-align:center;color:#888;'>No transactions found</td></tr>";
-            }
+                $rowIndex = 0;
+    while ($t = $result->fetch_assoc()) {
+        $rowIndex++;
+$rowClass = ($rowIndex % 2 === 1) ? 'row-odd' : 'row-even';
+        $txId = (int)$t['id'];
+
+        echo "<tr id='row-{$txId}' class='{$rowClass}'>";
+        echo "<td>".htmlspecialchars($t['beneficiary'])."</td>";
+        echo "<td>".htmlspecialchars($t['reference'])."</td>";
+        echo "<td>".htmlspecialchars($t['reference_number'])."</td>";
+        echo "<td>".htmlspecialchars($t['description'])."</td>";
+        echo "<td>".htmlspecialchars($t['processing_date'])."</td>";
+
+        // Falls amount NULL ist, fallback auf amount_total.
+        $shownAmount = ($t['amount'] !== null) ? (float)$t['amount'] : (float)$t['amount_total'];
+        echo "<td>" . number_format($shownAmount, 2, ',', '.') . " €</td>";
+
+        if ($isAdmin) {
+            echo "<td style='text-align:center;'>
+                    <span class='material-icons-outlined' style='color:#D4463B;'
+                          onclick='toggleEditTx(\"{$txId}\")'>edit</span>
+                    &nbsp;
+                    <a href='?delete_id=".$txId."' onclick='return confirm(\"Delete transaction?\")'>
+                        <span class='material-icons-outlined' style='color:#B31E32;'>delete</span>
+                    </a>
+                  </td>";
+        }
+        echo "</tr>";
+
+        // Inline edit row (nur Admin)
+        if ($isAdmin) {
+            $editAmount = ($t['amount'] !== null) ? (float)$t['amount'] : (float)$t['amount_total'];
+
+            echo "<tr class='edit-row' id='edit-{$txId}' style='display:none;'>
+                    <td colspan='7'>
+                        <form method='POST' style='display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center;'>
+                            <input type='hidden' name='id' value='{$txId}'>
+                            <input type='hidden' name='update_transaction' value='1'>
+
+                            <label style='margin-right:5px;'>Amount (€):</label>
+                            <input type='number' step='0.01' min='0' name='amount'
+                                   value='".htmlspecialchars((string)$editAmount, ENT_QUOTES, 'UTF-8')."'
+                                   style='width:140px;' required>
+
+                            <label style='margin-right:5px;'>Description:</label>
+                            <input type='text' name='description'
+                                   value='".htmlspecialchars($t['description'], ENT_QUOTES, 'UTF-8')."'
+                                   style='width:360px;'>
+
+                            <button type='submit'>Save</button>
+                            <button type='button' onclick='toggleEditTx(\"{$txId}\")'>Cancel</button>
+                        </form>
+                    </td>
+                  </tr>";
+        }
+    }
+} else {
+    $colspan = $isAdmin ? 7 : 6;
+    echo "<tr><td colspan='{$colspan}' style='text-align:center;color:#888;'>No transactions found</td></tr>";
+}            
             ?>
             </tbody>
         </table>
@@ -300,6 +456,16 @@ $result = $conn->query($selectSql);
     </nav>
     <?php endif; ?>
 </div>
+<script>
+function toggleEditTx(id) {
+    const row = document.getElementById("edit-" + id);
+    if (!row) return;
 
+    row.style.display =
+        (row.style.display === "none" || row.style.display === "")
+        ? "table-row"
+        : "none";
+}
+</script>
 </body>
 </html>
