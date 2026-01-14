@@ -19,28 +19,6 @@ body{
   background: var(--bg);
 }
 
-/* TOPBAR */
-.topbar{
-  height:64px;
-  background: var(--red);
-  color:#fff;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 18px;
-  position:sticky;
-  top:0;
-  z-index:50;
-  box-shadow: 0 2px 0 rgba(0,0,0,.06);
-}
-.topbar__title{
-  font-weight:700;
-  letter-spacing:.8px;
-}
-.topbar__brand{
-  font-weight:700;
-  opacity:.95;
-}
 
 /* LAYOUT */
 .help{

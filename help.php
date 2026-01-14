@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+    
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -13,18 +14,9 @@
   <link rel="stylesheet" href="help.css" />
 </head>
 
+<?php require __DIR__ . '/navigator.php'; ?>
 <body>
-  <!-- Use your existing topbar include here -->
-  <header class="topbar">
-    <div class="topbar__left">
-      <!-- put your hamburger + icons here if needed -->
-      <span class="topbar__title">HELP & TUTORIAL</span>
-    </div>
-    <div class="topbar__right">
-      <span class="topbar__brand">SHKOLLA AUSTRIAKE</span>
-    </div>
-  </header>
-
+  <div id="content">
   <main class="help">
     <!-- Left navigation -->
     <aside class="help-nav" aria-label="Help navigation">
@@ -282,6 +274,7 @@
 
     </section>
   </main>
+  </div>
 
   <script>
     // Role toggle: hides blocks marked with data-role="admin" or data-role="reader"
