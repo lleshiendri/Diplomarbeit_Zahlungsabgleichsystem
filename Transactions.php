@@ -402,7 +402,7 @@ $rowClass = ($rowIndex % 2 === 1) ? 'row-odd' : 'row-even';
                             <input type='hidden' name='id' value='{$txId}'>
                             <input type='hidden' name='update_transaction' value='1'>
 
-                            <label style='margin-right:5px;'>Amount (<?= CURRENCY ?>):</label>
+                            <label style='margin-right:5px;'>Amount (Lek):</label>
                             <input type='number' step='0.01' min='0' name='amount'
                                    value='".htmlspecialchars((string)$editAmount, ENT_QUOTES, 'UTF-8')."'
                                    style='width:140px;' required>
