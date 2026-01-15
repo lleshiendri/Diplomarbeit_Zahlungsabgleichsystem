@@ -378,7 +378,7 @@ $rowClass = ($rowIndex % 2 === 1) ? 'row-odd' : 'row-even';
 
         // Falls amount NULL ist, fallback auf amount_total.
         $shownAmount = ($t['amount'] !== null) ? (float)$t['amount'] : (float)$t['amount_total'];
-        echo "<td>" . number_format($shownAmount, 2, ',', '.') . " <?= CURRENCY ?></td>";
+        echo "<td>" . number_format($shownAmount, 2, ',', '.') . " Lek </td>";
 
         if ($isAdmin) {
             echo "<td style='text-align:center;'>
