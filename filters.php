@@ -171,7 +171,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     </div>
 
     <div class="filter-group">
-      <label>Amount Range (€)</label>
+      <label>Amount Range (<?= CURRENCY ?>)</label>
       <div class="amount-flex">
         <input type="number" name="amount_min" class="filter-input" placeholder="Min"
                value="<?= $g_min ?>">
