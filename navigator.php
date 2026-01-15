@@ -365,7 +365,7 @@ if ($syRes && $syRes->num_rows === 1) {
     <?php if ($schoolYearAmount !== null): ?>
     <p>
       <strong>Total Amount:</strong>
-      <?= number_format($schoolYearAmount, 2, ',', '.') ?> €
+      <?= number_format($schoolYearAmount, 2, ',', '.') ?> <?= CURRENCY ?>
     </p>
   <?php else: ?>
     <p><em>No school year was found.</em></p>
@@ -384,7 +384,7 @@ if ($syRes && $syRes->num_rows === 1) {
           action="update_schoolyear.php">
       <input type="hidden" name="schoolyear_id" value="<?= (int)$schoolYearId ?>">
 
-      <label for="schoolyear_amount_input">New total amount (€)</label>
+      <label for="schoolyear_amount_input">New total amount (<?= CURRENCY ?>)</label>
       <input
         id="schoolyear_amount_input"
         name="total_amount"

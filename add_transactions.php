@@ -219,7 +219,7 @@ attemptReferenceMatch($newInvoiceId, $conn);
                     </div>
                 </div>
                 <div class="full-width">
-                    <label for="amount">Amount Paid</label>
+                    <label for="amount">Amount Paid (<?= CURRENCY ?>)</label>
                     <div class="input-group">
                         <span class="material-icons-outlined">payments</span>
                         <input type="number" step="0.01" id="amount" name="amount" placeholder="Enter Amount" required>

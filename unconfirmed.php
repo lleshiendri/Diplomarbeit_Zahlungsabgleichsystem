@@ -259,7 +259,7 @@ if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
                     <td><?= htmlspecialchars($row['beneficairy']) ?></td>
                     <td><?= htmlspecialchars($row['reference']) ?></td>
                     <td><?= $row['processing_date'] ? date("d/m/Y", strtotime($row['processing_date'])) : '-' ?></td>
-                    <td class="amount"><?= number_format($row['amount_total'], 2, ',', '.') ?> €</td>
+                    <td class="amount"><?= number_format($row['amount_total'], 2, ',', '.') ?> <?= CURRENCY ?></td>
                   </tr>
                 <?php endwhile; ?>
               <?php else: ?>

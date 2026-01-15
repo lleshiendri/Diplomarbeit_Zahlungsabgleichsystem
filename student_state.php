@@ -351,10 +351,10 @@ $result = $conn->query($selectSql);
                                     <label style="margin-right:5px;">Long Name:</label>
                                     <input type="text" name="long_name" value="'.htmlspecialchars($studentName).'" style="width:150px;">
 
-                                    <label style="margin-right:5px;">Left to Pay (€):</label>
+                                    <label style="margin-right:5px;">Left to Pay (<?= CURRENCY ?>):</label>
                                     <input type="number" step="0.01" name="left_to_pay" value="'.htmlspecialchars($row['left_to_pay']).'" style="width:100px;">
 
-                                    <label style="margin-right:5px;">Additional Payments Status (€):</label>
+                                    <label style="margin-right:5px;">Additional Payments Status (<?= CURRENCY ?>):</label>
                                     <input type="number" step="0.01" name="additional_payments_status" value="'.htmlspecialchars($row['additional_payments_status'] ?? '0', ENT_QUOTES, 'UTF-8').'" style="width:150px;" required>
 
                                     <button type="submit">Save</button>
