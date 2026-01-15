@@ -1,7 +1,9 @@
 <?php
-require_once 'auth_check.php';
-require 'db_connect.php';
-require 'navigator.php';
+require_once __DIR__ . '/auth_check.php';
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+$currentPage = basename($_SERVER['PHP_SELF']);
+require_once __DIR__ . '/db_connect.php';
 
 $students_res = $conn->query("SELECT COUNT(*) AS c FROM STUDENT_TAB");
 $students = $students_res->fetch_assoc()['c'] ?? 0;
@@ -195,6 +197,7 @@ for ($m = 1; $m <= 12; $m++) {
   </style>
 </head>
 <body>
+  <?php define('NAV_PARTIAL', true); require __DIR__ . '/navigator.php'; ?>
   <div id="content">
     <main class="main">
       <h1>DASHBOARD</h1>
@@ -253,38 +256,82 @@ for ($m = 1; $m <= 12; $m++) {
   </div>
 
   <script>
+document.addEventListener("DOMContentLoaded", () => {
+  // ===== Safe sidebar helpers (no crash if elements missing)
+  const sidebar = document.getElementById("sidebar");
+  const content = document.getElementById("content");
+  const overlay = document.getElementById("overlay");
 
-    const sidebar   = document.getElementById("sidebar");
-    const content   = document.getElementById("content");
-    const overlay   = document.getElementById("overlay");
-    function openSidebar(){ sidebar.classList.add("open"); content.classList.add("shifted"); overlay.classList.add("show"); }
-    function closeSidebar(){ sidebar.classList.remove("open"); content.classList.remove("shifted"); overlay.classList.remove("show"); }
-    function toggleSidebar(){ sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); }
+  function openSidebar(){
+    if (sidebar) sidebar.classList.add("open");
+    if (content) content.classList.add("shifted");
+    if (overlay) overlay.classList.add("show");
+  }
+  function closeSidebar(){
+    if (sidebar) sidebar.classList.remove("open");
+    if (content) content.classList.remove("shifted");
+    if (overlay) overlay.classList.remove("show");
+  }
+  window.toggleSidebar = function(){
+    if (!sidebar) return;
+    sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+  };
 
-    const ctx = document.getElementById("paymentsChart").getContext("2d");
-    new Chart(ctx,{
-      type:"bar",
-      data:{
-        labels:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
-        datasets:[{
+  // ===== Simple on-page debug helper (no console needed)
+  function showError(msg){
+    let el = document.getElementById("chartError");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "chartError";
+      el.style.cssText = "margin:8px 0 0;color:#B31E32;background:#FAE4D5;border:1px solid #E3E5E0;padding:8px;border-radius:6px;font:13px/1.4 Roboto, sans-serif;";
+      const chartBox = document.getElementById("paymentsChart")?.closest(".chart-box") || document.body;
+      chartBox.insertBefore(el, chartBox.firstChild);
+    }
+    el.textContent = "Chart error: " + msg;
+  }
+
+  // ===== Guard: canvas present?
+  const canvas = document.getElementById("paymentsChart");
+  if (!canvas) { showError("canvas #paymentsChart not found"); return; }
+
+  // ===== Guard: Chart.js loaded?
+  if (typeof window.Chart === "undefined") {
+    showError("Chart.js did not load (CDN blocked?).");
+    return;
+  }
+
+  // ===== Create chart safely
+  try {
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { showError("2D context is not available."); return; }
+
+    new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+        datasets: [{
           data: <?= json_encode($chart_data) ?>,
-          backgroundColor:"#D4463B",         
-          borderRadius:2,
-          barPercentage:0.75,                 
-          categoryPercentage:0.8,
-          maxBarThickness:38
+          backgroundColor: "#D4463B",
+          borderRadius: 2,
+          barPercentage: 0.75,
+          categoryPercentage: 0.8,
+          maxBarThickness: 38
         }]
       },
-      options:{
-        maintainAspectRatio:false,
-        plugins:{ legend:{ display:false }, tooltip:{ enabled:true }},
-        layout:{ padding:0 },
-        scales:{
-          y:{ beginAtZero:true, ticks:{ stepSize:20, font:{ size:11 } }, grid:{ color:"rgba(0,0,0,.08)" }},
-          x:{ ticks:{ font:{ size:11 } }, grid:{ display:false }}
+      options: {
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: true } },
+        layout: { padding: 0 },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 20, font: { size: 11 } }, grid: { color: "rgba(0,0,0,.08)" } },
+          x: { ticks: { font: { size: 11 } }, grid: { display: false } }
         }
       }
     });
+  } catch (e) {
+    showError(e && e.message ? e.message : String(e));
+  }
+});
   </script>
 </body>
 </html>

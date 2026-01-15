@@ -1,0 +1,140 @@
+<?php
+// Aktuelle Seite erkennen
+$currentPage = basename($_SERVER['PHP_SELF']);
+?>
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+  <style>
+  :root{
+    --red-dark:#B31E32;
+    --red-main:#D4463B;
+    --red-light:#FAE4D5;
+    --off-white:#FFF8EB;
+    --gray-light:#E3E5E0;
+  }
+
+  /* HEADER */
+  .header{
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1300;
+    height: 70px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 30px;
+    background:var(--red-main); color:#fff;
+    box-shadow:0 2px 6px rgba(0,0,0,.1);
+  }
+  .nav-left { display:flex; align-items:center; gap:20px; }
+  .menu-icon, .nav-icon {
+    font-size:26px;
+    cursor:pointer;
+    color:white;
+    transition:.2s;
+    user-select:none;
+  }
+  .menu-icon:hover, .nav-icon:hover { color:var(--red-dark); }
+  .logo img{ height:36px; }
+
+  /* FILTER PANEL (optional) */
+  #filterPanel {
+    position: fixed;
+    top: 70px;
+    right: -320px;
+    width: 320px;
+    height: calc(100% - 70px);
+    background: #fff;
+    border-left: 1px solid var(--gray-light);
+    box-shadow: -2px 0 8px rgba(0,0,0,.1);
+    transition: right 0.3s ease;
+    z-index: 1250;
+  }
+  #filterPanel.open { right: 0; }
+
+  .overlay {
+    position: fixed;
+    top:0; left:0; right:0; bottom:0;
+    background: rgba(0,0,0,0.3);
+    display:none;
+    z-index:1100;
+  }
+  .overlay.show { display:block; }
+
+  /* SIDEBAR bleibt wie gehabt */
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="nav-left">
+    <!-- Menü -->
+    <span class="menu-icon material-icons-outlined" onclick="toggleSidebar()">menu</span>
+
+    <!-- Notifications -->
+    <span class="nav-icon material-icons-outlined">notifications</span>
+
+    <!-- Urgent -->
+    <span class="nav-icon material-icons-outlined">priority_high</span>
+
+    <?php if ($currentPage === 'unconfirmed.php'): ?>
+      <!-- Filter-Icon -->
+      <span class="nav-icon material-icons-outlined" id="filterToggle">filter_list</span>
+
+      <!-- Home-Icon -->
+      <a href="dashboard.php" class="nav-icon material-icons-outlined" style="text-decoration:none;color:white;">home</a>
+    <?php endif; ?>
+  </div>
+
+  <div class="logo"><img src="logo1.png" alt="Logo"></div>
+</div>
+
+<!-- SIDEBAR -->
+<aside id="sidebar" class="sidebar">
+  <!-- Dein Menü -->
+</aside>
+
+<!-- FILTER PANEL (nur bei unconfirmed eingebunden) -->
+<?php if ($currentPage === 'unconfirmed.php'): ?>
+  <div id="filterPanel">
+    <?php include 'filters.html'; ?>
+  </div>
+<?php endif; ?>
+
+<div id="overlay" class="overlay" onclick="closeSidebar(); closeFilter();"></div>
+
+<script>
+  const sidebar = document.getElementById("sidebar");
+  const overlay = document.getElementById("overlay");
+  const filterPanel = document.getElementById("filterPanel");
+  const filterToggle = document.getElementById("filterToggle");
+
+  // SIDEBAR
+  function openSidebar(){
+    sidebar.classList.add("open");
+    overlay.classList.add("show");
+  }
+  function closeSidebar(){
+    sidebar.classList.remove("open");
+    overlay.classList.remove("show");
+  }
+  function toggleSidebar(){
+    sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+  }
+
+  // FILTER PANEL (nur wenn vorhanden)
+  if (filterToggle) {
+    filterToggle.addEventListener('click', () => {
+      filterPanel.classList.toggle('open');
+    });
+  }
+  function closeFilter(){
+    if (filterPanel) filterPanel.classList.remove('open');
+  }
+</script>
+
+</body>
+</html>
