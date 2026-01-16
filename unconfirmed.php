@@ -57,10 +57,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_invoice'])) {
                 // Log manual confirmation to MATCHING_HISTORY_TAB
                 logMatchingAttempt($conn, $invoice_id, $student_id, 100.0, $matched_by, true);
                 
-                // Check and create late-fee notification if needed (only for reference-id matches)
-                if ($matched_by === 'reference' && $processing_date) {
-                    require_once 'matching_functions.php';
-                    checkAndCreateLateFeeNotification($conn, $student_id, $invoice_id, $processing_date, $matched_by);
+                // Call stored procedure to check and create late-fee notification (only for reference-id matches)
+                if ($matched_by === 'reference') {
+                    $proc_stmt = $conn->prepare("CALL sp_apply_late_fee_for_student_month(?)");
+                    if ($proc_stmt) {
+                        $proc_stmt->bind_param("i", $student_id);
+                        $proc_stmt->execute();
+                        // Consume all result sets
+                        while ($proc_stmt->next_result()) {
+                            if ($result = $proc_stmt->get_result()) {
+                                $result->free();
+                            }
+                        }
+                        $proc_stmt->close();
+                    }
                 }
                 
                 $success_message = "Invoice confirmed and assigned to student.";

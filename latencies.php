@@ -108,29 +108,50 @@ require "db_connect.php";
         $totalStudents = $countResult ? (int)$countResult->fetch_assoc()['total'] : 0;
         $totalPages = max(1, (int)ceil($totalStudents / $perPage));
 
-        // MAIN QUERY - Calculate days late relative to monthly deadline (10th)
+        // MAIN QUERY - Calculate days late with eligibility filters
+        // Only shows days late for students who are late-fee applicable
         $sql = "
     SELECT
         s.id AS student_id,
         s.long_name,
         MAX(i.processing_date) AS last_transaction,
         NOW() AS last_import,
+        yearly_sum.year_sum,
         first_payment.first_payment_this_month,
         STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d') AS deadline_date,
         CASE
-            WHEN first_payment.first_payment_this_month IS NULL THEN 
-                GREATEST(DATEDIFF(CURDATE(), STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d')), 0)
-            WHEN first_payment.first_payment_this_month <= STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d') THEN 0
-            ELSE DATEDIFF(
-                first_payment.first_payment_this_month,
-                STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d')
-            )
+            -- Yearly payers exempt (yearly_sum >= 1310)
+            WHEN yearly_sum.year_sum >= 1310 THEN 0
+            -- September exception: always 0
+            WHEN MONTH(CURDATE()) = 9 THEN 0
+            -- October exception: if first payment <= Oct 10, then 0
+            WHEN MONTH(CURDATE()) = 10 AND first_payment.first_payment_this_month IS NOT NULL 
+                 AND first_payment.first_payment_this_month <= STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d') THEN 0
+            -- Calculate days late based on first payment or current date
+            WHEN first_payment.first_payment_this_month IS NOT NULL 
+                 AND first_payment.first_payment_this_month > STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d') 
+                 THEN DATEDIFF(first_payment.first_payment_this_month, STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d'))
+            WHEN first_payment.first_payment_this_month IS NULL 
+                 AND CURDATE() > STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d')
+                 THEN DATEDIFF(CURDATE(), STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d'))
+            ELSE 0
         END AS days_late_month
     FROM STUDENT_TAB s
     LEFT JOIN INVOICE_TAB i 
         ON i.student_id = s.id 
         AND i.student_id IS NOT NULL
     LEFT JOIN (
+        -- Yearly sum from confirmed invoices only
+        SELECT 
+            student_id,
+            IFNULL(SUM(amount_total), 0) AS year_sum
+        FROM INVOICE_TAB
+        WHERE student_id IS NOT NULL
+          AND YEAR(processing_date) = YEAR(CURDATE())
+        GROUP BY student_id
+    ) yearly_sum ON yearly_sum.student_id = s.id
+    LEFT JOIN (
+        -- First payment this month from confirmed invoices only
         SELECT 
             student_id,
             MIN(processing_date) AS first_payment_this_month
@@ -140,7 +161,7 @@ require "db_connect.php";
           AND MONTH(processing_date) = MONTH(CURDATE())
         GROUP BY student_id
     ) first_payment ON first_payment.student_id = s.id
-    GROUP BY s.id, s.long_name, first_payment.first_payment_this_month
+    GROUP BY s.id, s.long_name, yearly_sum.year_sum, first_payment.first_payment_this_month
     ORDER BY s.long_name ASC
     LIMIT $perPage OFFSET $offset
 ";
@@ -153,44 +174,21 @@ require "db_connect.php";
                 $lateText = "—";
                 $lateClass = "txt-orange";
 
-                // Use days_late_month instead of days_since_payment
-                $daysLate = isset($row['days_late_month']) ? (int)$row['days_late_month'] : null;
+                // Use days_late_month (already calculated with eligibility filters)
+                $daysLate = isset($row['days_late_month']) ? (int)$row['days_late_month'] : 0;
 
-                if ($daysLate !== null) {
-                    if ($daysLate == 0) {
-                        $lateClass = "txt-green";
-                        $lateText = "0 DAYS";
-                    } elseif ($daysLate <= 5) {
-                        $lateClass = "txt-green";
-                        $lateText = $daysLate . " DAYS";
-                    } elseif ($daysLate <= 10) {
-                        $lateClass = "txt-orange";
-                        $lateText = $daysLate . " DAYS";
-                    } else {
-                        $lateClass = "txt-red";
-                        $lateText = $daysLate . " DAYS";
-                    }
+                if ($daysLate == 0) {
+                    $lateClass = "txt-green";
+                    $lateText = "0 DAYS";
+                } elseif ($daysLate <= 5) {
+                    $lateClass = "txt-green";
+                    $lateText = $daysLate . " DAYS";
+                } elseif ($daysLate <= 10) {
+                    $lateClass = "txt-orange";
+                    $lateText = $daysLate . " DAYS";
                 } else {
-                    // No confirmed payments this month - check if we're past deadline
-                    $deadline = $row['deadline_date'] ?? null;
-                    if ($deadline) {
-                        $today = new DateTime();
-                        $deadlineDate = new DateTime($deadline);
-                        if ($today > $deadlineDate) {
-                            $daysLate = $today->diff($deadlineDate)->days;
-                            if ($daysLate <= 5) {
-                                $lateClass = "txt-green";
-                            } elseif ($daysLate <= 10) {
-                                $lateClass = "txt-orange";
-                            } else {
-                                $lateClass = "txt-red";
-                            }
-                            $lateText = $daysLate . " DAYS";
-                        } else {
-                            $lateClass = "txt-green";
-                            $lateText = "0 DAYS";
-                        }
-                    }
+                    $lateClass = "txt-red";
+                    $lateText = $daysLate . " DAYS";
                 }
 
                 echo "<tr>";
