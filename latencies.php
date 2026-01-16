@@ -108,60 +108,43 @@ require "db_connect.php";
         $totalStudents = $countResult ? (int)$countResult->fetch_assoc()['total'] : 0;
         $totalPages = max(1, (int)ceil($totalStudents / $perPage));
 
-        // MAIN QUERY - Calculate days late with eligibility filters
-        // Only shows days late for students who are late-fee applicable
+        // MAIN QUERY - Calculate days late based on confirmed invoices only
+        // Uses processing_date, NOT NOW() or last_import
         $sql = "
     SELECT
         s.id AS student_id,
         s.long_name,
         MAX(i.processing_date) AS last_transaction,
         NOW() AS last_import,
-        yearly_sum.year_sum,
         first_payment.first_payment_this_month,
         STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d') AS deadline_date,
         CASE
-            -- Yearly payers exempt (yearly_sum >= 1310)
-            WHEN yearly_sum.year_sum >= 1310 THEN 0
-            -- September exception: always 0
-            WHEN MONTH(CURDATE()) = 9 THEN 0
-            -- October exception: if first payment <= Oct 10, then 0
-            WHEN MONTH(CURDATE()) = 10 AND first_payment.first_payment_this_month IS NOT NULL 
-                 AND first_payment.first_payment_this_month <= STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d') THEN 0
-            -- Calculate days late based on first payment or current date
-            WHEN first_payment.first_payment_this_month IS NOT NULL 
-                 AND first_payment.first_payment_this_month > STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d') 
-                 THEN DATEDIFF(first_payment.first_payment_this_month, STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d'))
-            WHEN first_payment.first_payment_this_month IS NULL 
-                 AND CURDATE() > STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d')
-                 THEN DATEDIFF(CURDATE(), STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d'))
-            ELSE 0
-        END AS days_late_month
+            -- If no payment this month: Days Late = 0 (do NOT penalize unpaid students)
+            WHEN first_payment.first_payment_this_month IS NULL THEN 0
+            -- If paid on or before deadline: Days Late = 0
+            WHEN first_payment.first_payment_this_month <= STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d') THEN 0
+            -- If paid after deadline: Days Late = DATEDIFF(first_payment, deadline)
+            ELSE DATEDIFF(first_payment.first_payment_this_month, STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d'))
+        END AS days_late
     FROM STUDENT_TAB s
     LEFT JOIN INVOICE_TAB i 
         ON i.student_id = s.id 
         AND i.student_id IS NOT NULL
     LEFT JOIN (
-        -- Yearly sum from confirmed invoices only
-        SELECT 
-            student_id,
-            IFNULL(SUM(amount_total), 0) AS year_sum
-        FROM INVOICE_TAB
-        WHERE student_id IS NOT NULL
-          AND YEAR(processing_date) = YEAR(CURDATE())
-        GROUP BY student_id
-    ) yearly_sum ON yearly_sum.student_id = s.id
-    LEFT JOIN (
         -- First payment this month from confirmed invoices only
+        -- Join with MATCHING_HISTORY_TAB to ensure is_confirmed=1
         SELECT 
-            student_id,
-            MIN(processing_date) AS first_payment_this_month
-        FROM INVOICE_TAB
-        WHERE student_id IS NOT NULL
-          AND YEAR(processing_date) = YEAR(CURDATE())
-          AND MONTH(processing_date) = MONTH(CURDATE())
-        GROUP BY student_id
+            i2.student_id,
+            MIN(i2.processing_date) AS first_payment_this_month
+        FROM INVOICE_TAB i2
+        INNER JOIN MATCHING_HISTORY_TAB mh ON mh.invoice_id = i2.id
+        WHERE i2.student_id IS NOT NULL
+          AND mh.is_confirmed = 1
+          AND YEAR(i2.processing_date) = YEAR(CURDATE())
+          AND MONTH(i2.processing_date) = MONTH(CURDATE())
+        GROUP BY i2.student_id
     ) first_payment ON first_payment.student_id = s.id
-    GROUP BY s.id, s.long_name, yearly_sum.year_sum, first_payment.first_payment_this_month
+    GROUP BY s.id, s.long_name, first_payment.first_payment_this_month
     ORDER BY s.long_name ASC
     LIMIT $perPage OFFSET $offset
 ";
@@ -174,8 +157,8 @@ require "db_connect.php";
                 $lateText = "—";
                 $lateClass = "txt-orange";
 
-                // Use days_late_month (already calculated with eligibility filters)
-                $daysLate = isset($row['days_late_month']) ? (int)$row['days_late_month'] : 0;
+                // Use days_late (calculated from confirmed invoices only, based on processing_date)
+                $daysLate = isset($row['days_late']) ? (int)$row['days_late'] : 0;
 
                 if ($daysLate == 0) {
                     $lateClass = "txt-green";

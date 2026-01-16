@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_invoice'])) {
                 
                 // Call stored procedure to check and create late-fee notification (only for reference-id matches)
                 if ($matched_by === 'reference') {
-                    $proc_stmt = $conn->prepare("CALL sp_apply_late_fee_for_student_month(?)");
+                    $proc_stmt = $conn->prepare("CALL sp_apply_late_fee_for_student(?)");
                     if ($proc_stmt) {
                         $proc_stmt->bind_param("i", $student_id);
                         $proc_stmt->execute();
