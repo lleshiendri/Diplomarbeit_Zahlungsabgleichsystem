@@ -305,8 +305,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             return;
                         }
 
-                        // Load matching engine for automatic reference-based matching
-                        require_once __DIR__ . '/matching_engine.php';
+                        // Matching functions already loaded at top of file
 
                         // Parse only valid transaction rows
                         $started = false;

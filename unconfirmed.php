@@ -16,13 +16,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_invoice'])) {
     $student_id = isset($_POST['student_id']) ? (int)$_POST['student_id'] : 0;
     
     if ($invoice_id > 0 && $student_id > 0) {
+        // Get invoice details to check if it's a reference-id match
+        $invoice_stmt = $conn->prepare("SELECT reference_number, processing_date FROM INVOICE_TAB WHERE id = ?");
+        $reference_number = null;
+        $processing_date = null;
+        if ($invoice_stmt) {
+            $invoice_stmt->bind_param("i", $invoice_id);
+            $invoice_stmt->execute();
+            $invoice_result = $invoice_stmt->get_result();
+            if ($invoice_row = $invoice_result->fetch_assoc()) {
+                $reference_number = $invoice_row['reference_number'];
+                $processing_date = $invoice_row['processing_date'];
+            }
+            $invoice_stmt->close();
+        }
+        
+        // Check if this was matched by reference-id (check matching history)
+        $match_stmt = $conn->prepare("SELECT matched_by FROM MATCHING_HISTORY_TAB WHERE invoice_id = ? ORDER BY created_at DESC LIMIT 1");
+        $matched_by = 'manual';
+        if ($match_stmt) {
+            $match_stmt->bind_param("i", $invoice_id);
+            $match_stmt->execute();
+            $match_result = $match_stmt->get_result();
+            if ($match_row = $match_result->fetch_assoc()) {
+                $matched_by = $match_row['matched_by'];
+            }
+            $match_stmt->close();
+        }
+        
+        // If reference_number exists, treat as reference-id match
+        if (!empty($reference_number)) {
+            $matched_by = 'reference';
+        }
+        
         // Update invoice with student_id
         $stmt = $conn->prepare("UPDATE INVOICE_TAB SET student_id = ? WHERE id = ?");
         if ($stmt) {
             $stmt->bind_param("ii", $student_id, $invoice_id);
             if ($stmt->execute()) {
                 // Log manual confirmation to MATCHING_HISTORY_TAB
-                logMatchingAttempt($conn, $invoice_id, $student_id, 100.0, 'manual', true);
+                logMatchingAttempt($conn, $invoice_id, $student_id, 100.0, $matched_by, true);
+                
+                // Check and create late-fee notification if needed (only for reference-id matches)
+                if ($matched_by === 'reference' && $processing_date) {
+                    require_once 'matching_functions.php';
+                    checkAndCreateLateFeeNotification($conn, $student_id, $invoice_id, $processing_date, $matched_by);
+                }
+                
                 $success_message = "Invoice confirmed and assigned to student.";
             } else {
                 $error_message = "Error updating invoice: " . $stmt->error;

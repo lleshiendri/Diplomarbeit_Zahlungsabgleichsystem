@@ -108,18 +108,39 @@ require "db_connect.php";
         $totalStudents = $countResult ? (int)$countResult->fetch_assoc()['total'] : 0;
         $totalPages = max(1, (int)ceil($totalStudents / $perPage));
 
-        // MAIN QUERY
+        // MAIN QUERY - Calculate days late relative to monthly deadline (10th)
         $sql = "
     SELECT
         s.id AS student_id,
         s.long_name,
         MAX(i.processing_date) AS last_transaction,
         NOW() AS last_import,
-        DATEDIFF(CURDATE(), MAX(i.processing_date)) AS days_since_payment
+        first_payment.first_payment_this_month,
+        STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d') AS deadline_date,
+        CASE
+            WHEN first_payment.first_payment_this_month IS NULL THEN 
+                GREATEST(DATEDIFF(CURDATE(), STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d')), 0)
+            WHEN first_payment.first_payment_this_month <= STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d') THEN 0
+            ELSE DATEDIFF(
+                first_payment.first_payment_this_month,
+                STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d')
+            )
+        END AS days_late_month
     FROM STUDENT_TAB s
     LEFT JOIN INVOICE_TAB i 
-        ON i.student_id = s.id
-    GROUP BY s.id
+        ON i.student_id = s.id 
+        AND i.student_id IS NOT NULL
+    LEFT JOIN (
+        SELECT 
+            student_id,
+            MIN(processing_date) AS first_payment_this_month
+        FROM INVOICE_TAB
+        WHERE student_id IS NOT NULL
+          AND YEAR(processing_date) = YEAR(CURDATE())
+          AND MONTH(processing_date) = MONTH(CURDATE())
+        GROUP BY student_id
+    ) first_payment ON first_payment.student_id = s.id
+    GROUP BY s.id, s.long_name, first_payment.first_payment_this_month
     ORDER BY s.long_name ASC
     LIMIT $perPage OFFSET $offset
 ";
@@ -132,24 +153,50 @@ require "db_connect.php";
                 $lateText = "—";
                 $lateClass = "txt-orange";
 
-                if (!is_null($row['last_transaction'])) {
-                    $days = (int)$row['days_since_payment'];
+                // Use days_late_month instead of days_since_payment
+                $daysLate = isset($row['days_late_month']) ? (int)$row['days_late_month'] : null;
 
-                    if ($days <= 5) {
+                if ($daysLate !== null) {
+                    if ($daysLate == 0) {
                         $lateClass = "txt-green";
-                    } elseif ($days <= 10) {
+                        $lateText = "0 DAYS";
+                    } elseif ($daysLate <= 5) {
+                        $lateClass = "txt-green";
+                        $lateText = $daysLate . " DAYS";
+                    } elseif ($daysLate <= 10) {
                         $lateClass = "txt-orange";
+                        $lateText = $daysLate . " DAYS";
                     } else {
                         $lateClass = "txt-red";
+                        $lateText = $daysLate . " DAYS";
                     }
-
-                    $lateText = $days . " DAYS";
+                } else {
+                    // No confirmed payments this month - check if we're past deadline
+                    $deadline = $row['deadline_date'] ?? null;
+                    if ($deadline) {
+                        $today = new DateTime();
+                        $deadlineDate = new DateTime($deadline);
+                        if ($today > $deadlineDate) {
+                            $daysLate = $today->diff($deadlineDate)->days;
+                            if ($daysLate <= 5) {
+                                $lateClass = "txt-green";
+                            } elseif ($daysLate <= 10) {
+                                $lateClass = "txt-orange";
+                            } else {
+                                $lateClass = "txt-red";
+                            }
+                            $lateText = $daysLate . " DAYS";
+                        } else {
+                            $lateClass = "txt-green";
+                            $lateText = "0 DAYS";
+                        }
+                    }
                 }
 
                 echo "<tr>";
                 echo "<td>" . htmlspecialchars($row['long_name']) . "</td>";
-                echo "<td>" . ($row['last_transaction'] ?: '—') . "</td>";
-                echo "<td>" . ($row['last_import'] ?: '—') . "</td>";
+                echo "<td>" . ($row['last_transaction'] ? date('Y-m-d', strtotime($row['last_transaction'])) : '—') . "</td>";
+                echo "<td>" . ($row['last_import'] ? date('Y-m-d H:i:s', strtotime($row['last_import'])) : '—') . "</td>";
                 echo "<td class='days-late $lateClass'>$lateText</td>";
                 echo "</tr>";
             }
