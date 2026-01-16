@@ -7,6 +7,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
 require 'navigator.php'; 
 require 'db_connect.php';
+require 'matching_functions.php';
 
 $success_message = "";
 $error_message = "";
@@ -33,17 +34,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Order matches INSERT: reference_number, reference, beneficiary, processing_date, description, amount_total
             $stmt->bind_param("sssssd", $ref_number, $reference, $ordering_name, $processing_date, $description, $amount); 
             if ($stmt->execute()) {
-                // Attempt automatic reference-based matching after insert
-                $newInvoiceId = $conn->insert_id;
-                if ($newInvoiceId > 0) {
-require_once __DIR__ . '/matching_engine.php';
-attemptReferenceMatch($newInvoiceId, $conn);
+                // Get the inserted invoice ID
+                $invoice_id = $conn->insert_id;
+                $stmt->close();
+                
+                // Run matching algorithm and log to MATCHING_HISTORY_TAB
+                $match_result = processInvoiceMatching($conn, $invoice_id, $ref_number, $ordering_name, $description);
+                
+                if ($match_result['confirmed']) {
+                    $success_message = "Transaction was successfully added and matched to student (confidence: " . number_format($match_result['confidence'], 1) . "%).";
+                } else {
+                    $success_message = "Transaction was successfully added. Matching confidence too low (" . number_format($match_result['confidence'], 1) . "%) - requires manual confirmation.";
                 }
-                $success_message = "Transaction was successfully added.";
             } else {
                 $error_message = "Error while saving: " . $stmt->error;
+                $stmt->close();
             }
-            $stmt->close();
         } else {
             $error_message = "Statement error: " . $conn->error;
         }

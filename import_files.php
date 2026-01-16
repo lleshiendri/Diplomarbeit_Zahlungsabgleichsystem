@@ -4,6 +4,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 require 'db_connect.php';
+require 'matching_functions.php';
 
 function validateCSVStructure($filePath, $fileType) {
     // 1️⃣ Expected header sets
@@ -347,12 +348,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 $amount,
                                 $amount_total
                             );
-                            $stmtTrans->execute();
-                            
-                            // Attempt automatic reference-based matching after each invoice insert
-                            $insertedInvoiceId = $conn->insert_id;
-                            if ($insertedInvoiceId > 0) {
-                                attemptReferenceMatch($insertedInvoiceId, $conn);
+                            if ($stmtTrans->execute()) {
+                                // Get the inserted invoice ID
+                                $invoice_id = $conn->insert_id;
+                                
+                                // Run matching algorithm and log to MATCHING_HISTORY_TAB
+                                if ($invoice_id) {
+                                    processInvoiceMatching($conn, $invoice_id, $reference_number, $beneficiary, $reference);
+                                }
                             }
                         }
 

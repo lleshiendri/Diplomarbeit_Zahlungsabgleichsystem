@@ -5,76 +5,100 @@ ini_set('display_errors', 1);
 
 require 'navigator.php'; 
 require 'db_connect.php';
+require 'matching_functions.php';
 
-// 1) Unbestätigte Transaktionen aus INVOICE_TAB
+$success_message = "";
+$error_message = "";
+
+// Handle admin confirmation
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_invoice'])) {
+    $invoice_id = isset($_POST['invoice_id']) ? (int)$_POST['invoice_id'] : 0;
+    $student_id = isset($_POST['student_id']) ? (int)$_POST['student_id'] : 0;
+    
+    if ($invoice_id > 0 && $student_id > 0) {
+        // Update invoice with student_id
+        $stmt = $conn->prepare("UPDATE INVOICE_TAB SET student_id = ? WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("ii", $student_id, $invoice_id);
+            if ($stmt->execute()) {
+                // Log manual confirmation to MATCHING_HISTORY_TAB
+                logMatchingAttempt($conn, $invoice_id, $student_id, 100.0, 'manual', true);
+                $success_message = "Invoice confirmed and assigned to student.";
+            } else {
+                $error_message = "Error updating invoice: " . $stmt->error;
+            }
+            $stmt->close();
+        } else {
+            $error_message = "Statement error: " . $conn->error;
+        }
+    } else {
+        $error_message = "Invalid invoice or student ID.";
+    }
+}
+
+// 1) Unbestätigte Transaktionen aus INVOICE_TAB (student_id IS NULL)
 $transactions_sql = "
     SELECT 
+        id,
         reference_number,
-        beneficairy,             
+        beneficiary,
         reference,
         amount_total,
         processing_date
     FROM INVOICE_TAB
-    WHERE processing_date IS NULL
+    WHERE student_id IS NULL
     ORDER BY id DESC
     LIMIT 50
 ";
 $transactions_result = $conn->query($transactions_sql);
 
 // 2) Stat-Karten (Pending/Confirmed)
-$pending_sql = "SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE processing_date IS NULL";
+$pending_sql = "SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE student_id IS NULL";
 $pending_res = $conn->query($pending_sql);
 $pending = $pending_res ? (int)$pending_res->fetch_assoc()['c'] : 0;
 
-$confirmed_sql = "SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE processing_date IS NOT NULL";
+$confirmed_sql = "SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE student_id IS NOT NULL";
 $confirmed_res = $conn->query($confirmed_sql);
 $confirmed = $confirmed_res ? (int)$confirmed_res->fetch_assoc()['c'] : 0;
 
-// 3) Vorschläge: Passender Student/Legal Guardian
-// anhand des Ordering Names (beneficairy)
-$suggestion_student   = "";
-$suggestion_guardian  = "";
-$reason_text          = "";
+// 3) Get first unconfirmed invoice for suggestions
+$suggestion_invoice_id = null;
+$suggestion_student_id = null;
+$suggestion_student_name = "";
+$suggestion_guardian = "";
+$reason_text = "";
 
 $suggestion_sql = "
-    SELECT beneficairy
+    SELECT id, reference_number, beneficiary, reference
     FROM INVOICE_TAB
-    WHERE processing_date IS NULL
+    WHERE student_id IS NULL
     ORDER BY id DESC
     LIMIT 1
 ";
 $suggestion_res = $conn->query($suggestion_sql);
 
 if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
-    $ordering_name = trim($row['beneficairy']);
-    if (!empty($ordering_name)) {
-        
-        $last_name_parts = preg_split('/\s+/', $ordering_name);
-        $last_name = end($last_name_parts);
-        $student_sql = "
-            SELECT long_name
-            FROM STUDENT_TAB
-            WHERE long_name LIKE '%".$conn->real_escape_string($last_name)."%'
-            LIMIT 1
-        ";
-        $student_res = $conn->query($student_sql);
-        if ($student_res && $student_row = $student_res->fetch_assoc()) {
-            $suggestion_student = $student_row['long_name'];
-            $reason_text = "Student and ordering party share the same last name.";
-        }
-
-        $guardian_sql = "
-            SELECT CONCAT(first_name, ' ', last_name) AS fullname
-            FROM LEGAL_GUARDIAN_TAB
-            WHERE last_name = '".$conn->real_escape_string($last_name)."'
-            LIMIT 1
-        ";
-        $guardian_res = $conn->query($guardian_sql);
-        if ($guardian_res && $guardian_row = $guardian_res->fetch_assoc()) {
-            $suggestion_guardian = $guardian_row['fullname'];
-            if (empty($reason_text)) {
-                $reason_text = "Legal guardian and ordering party share the same last name.";
+    $suggestion_invoice_id = (int)$row['id'];
+    $reference_number = $row['reference_number'] ?? '';
+    $beneficiary = $row['beneficiary'] ?? '';
+    $reference = $row['reference'] ?? '';
+    
+    // Run matching algorithm to get suggestion
+    $match_result = matchInvoiceToStudent($conn, $reference_number, $beneficiary, $reference);
+    
+    if ($match_result['student_id']) {
+        $suggestion_student_id = $match_result['student_id'];
+        // Get student name
+        $student_stmt = $conn->prepare("SELECT id, long_name FROM STUDENT_TAB WHERE id = ?");
+        if ($student_stmt) {
+            $student_stmt->bind_param("i", $suggestion_student_id);
+            $student_stmt->execute();
+            $student_res = $student_stmt->get_result();
+            if ($student_row = $student_res->fetch_assoc()) {
+                $suggestion_student_name = $student_row['long_name'];
+                $reason_text = "Matched by " . $match_result['matched_by'] . " (confidence: " . number_format($match_result['confidence'], 1) . "%)";
             }
+            $student_stmt->close();
         }
     }
 }
@@ -256,7 +280,7 @@ if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
                 <?php while($row = $transactions_result->fetch_assoc()): ?>
                   <tr>
                     <td><?= htmlspecialchars($row['reference_number']) ?></td>
-                    <td><?= htmlspecialchars($row['beneficairy']) ?></td>
+                    <td><?= htmlspecialchars($row['beneficiary']) ?></td>
                     <td><?= htmlspecialchars($row['reference']) ?></td>
                     <td><?= $row['processing_date'] ? date("d/m/Y", strtotime($row['processing_date'])) : '-' ?></td>
                     <td class="amount"><?= number_format($row['amount_total'], 2, ',', '.') ?> <?= CURRENCY ?></td>
@@ -270,30 +294,55 @@ if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
         </section>
 
         <aside class="stack">
+          <?php if ($success_message): ?>
+            <div class="card" style="background:#E7F7E7; color:#2E7D32; padding:12px; border:1px solid #C8E6C9;">
+              <?= htmlspecialchars($success_message) ?>
+            </div>
+          <?php endif; ?>
+          <?php if ($error_message): ?>
+            <div class="card" style="background:#FCE8E6; color:#B71C1C; padding:12px; border:1px solid #F5C6CB;">
+              <?= htmlspecialchars($error_message) ?>
+            </div>
+          <?php endif; ?>
+
           <div class="stats">
             <div class="stat"><div class="num"><?= $pending ?></div><div class="label">Pending</div></div>
             <div class="stat"><div class="num"><?= $confirmed ?></div><div class="label">Confirmed</div></div>
           </div>
 
+          <?php if ($suggestion_invoice_id): ?>
           <div class="card">
             <div class="side-title">Suggested Student</div>
-            <input class="side-input" type="text" value="<?= htmlspecialchars($suggestion_student) ?>">
-          </div>
+            <form method="post" action="">
+              <input type="hidden" name="invoice_id" value="<?= $suggestion_invoice_id ?>">
+              <select name="student_id" class="side-input" required>
+                <option value="">-- Select Student --</option>
+                <?php
+                // Get all students for dropdown
+                $students_sql = "SELECT id, long_name FROM STUDENT_TAB ORDER BY long_name ASC";
+                $students_res = $conn->query($students_sql);
+                if ($students_res) {
+                    while ($s = $students_res->fetch_assoc()) {
+                        $selected = ($suggestion_student_id == $s['id']) ? 'selected' : '';
+                        echo '<option value="' . (int)$s['id'] . '" ' . $selected . '>' . htmlspecialchars($s['long_name']) . '</option>';
+                    }
+                }
+                ?>
+              </select>
+              
+              <div class="card" style="margin-top:12px; padding:10px; background:#f9f9f9;">
+                <div class="side-title">Connection Reason</div>
+                <p class="reason-text"><?= htmlspecialchars($reason_text ?: 'No automatic match found') ?></p>
+              </div>
 
-          <div class="card">
-            <div class="side-title">Suggested Legal Guardian</div>
-            <input class="side-input" type="text" value="<?= htmlspecialchars($suggestion_guardian) ?>">
+              <div style="margin-top:12px;display:flex;gap:10px;">
+                <button type="submit" name="confirm_invoice" class="btn btn-primary">
+                  <span class="material-icons-outlined">check_circle</span> Confirm
+                </button>
+              </div>
+            </form>
           </div>
-
-          <div class="card">
-            <div class="side-title">Connection Reason</div>
-            <p class="reason-text"><?= htmlspecialchars($reason_text) ?></p>
-
-            <div style="margin-top:12px;display:flex;gap:10px;">
-              <button class="btn btn-primary"><span class="material-icons-outlined">check_circle</span> Confirm</button>
-              <button class="btn btn-ghost"><span class="material-icons-outlined">edit</span> Edit</button>
-            </div>  
-          </div>
+          <?php endif; ?>
         </aside>
       </div>
     </div>
