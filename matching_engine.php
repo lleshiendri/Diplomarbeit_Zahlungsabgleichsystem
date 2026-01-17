@@ -103,7 +103,6 @@ function attemptReferenceMatch($invoiceId, $conn) {
                 $currentLeftToPay = (float)($studentFinRow['left_to_pay'] ?? 0);
                 $currentAmountPaid = (float)($studentFinRow['amount_paid'] ?? 0);
                 
-                // Calculate new values: reduce left_to_pay and increase amount_paid
                 $newLeftToPay = max(0, $currentLeftToPay - $invoiceAmount);
                 $newAmountPaid = $currentAmountPaid + $invoiceAmount;
                 

@@ -109,42 +109,43 @@ require "db_connect.php";
         $totalPages = max(1, (int)ceil($totalStudents / $perPage));
 
         // MAIN QUERY - Calculate days late based on confirmed invoices only
+        // last_transaction = MAX(processing_date) from ALL confirmed invoices (any month)
+        // days_late = computed only from current month's first confirmed payment
         // Uses processing_date, NOT NOW() or last_import
         $sql = "
     SELECT
         s.id AS student_id,
         s.long_name,
-        MAX(i.processing_date) AS last_transaction,
+        lt.last_transaction,
         NOW() AS last_import,
-        first_payment.first_payment_this_month,
-        STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d') AS deadline_date,
-        CASE
-            -- If no payment this month: Days Late = 0 (do NOT penalize unpaid students)
-            WHEN first_payment.first_payment_this_month IS NULL THEN 0
-            -- If paid on or before deadline: Days Late = 0
-            WHEN first_payment.first_payment_this_month <= STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d') THEN 0
-            -- If paid after deadline: Days Late = DATEDIFF(first_payment, deadline)
-            ELSE DATEDIFF(first_payment.first_payment_this_month, STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d'))
-        END AS days_late
+        COALESCE(lm.days_late, 0) AS days_late
     FROM STUDENT_TAB s
-    LEFT JOIN INVOICE_TAB i 
-        ON i.student_id = s.id 
-        AND i.student_id IS NOT NULL
     LEFT JOIN (
-        -- First payment this month from confirmed invoices only
-        -- Join with MATCHING_HISTORY_TAB to ensure is_confirmed=1
-        SELECT 
-            i2.student_id,
-            MIN(i2.processing_date) AS first_payment_this_month
-        FROM INVOICE_TAB i2
-        INNER JOIN MATCHING_HISTORY_TAB mh ON mh.invoice_id = i2.id
-        WHERE i2.student_id IS NOT NULL
-          AND mh.is_confirmed = 1
-          AND YEAR(i2.processing_date) = YEAR(CURDATE())
-          AND MONTH(i2.processing_date) = MONTH(CURDATE())
-        GROUP BY i2.student_id
-    ) first_payment ON first_payment.student_id = s.id
-    GROUP BY s.id, s.long_name, first_payment.first_payment_this_month
+        SELECT student_id, MAX(processing_date) AS last_transaction
+        FROM INVOICE_TAB
+        WHERE student_id IS NOT NULL
+        GROUP BY student_id
+    ) lt ON lt.student_id = s.id
+    LEFT JOIN (
+        SELECT
+            student_id,
+            CASE
+                -- If no payment this month: Days Late = 0 (do NOT penalize unpaid students)
+                WHEN MIN(processing_date) IS NULL THEN 0
+                -- If paid on or before deadline (10th): Days Late = 0
+                WHEN MIN(processing_date) <= STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d') THEN 0
+                -- If paid after deadline: Days Late = DATEDIFF(first_payment, deadline)
+                ELSE DATEDIFF(
+                    MIN(processing_date),
+                    STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d')
+                )
+            END AS days_late
+        FROM INVOICE_TAB
+        WHERE student_id IS NOT NULL
+          AND YEAR(processing_date) = YEAR(CURDATE())
+          AND MONTH(processing_date) = MONTH(CURDATE())
+        GROUP BY student_id
+    ) lm ON lm.student_id = s.id
     ORDER BY s.long_name ASC
     LIMIT $perPage OFFSET $offset
 ";
