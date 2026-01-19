@@ -56,26 +56,14 @@
           <!-- HERO -->
           <section class="hero card">
             <div class="hero__text">
-              <h1>How to use the system</h1>
+              <h1>Help & Tutorial</h1>
               <p class="muted">
-                This page explains every screen, action, and warning in plain language. If you're unsure what to click, start here.
+                This page explains every screen, action, and warning in plain language.
               </p>
               <div class="hero__chips">
                 <span class="chip">Beginner-friendly</span>
                 <span class="chip">Step-by-step</span>
                 <span class="chip">Role-aware</span>
-              </div>
-            </div>
-
-            <div class="hero__quick">
-              <div class="quick-card">
-                <div class="quick-card__title">Quick start</div>
-                <ol class="quick-card__list">
-                  <li>Log in</li>
-                  <li>Check Dashboard for warnings</li>
-                  <li>Handle Unconfirmed / Notifications if needed</li>
-                  <li>Import or add transactions</li>
-                </ol>
               </div>
             </div>
           </section>
@@ -91,25 +79,78 @@
               <div class="panel">
                 <h3>What this system is</h3>
                 <p>
-                  It tracks students, incoming payments, and outstanding amounts. It automatically suggests matches and creates notifications
-                  when something needs attention.
+                This system manages all student payments in a centralized and automated way.
+                Incoming transactions are analyzed and, whenever possible, automatically assigned to the correct student account and balance — reducing manual work and errors.
                 </p>
+                <h3>What makes it reliable</h3>
+                <p>
+                If a payment cannot be confirmed with full certainty, it is clearly marked for review instead of being assigned blindly.
+                This ensures that every balance remains accurate and traceable.
+                </p>
+                <h3> Notifications & late payments</h3>
+                <p>
+                The system continuously monitors payment status and deadlines.
+                When payments are missing or delayed, notifications are generated automatically for the administration and, where applicable, for the paying party (students or parents).
+                Late payments are handled according to a defined late-fee logic, so rules are applied consistently and transparently.
+                </p>
+                <h3>Overview & control</h3>
+                <p>
+                In addition to individual student balances, the system provides statistics and overviews that show the current state of payments across all students — including totals, outstanding amounts, and critical cases.
+                </p>
+              
+
                 <div class="callout callout--info">
-                  <strong>Key idea:</strong> Transactions can exist before they are confirmed for a specific student.
+                  <strong>Role-based access:</strong> Only authorized users can confirm, adjust, or override payment data.
                 </div>
               </div>
 
-              <div class="panel">
-                <h3>Typical workflow</h3>
-                <ol class="steps">
-                  <li>Students are registered</li>
-                  <li>Transactions come in (manual or import)</li>
-                  <li>Matching runs automatically</li>
-                  <li>Unconfirmed cases require admin review</li>
-                  <li>Notifications appear for issues</li>
-                </ol>
+              <div class="panel flow">
+                <h3>Payment lifecycle</h3>
+                <ul class="flow-list">
+                  <li><span class="flow-dot"></span><span>Payment received</span></li>
+                  <li><span class="flow-dot"></span><span>Automatic matching</span></li>
+                  <li><span class="flow-dot"></span><span>Review if uncertain</span></li>
+                  <li><span class="flow-dot"></span><span>Balance updated</span></li>
+                  <li><span class="flow-dot"></span><span>Monitoring & notifications</span></li>
+                </ul>
               </div>
-            </div>
+
+              <div class="panel role-split">
+                <h3>Who does what</h3>
+
+                <div class="role role-admin">
+                  <strong>Administrator</strong>
+                  <ul>
+                    <li>Confirms or corrects payments</li>
+                    <li>Manages students and imports</li>
+                    <li>Handles notifications and limits</li>
+                  </ul>
+                </div>
+
+                <div class="role role-reader">
+                  <strong>Reader</strong>
+                  <ul>
+                    <li>Views balances and transactions</li>
+                    <li>Monitors payment status</li>
+                    <li>Cannot change data</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="panel guidance">
+                <h3>How to work with the system</h3>
+
+                <ul class="checklist">
+                  <li>Nothing is assigned blindly</li>
+                  <li>Unconfirmed cases always require review</li>
+                  <li>Critical issues generate notifications</li>
+                  <li>All actions are traceable</li>
+                </ul>
+
+                <p class="muted small">
+                  If something needs your attention, the system will clearly indicate it.
+                </p>
+              </div> 
           </article>
 
           <!-- Login -->
