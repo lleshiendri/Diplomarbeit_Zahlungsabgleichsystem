@@ -342,7 +342,6 @@ if ($syRes && $syRes->num_rows === 1) {
       <a href="unconfirmed.php"><span class="material-icons-outlined">priority_high</span> Unconfirmed</a>
       <?php endif; ?>
 
-      <a href="Transactions.php"><span class="material-icons-outlined">receipt_long</span> Transactions</a>
       <a href="student_state.php"><span class="material-icons-outlined">school</span> Student State</a>
       <a href="latencies.php"><span class="material-icons-outlined">schedule</span> Latencies</a>
       <a href="notifications.php"><span class="material-icons-outlined">notifications</span> Notifications</a>

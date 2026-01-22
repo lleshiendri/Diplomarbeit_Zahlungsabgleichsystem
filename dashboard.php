@@ -17,8 +17,8 @@ $total_transactions = $transactions_res->fetch_assoc()['c'] ?? 0;
 $left_res = $conn->query("SELECT SUM(left_to_pay) AS s FROM STUDENT_TAB");
 $left_to_pay = $left_res->fetch_assoc()['s'] ?? 0;
 
-$unconfirmed_res = $conn->query("SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE processing_date IS NULL");
-$unconfirmed = $unconfirmed_res->fetch_assoc()['c'] ?? 0;
+$unconfirmed_res = $conn->query("SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE student_id IS NULL");
+$unconfirmed = $unconfirmed_res->fetch_assoc()['c'] ?? 0; 
 
 $processed_week_res = $conn->query("
     SELECT COUNT(*) AS c 
