@@ -1,90 +1,75 @@
-<?php   
+<?php
 require_once 'auth_check.php';
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-require 'navigator.php'; 
+require 'navigator.php';
 require 'db_connect.php';
-require 'matching_functions.php';
+require_once 'matching_functions.php';
 
 $success_message = "";
 $error_message = "";
 
-// Handle admin confirmation
+/* ===============================================================
+   HANDLE ADMIN CONFIRMATION (manual assign)
+   =============================================================== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_invoice'])) {
     $invoice_id = isset($_POST['invoice_id']) ? (int)$_POST['invoice_id'] : 0;
     $student_id = isset($_POST['student_id']) ? (int)$_POST['student_id'] : 0;
-    
+
     if ($invoice_id > 0 && $student_id > 0) {
-        // Get invoice details to check if it's a reference-id match
-        $invoice_stmt = $conn->prepare("SELECT reference_number, processing_date FROM INVOICE_TAB WHERE id = ?");
-        $reference_number = null;
-        $processing_date = null;
-        if ($invoice_stmt) {
-            $invoice_stmt->bind_param("i", $invoice_id);
-            $invoice_stmt->execute();
-            $invoice_result = $invoice_stmt->get_result();
-            if ($invoice_row = $invoice_result->fetch_assoc()) {
-                $reference_number = $invoice_row['reference_number'];
-                $processing_date = $invoice_row['processing_date'];
-            }
-            $invoice_stmt->close();
-        }
-        
-        // Check if this was matched by reference-id (check matching history)
-        $match_stmt = $conn->prepare("SELECT matched_by FROM MATCHING_HISTORY_TAB WHERE invoice_id = ? ORDER BY created_at DESC LIMIT 1");
-        $matched_by = 'manual';
-        if ($match_stmt) {
-            $match_stmt->bind_param("i", $invoice_id);
-            $match_stmt->execute();
-            $match_result = $match_stmt->get_result();
-            if ($match_row = $match_result->fetch_assoc()) {
-                $matched_by = $match_row['matched_by'];
-            }
-            $match_stmt->close();
-        }
-        
-        // If reference_number exists, treat as reference-id match
-        if (!empty($reference_number)) {
-            $matched_by = 'reference';
-        }
-        
-        // Update invoice with student_id
+
         $stmt = $conn->prepare("UPDATE INVOICE_TAB SET student_id = ? WHERE id = ?");
         if ($stmt) {
             $stmt->bind_param("ii", $student_id, $invoice_id);
+
             if ($stmt->execute()) {
-                // Log manual confirmation to MATCHING_HISTORY_TAB
-                logMatchingAttempt($conn, $invoice_id, $student_id, 100.0, $matched_by, true);
-                
-                // Call stored procedure to check and create late-fee notification for ALL confirmed matches
-                $proc_stmt = $conn->prepare("CALL sp_apply_late_fee_for_student_month(?)");
-                if ($proc_stmt) {
-                    $proc_stmt->bind_param("i", $student_id);
-                    $proc_stmt->execute();
-                    // Consume all result sets
-                    while ($proc_stmt->next_result()) {
-                        if ($result = $proc_stmt->get_result()) {
-                            $result->free();
-                        }
-                    }
-                    $proc_stmt->close();
+
+                // 1) Log manual confirmation
+                logMatchingAttempt($conn, $invoice_id, $student_id, 100.0, 'manual', true);
+
+                // 2) Fetch invoice meta (processing_date + reference_number)
+                $meta = getInvoiceMeta($conn, $invoice_id);
+                $processing_date = $meta['processing_date'] ?: date('Y-m-d H:i:s');
+
+                $invoice_reference = $meta['reference_number'];
+                if ($invoice_reference === null || trim((string)$invoice_reference) === '') {
+                    $invoice_reference = "INV-" . (int)$invoice_id;
                 }
-                
+
+                // INFO notification (always)
+createNotificationOnce(
+    $conn,
+    "info",
+    $student_id,
+    $invoice_reference,
+    date('Y-m-d', strtotime($processing_date)),
+    "Confirmed manually: $invoice_reference assigned to Student #$student_id"
+);
+
+// LATE FEE check immediately (Rule A)
+maybeCreateLateFeeUrgent($conn, $student_id, $invoice_reference, $processing_date);
+
+
                 $success_message = "Invoice confirmed and assigned to student.";
+
             } else {
                 $error_message = "Error updating invoice: " . $stmt->error;
             }
+
             $stmt->close();
         } else {
             $error_message = "Statement error: " . $conn->error;
         }
+
     } else {
         $error_message = "Invalid invoice or student ID.";
     }
 }
 
-// 1) Unbestätigte Transaktionen aus INVOICE_TAB (student_id IS NULL)
+/* ===============================================================
+   1) UNCONFIRMED TRANSACTIONS (student_id IS NULL)
+   =============================================================== */
 $transactions_sql = "
     SELECT 
         id,
@@ -100,7 +85,9 @@ $transactions_sql = "
 ";
 $transactions_result = $conn->query($transactions_sql);
 
-// 2) Stat-Karten (Pending/Confirmed)
+/* ===============================================================
+   2) STAT CARDS
+   =============================================================== */
 $pending_sql = "SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE student_id IS NULL";
 $pending_res = $conn->query($pending_sql);
 $pending = $pending_res ? (int)$pending_res->fetch_assoc()['c'] : 0;
@@ -109,15 +96,19 @@ $confirmed_sql = "SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE student_id IS NOT 
 $confirmed_res = $conn->query($confirmed_sql);
 $confirmed = $confirmed_res ? (int)$confirmed_res->fetch_assoc()['c'] : 0;
 
-// 3) Get first unconfirmed invoice for suggestions
+/* ===============================================================
+   3) SUGGESTION BOX (first unconfirmed invoice)
+   =============================================================== */
 $suggestion_invoice_id = null;
 $suggestion_student_id = null;
-$suggestion_student_name = "";
-$suggestion_guardian = "";
 $reason_text = "";
+$suggestion_invoice_ref = "";
+$suggestion_invoice_beneficiary = "";
+$suggestion_invoice_reference = "";
+$suggestion_guardian = "";
 
 $suggestion_sql = "
-    SELECT id, reference_number, beneficiary, reference
+    SELECT id, reference_number, beneficiary, reference, processing_date
     FROM INVOICE_TAB
     WHERE student_id IS NULL
     ORDER BY id DESC
@@ -125,29 +116,55 @@ $suggestion_sql = "
 ";
 $suggestion_res = $conn->query($suggestion_sql);
 
-if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
+if ($suggestion_res && ($row = $suggestion_res->fetch_assoc())) {
+
+    // ✅ IMPORTANT: without this, sidebar will never render
     $suggestion_invoice_id = (int)$row['id'];
-    $reference_number = $row['reference_number'] ?? '';
-    $beneficiary = $row['beneficiary'] ?? '';
-    $reference = $row['reference'] ?? '';
-    
-    // Run matching algorithm to get suggestion
-    $match_result = matchInvoiceToStudent($conn, $reference_number, $beneficiary, $reference);
-    
-    if ($match_result['student_id']) {
-        $suggestion_student_id = $match_result['student_id'];
-        // Get student name
-        $student_stmt = $conn->prepare("SELECT id, long_name FROM STUDENT_TAB WHERE id = ?");
-        if ($student_stmt) {
-            $student_stmt->bind_param("i", $suggestion_student_id);
-            $student_stmt->execute();
-            $student_res = $student_stmt->get_result();
-            if ($student_row = $student_res->fetch_assoc()) {
-                $suggestion_student_name = $student_row['long_name'];
-                $reason_text = "Matched by " . $match_result['matched_by'] . " (confidence: " . number_format($match_result['confidence'], 1) . "%)";
+
+    $suggestion_invoice_ref = (string)($row['reference_number'] ?? '');
+    $suggestion_invoice_beneficiary = (string)($row['beneficiary'] ?? '');
+    $suggestion_invoice_reference = (string)($row['reference'] ?? '');
+
+    $ordering_name = trim($suggestion_invoice_beneficiary);
+
+    if ($ordering_name !== "") {
+        $last_name_parts = preg_split('/\s+/', $ordering_name);
+        $last_name = $last_name_parts ? end($last_name_parts) : "";
+
+        if ($last_name !== "") {
+
+            // Student suggestion (id + name)
+            $student_sql = "
+                SELECT id, long_name
+                FROM STUDENT_TAB
+                WHERE long_name LIKE '%" . $conn->real_escape_string($last_name) . "%'
+                LIMIT 1
+            ";
+            $student_res = $conn->query($student_sql);
+            if ($student_res && ($student_row = $student_res->fetch_assoc())) {
+                $suggestion_student_id = (int)$student_row['id'];
+                $reason_text = "Student and ordering party share the same last name.";
             }
-            $student_stmt->close();
+
+            // Guardian suggestion
+            $guardian_sql = "
+                SELECT CONCAT(first_name, ' ', last_name) AS fullname
+                FROM LEGAL_GUARDIAN_TAB
+                WHERE last_name = '" . $conn->real_escape_string($last_name) . "'
+                LIMIT 1
+            ";
+            $guardian_res = $conn->query($guardian_sql);
+            if ($guardian_res && ($guardian_row = $guardian_res->fetch_assoc())) {
+                $suggestion_guardian = (string)$guardian_row['fullname'];
+                if ($reason_text === "") {
+                    $reason_text = "Legal guardian and ordering party share the same last name.";
+                }
+            }
         }
+    }
+
+    if ($reason_text === "") {
+        $reason_text = "No automatic match found.";
     }
 }
 ?>
@@ -158,7 +175,6 @@ if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Unconfirmed</title>
 
-  <!-- Fonts & Icons -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Roboto:wght@400;500&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
 
@@ -174,17 +190,8 @@ if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
       --sidebar-w:320px;
     }
     *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family:'Roboto',sans-serif;
-      color:black;
-      background:#fff;
-    }
-    #content {
-      transition: margin-left 0.3s ease;
-      margin-left: 0;
-      padding: 100px 30px 60px;
-    }
+    body{ margin:0; font-family:'Roboto',sans-serif; color:black; background:#fff; }
+    #content { transition: margin-left 0.3s ease; margin-left: 0; padding: 100px 30px 60px; }
     #content.shifted { margin-left: 260px; }
 
     .page h1{
@@ -234,11 +241,7 @@ if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
       border-top:1px solid var(--gray-light);
     }
     .amount{text-align:right;font-variant-numeric:tabular-nums;}
-    tbody tr:hover {
-      background-color:#f5f5f5;
-      transition:background-color 0.2s ease-in-out;
-      cursor:pointer;
-    }
+    tbody tr:hover { background-color:#f5f5f5; transition:background-color 0.2s ease-in-out; cursor:pointer; }
 
     .stack{display:flex;flex-direction:column;gap:16px;}
     .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
@@ -295,13 +298,7 @@ if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
     .btn-primary{background:var(--red-main);color:#fff;}
     .btn-ghost{background:#fff;color:#333;border:1px solid var(--gray-light);}
     .btn:hover{opacity:.9;}
-    #overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.4);
-      display: none;
-      z-index: 98;
-    }
+    #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; z-index: 98; }
     #overlay.show {display:block;}
   </style>
 </head>
@@ -327,11 +324,11 @@ if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
               <?php if ($transactions_result && $transactions_result->num_rows > 0): ?>
                 <?php while($row = $transactions_result->fetch_assoc()): ?>
                   <tr>
-                    <td><?= htmlspecialchars($row['reference_number']) ?></td>
-                    <td><?= htmlspecialchars($row['beneficiary']) ?></td>
-                    <td><?= htmlspecialchars($row['reference']) ?></td>
-                    <td><?= $row['processing_date'] ? date("d/m/Y", strtotime($row['processing_date'])) : '-' ?></td>
-                    <td class="amount"><?= number_format($row['amount_total'], 2, ',', '.') ?> <?= CURRENCY ?></td>
+                    <td><?= htmlspecialchars($row['reference_number'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars($row['beneficiary'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars($row['reference'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= !empty($row['processing_date']) ? date("d/m/Y", strtotime($row['processing_date'])) : '-' ?></td>
+                    <td class="amount"><?= number_format((float)$row['amount_total'], 2, ',', '.') ?> <?= CURRENCY ?></td>
                   </tr>
                 <?php endwhile; ?>
               <?php else: ?>
@@ -344,43 +341,53 @@ if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
         <aside class="stack">
           <?php if ($success_message): ?>
             <div class="card" style="background:#E7F7E7; color:#2E7D32; padding:12px; border:1px solid #C8E6C9;">
-              <?= htmlspecialchars($success_message) ?>
+              <?= htmlspecialchars($success_message, ENT_QUOTES, 'UTF-8') ?>
             </div>
           <?php endif; ?>
           <?php if ($error_message): ?>
             <div class="card" style="background:#FCE8E6; color:#B71C1C; padding:12px; border:1px solid #F5C6CB;">
-              <?= htmlspecialchars($error_message) ?>
+              <?= htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8') ?>
             </div>
           <?php endif; ?>
 
           <div class="stats">
-            <div class="stat"><div class="num"><?= $pending ?></div><div class="label">Pending</div></div>
-            <div class="stat"><div class="num"><?= $confirmed ?></div><div class="label">Confirmed</div></div>
+            <div class="stat"><div class="num"><?= (int)$pending ?></div><div class="label">Pending</div></div>
+            <div class="stat"><div class="num"><?= (int)$confirmed ?></div><div class="label">Confirmed</div></div>
           </div>
 
           <?php if ($suggestion_invoice_id): ?>
           <div class="card">
-            <div class="side-title">Suggested Student</div>
+            <div class="side-title">Manual confirmation</div>
+
+            <div style="font-size:13px;color:#333;line-height:1.4;margin-bottom:10px;">
+              <b>Invoice:</b> <?= htmlspecialchars($suggestion_invoice_ref ?: ("INV-" . (int)$suggestion_invoice_id), ENT_QUOTES, 'UTF-8') ?><br>
+              <b>Ordering name:</b> <?= htmlspecialchars($suggestion_invoice_beneficiary, ENT_QUOTES, 'UTF-8') ?><br>
+              <b>Description:</b> <?= htmlspecialchars($suggestion_invoice_reference, ENT_QUOTES, 'UTF-8') ?><br>
+              <?php if (!empty($suggestion_guardian)): ?>
+                <b>Guardian hint:</b> <?= htmlspecialchars($suggestion_guardian, ENT_QUOTES, 'UTF-8') ?><br>
+              <?php endif; ?>
+            </div>
+
             <form method="post" action="">
-              <input type="hidden" name="invoice_id" value="<?= $suggestion_invoice_id ?>">
+              <input type="hidden" name="invoice_id" value="<?= (int)$suggestion_invoice_id ?>">
+
               <select name="student_id" class="side-input" required>
                 <option value="">-- Select Student --</option>
                 <?php
-                // Get all students for dropdown
                 $students_sql = "SELECT id, long_name FROM STUDENT_TAB ORDER BY long_name ASC";
                 $students_res = $conn->query($students_sql);
                 if ($students_res) {
                     while ($s = $students_res->fetch_assoc()) {
-                        $selected = ($suggestion_student_id == $s['id']) ? 'selected' : '';
-                        echo '<option value="' . (int)$s['id'] . '" ' . $selected . '>' . htmlspecialchars($s['long_name']) . '</option>';
+                        $selected = ($suggestion_student_id !== null && (int)$suggestion_student_id === (int)$s['id']) ? 'selected' : '';
+                        echo '<option value="' . (int)$s['id'] . '" ' . $selected . '>' . htmlspecialchars($s['long_name'], ENT_QUOTES, 'UTF-8') . '</option>';
                     }
                 }
                 ?>
               </select>
-              
+
               <div class="card" style="margin-top:12px; padding:10px; background:#f9f9f9;">
                 <div class="side-title">Connection Reason</div>
-                <p class="reason-text"><?= htmlspecialchars($reason_text ?: 'No automatic match found') ?></p>
+                <p class="reason-text"><?= htmlspecialchars($reason_text, ENT_QUOTES, 'UTF-8') ?></p>
               </div>
 
               <div style="margin-top:12px;display:flex;gap:10px;">
@@ -396,19 +403,16 @@ if ($suggestion_res && $row = $suggestion_res->fetch_assoc()) {
     </div>
   </main>
 
-  <!-- Filter Panel aus externer Datei -->
   <?php include 'filters.php'; ?>
 
   <script>
-    // Sidebar Steuerung
     const sidebar   = document.getElementById("sidebar");
     const content   = document.getElementById("content");
     const overlay   = document.getElementById("overlay");
+
     function openSidebar(){ sidebar.classList.add("open"); content.classList.add("shifted"); overlay.classList.add("show"); }
     function closeSidebar(){ sidebar.classList.remove("open"); content.classList.remove("shifted"); overlay.classList.remove("show"); }
-    function toggleSidebar(){
-       sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); 
-      }
+    function toggleSidebar(){ sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); }
 
     document.addEventListener('DOMContentLoaded', () => {
       const navLeft = document.querySelector('.nav-left');

@@ -23,9 +23,14 @@ require "db_connect.php"; // needed for unread counter
 
 // Unread notifications count
 $unreadCount = 0;
-$res = $conn->query("SELECT COUNT(*) AS c FROM NOTIFICATION WHERE is_read = 0");
-if ($row = $res->fetch_assoc()) {
+
+// FIX 1: Use the correct table name (NOTIFICATION_TAB)
+// FIX 2: Guard against failed query (fetch_assoc on bool)
+$res = $conn->query("SELECT COUNT(*) AS c FROM NOTIFICATION_TAB WHERE is_read = 0");
+if ($res && ($row = $res->fetch_assoc())) {
     $unreadCount = (int)$row['c'];
+} else {
+    $unreadCount = 0;
 }
 
 // --- School year info (current school year) ---
@@ -35,7 +40,6 @@ $schoolYearId     = null;
 
 $month = (int)date('n');
 $year  = (int)date('Y');
-
 
 // If before September → belong to previous school year
 if ($month < 9) {
@@ -182,10 +186,10 @@ if ($syRes && $syRes->num_rows === 1) {
   #content { transition: margin-left 0.3s ease; }
   #content.shifted { margin-left: 260px; }
 
-    /* SCHOOL YEAR POPUP */
+  /* SCHOOL YEAR POPUP */
   .schoolyear-modal {
     position: fixed;
-    top: 95px;          
+    top: 95px;
     right: 30px;
     background: #fff;
     border: 1px solid var(--gray-light);
@@ -226,7 +230,7 @@ if ($syRes && $syRes->num_rows === 1) {
     font-weight:600;
   }
 
-    .schoolyear-edit-toggle {
+  .schoolyear-edit-toggle {
     margin-top: 8px;
     font-size: 12px;
     border: none;
@@ -307,16 +311,18 @@ if ($syRes && $syRes->num_rows === 1) {
     </a>
 
     <a href="unconfirmed.php"><span class="nav-icon material-icons-outlined">priority_high</span></a>
-  <!-- School Year info -->
+
+    <!-- School Year info -->
     <span id="schoolYearToggle" class="nav-icon-wrapper" style="cursor:pointer;" title="Schuljahr">
       <span class="nav-icon material-icons-outlined">event</span>
     </span>
 
     <?php if ($currentPage !== 'dashboard.php'): ?>
       <?php if (in_array($currentPage, ['unconfirmed.php','student_state.php,', 'Transactions.php'], true)): ?>
-<span id="filterToggle" class="nav-icon-wrapper">
-    <span class="nav-icon material-icons-outlined">filter_list</span>
-</span>      <?php endif; ?>
+        <span id="filterToggle" class="nav-icon-wrapper">
+          <span class="nav-icon material-icons-outlined">filter_list</span>
+        </span>
+      <?php endif; ?>
       <a href="dashboard.php" class="nav-icon material-icons-outlined" style="text-decoration:none;color:white;">home</a>
     <?php endif; ?>
   </div>
@@ -362,7 +368,7 @@ if ($syRes && $syRes->num_rows === 1) {
     <?= htmlspecialchars($schoolYearLabel, ENT_QUOTES, 'UTF-8') ?>
   </p>
 
-    <?php if ($schoolYearAmount !== null): ?>
+  <?php if ($schoolYearAmount !== null): ?>
     <p>
       <strong>Total Amount:</strong>
       <?= number_format($schoolYearAmount, 2, ',', '.') ?> <?= CURRENCY ?>
@@ -411,7 +417,6 @@ if ($syRes && $syRes->num_rows === 1) {
 
 <!-- FILTER PANEL -->
 <?php
-// Only include filters on specific pages that require them
 $filtersPages = ['unconfirmed.php', 'student_state.php', 'Transactions.php'];
 if (in_array($currentPage, $filtersPages, true)) {
     define('APP_HAS_OVERLAY', true);
@@ -428,9 +433,10 @@ if (in_array($currentPage, $filtersPages, true)) {
   const filterOverlay = document.getElementById("filterOverlay");
   const filterToggle = document.getElementById("filterToggle");
 
-    const schoolYearToggle = document.getElementById("schoolYearToggle");
+  const schoolYearToggle = document.getElementById("schoolYearToggle");
   const schoolYearModal  = document.getElementById("schoolYearModal");
-
+  const schoolYearEditToggle = document.getElementById("schoolYearEditToggle");
+  const schoolYearEditForm = document.getElementById("schoolYearEditForm");
 
   // SIDEBAR
   function openSidebar(){
@@ -444,7 +450,6 @@ if (in_array($currentPage, $filtersPages, true)) {
     const content = document.getElementById("content");
     if (content) content.classList.remove("shifted");
 
-    // Only hide overlay if filter panel is also closed
     if (!filterPanel || !filterPanel.classList.contains('open')) {
       overlay.classList.remove("show");
     }
@@ -458,13 +463,11 @@ if (in_array($currentPage, $filtersPages, true)) {
     if (filterPanel) filterPanel.classList.remove('open');
     if (filterOverlay) filterOverlay.classList.remove('show');
 
-    // Only hide overlay if sidebar is also closed
     if (!sidebar.classList.contains('open')) {
       overlay.classList.remove('show');
     }
   }
 
-  // Bind filter toggle here so it works on all pages that have it
   if (filterToggle && filterPanel) {
     filterToggle.addEventListener('click', () => {
       const willOpen = !filterPanel.classList.contains('open');
@@ -483,17 +486,23 @@ if (in_array($currentPage, $filtersPages, true)) {
     });
   }
 
-    // SCHOOL YEAR POPUP
+  // SCHOOL YEAR POPUP
   function openSchoolYearModal() {
     if (!schoolYearModal) return;
     schoolYearModal.classList.add('show');
     schoolYearModal.setAttribute('aria-hidden', 'false');
   }
 
+  function closeSchoolYearEditForm() {
+    if (!schoolYearEditForm) return;
+    schoolYearEditForm.classList.remove('show');
+  }
+
   function closeSchoolYearModal() {
     if (!schoolYearModal) return;
     schoolYearModal.classList.remove('show');
     schoolYearModal.setAttribute('aria-hidden', 'true');
+    closeSchoolYearEditForm();
   }
 
   if (schoolYearToggle && schoolYearModal) {
@@ -507,7 +516,6 @@ if (in_array($currentPage, $filtersPages, true)) {
     });
   }
 
-  // Close when clicking outside or pressing ESC
   document.addEventListener('click', (e) => {
     if (!schoolYearModal || !schoolYearModal.classList.contains('show')) return;
     if (!schoolYearModal.contains(e.target) && e.target !== schoolYearToggle) {
@@ -521,14 +529,9 @@ if (in_array($currentPage, $filtersPages, true)) {
     }
   });
 
-    function openSchoolYearEditForm() {
+  function openSchoolYearEditForm() {
     if (!schoolYearEditForm) return;
     schoolYearEditForm.classList.add('show');
-  }
-
-  function closeSchoolYearEditForm() {
-    if (!schoolYearEditForm) return;
-    schoolYearEditForm.classList.remove('show');
   }
 
   if (schoolYearEditToggle && schoolYearEditForm) {
@@ -542,15 +545,6 @@ if (in_array($currentPage, $filtersPages, true)) {
       }
     });
   }
-
-  // when closing the popup, also close the edit form
-  function closeSchoolYearModal() {
-    if (!schoolYearModal) return;
-    schoolYearModal.classList.remove('show');
-    schoolYearModal.setAttribute('aria-hidden', 'true');
-    closeSchoolYearEditForm();
-  }
-
 </script>
 
 <?php if (defined('NAV_STANDALONE') && NAV_STANDALONE): ?>

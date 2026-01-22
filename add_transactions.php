@@ -1,4 +1,5 @@
 <?php 
+const CURRENCY = 'Lek';
 require_once 'auth_check.php';
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
@@ -7,52 +8,74 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
 require 'navigator.php'; 
 require 'db_connect.php';
-require 'matching_functions.php';
+
+// ✅ Use new matching + notifications pipeline
+require_once __DIR__ . '/matching_functions.php';
 
 $success_message = "";
 $error_message = "";
+$debug_box = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // htmlspecialchars zum Schutz gegen XSS
-    $ref_number       = htmlspecialchars(trim($_POST['reference_number'] ?? ''), ENT_QUOTES, 'UTF-8');  
-    $reference    = htmlspecialchars(trim($_POST['reference'] ?? ''), ENT_QUOTES, 'UTF-8'); 
-    $ordering_name    = htmlspecialchars(trim($_POST['beneficiary'] ?? ''), ENT_QUOTES, 'UTF-8');  
-    $processing_date = htmlspecialchars($_POST['processing_date'] ?? '', ENT_QUOTES, 'UTF-8');  
-    $description      = htmlspecialchars(trim($_POST['description'] ?? ''), ENT_QUOTES, 'UTF-8');  
-    $amount           = isset($_POST['amount']) ? (float) $_POST['amount'] : 0;
+
+    // ✅ Do NOT htmlspecialchars before DB insert. Use trim only.
+    $ref_number      = trim($_POST['reference_number'] ?? '');
+    $reference       = trim($_POST['reference'] ?? '');
+    $ordering_name   = trim($_POST['beneficiary'] ?? '');
+    $processing_date = trim($_POST['processing_date'] ?? '');
+    $description     = trim($_POST['description'] ?? '');
+    $amount          = isset($_POST['amount']) ? (float) $_POST['amount'] : 0;
+
+    // Ensure DATETIME string (input type="date" => YYYY-MM-DD)
+    if ($processing_date && strlen($processing_date) === 10) {
+        $processing_date .= " 00:00:00";
+    }
 
     if ($ref_number && $reference && $ordering_name && $processing_date && $amount) {
-        // Prepared Statement verhindert SQL-Injection
+
         $stmt = $conn->prepare("
             INSERT INTO INVOICE_TAB 
-                (reference_number, reference, beneficiary, processing_date,  description, amount_total) 
+                (reference_number, reference, beneficiary, processing_date, description, amount_total) 
             VALUES (?, ?, ?, ?, ?, ?)
-        ");  
+        ");
 
         if ($stmt) {
-            // bind_param sichert Parameterbindung 
-            // Order matches INSERT: reference_number, reference, beneficiary, processing_date, description, amount_total
-            $stmt->bind_param("sssssd", $ref_number, $reference, $ordering_name, $processing_date, $description, $amount); 
+            $stmt->bind_param("sssssd", $ref_number, $reference, $ordering_name, $processing_date, $description, $amount);
+
             if ($stmt->execute()) {
-                // Get the inserted invoice ID
-                $invoice_id = $conn->insert_id;
-                $stmt->close();
-                
-                // Run matching algorithm and log to MATCHING_HISTORY_TAB
-                $match_result = processInvoiceMatching($conn, $invoice_id, $ref_number, $ordering_name, $description);
-                
-                if ($match_result['confirmed']) {
-                    $success_message = "Transaction was successfully added and matched to student (confidence: " . number_format($match_result['confidence'], 1) . "%).";
+
+                $newInvoiceId = (int)$conn->insert_id;
+
+                if ($newInvoiceId > 0) {
+
+                    // ✅ Run full pipeline (matching + history + invoice update + notifications)
+                  $matchResult = processInvoiceMatching($conn, $newInvoiceId, $ref_number, $ordering_name, $reference, true);
+
+
+                    $success_message = "Transaction was successfully added.";
+
+                    // Optional debug box
+                    if (defined('ENV_DEBUG') && ENV_DEBUG) {
+                        $debug_box = "<pre style='background:#111;color:#0f0;padding:12px;border-radius:10px;max-width:900px;margin:20px auto;overflow:auto;'>";
+                        $debug_box .= "DEBUG: processInvoiceMatching() result\n";
+                        $debug_box .= htmlspecialchars(json_encode($matchResult, JSON_PRETTY_PRINT), ENT_QUOTES, 'UTF-8');
+                        $debug_box .= "</pre>";
+                    }
+
                 } else {
-                    $success_message = "Transaction was successfully added. Matching confidence too low (" . number_format($match_result['confidence'], 1) . "%) - requires manual confirmation.";
+                    $error_message = "Invoice insert failed (no insert_id).";
                 }
+
             } else {
                 $error_message = "Error while saving: " . $stmt->error;
-                $stmt->close();
             }
+
+            $stmt->close();
+
         } else {
             $error_message = "Statement error: " . $conn->error;
         }
+
     } else {
         $error_message = "Please fill out all required fields.";
     }
@@ -94,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         h1{
             font-family:'Space Grotesk',sans-serif;
             color:var(--red-dark);
-            margin-bottom:20px;
+            margin-bottom:10px;
             text-align:center;
         }
 
@@ -175,16 +198,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
 
-<!-- Inhalt -->
 <div id="content">
     <h1>Add Transaction</h1>
 
     <?php if ($success_message): ?>
-        <div class="message success"><?= $success_message ?></div>
+        <div class="message success"><?= htmlspecialchars($success_message, ENT_QUOTES, 'UTF-8') ?></div>
     <?php endif; ?>
     <?php if ($error_message): ?>
-        <div class="message error"><?= $error_message ?></div>
+        <div class="message error"><?= htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8') ?></div>
     <?php endif; ?>
+
+    <?= $debug_box ?>
 
     <div class="form-card">
         <form method="post" action="">
