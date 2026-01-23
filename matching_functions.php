@@ -322,8 +322,8 @@ function processInvoiceMatching($conn, $invoice_id, $reference_number, $benefici
     $time_from_date  = toDateString($processing_date);
 
     // ✅ invoice_reference MUST be the constant reference id (INVOICE_TAB.reference)
-    $invoice_reference = trim((string)$reference);
-    if ($invoice_reference === '') $invoice_reference = trim((string)($meta['reference'] ?? ''));
+    $invoice_reference = trim((string)$reference_number);
+    if ($invoice_reference === '') $invoice_reference = trim((string)($meta['reference_number'] ?? ''));
     if ($invoice_reference === '') {
         // last-resort fallback to keep DB inserts stable
         $invoice_reference = "INV-" . (int)$invoice_id;

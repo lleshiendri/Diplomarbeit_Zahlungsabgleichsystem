@@ -38,18 +38,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_invoice'])) {
                 }
 
                 // INFO notification (always)
-createNotificationOnce(
-    $conn,
-    "info",
-    $student_id,
-    $invoice_reference,
-    date('Y-m-d', strtotime($processing_date)),
-    "Confirmed manually: $invoice_reference assigned to Student #$student_id"
-);
+                createNotificationOnce(
+                    $conn,
+                    "info",
+                    $student_id,
+                    $invoice_reference,
+                    date('Y-m-d', strtotime($processing_date)),
+                    "Confirmed manually: $invoice_reference assigned to Student #$student_id"
+                );
 
-// LATE FEE check immediately (Rule A)
-maybeCreateLateFeeUrgent($conn, $student_id, $invoice_reference, $processing_date);
-
+                // LATE FEE check immediately (Rule A)
+                maybeCreateLateFeeUrgent($conn, $student_id, $invoice_reference, $processing_date);
 
                 $success_message = "Invoice confirmed and assigned to student.";
 
@@ -97,7 +96,7 @@ $confirmed_res = $conn->query($confirmed_sql);
 $confirmed = $confirmed_res ? (int)$confirmed_res->fetch_assoc()['c'] : 0;
 
 /* ===============================================================
-   3) SUGGESTION BOX (first unconfirmed invoice)
+   3) SUGGESTION BOX (selected unconfirmed invoice)
    =============================================================== */
 $suggestion_invoice_id = null;
 $suggestion_student_id = null;
@@ -107,18 +106,32 @@ $suggestion_invoice_beneficiary = "";
 $suggestion_invoice_reference = "";
 $suggestion_guardian = "";
 
-$suggestion_sql = "
-    SELECT id, reference_number, beneficiary, reference, processing_date
-    FROM INVOICE_TAB
-    WHERE student_id IS NULL
-    ORDER BY id DESC
-    LIMIT 1
-";
+// Selected invoice via GET
+$active_id = isset($_GET['invoice_id']) ? (int)$_GET['invoice_id'] : 0;
+
+if ($active_id > 0) {
+    $suggestion_sql = "
+        SELECT id, reference_number, beneficiary, reference, processing_date
+        FROM INVOICE_TAB
+        WHERE student_id IS NULL
+          AND id = $active_id
+        LIMIT 1
+    ";
+} else {
+    $suggestion_sql = "
+        SELECT id, reference_number, beneficiary, reference, processing_date
+        FROM INVOICE_TAB
+        WHERE student_id IS NULL
+        ORDER BY id DESC
+        LIMIT 1
+    ";
+}
+
 $suggestion_res = $conn->query($suggestion_sql);
 
 if ($suggestion_res && ($row = $suggestion_res->fetch_assoc())) {
 
-    // ✅ IMPORTANT: without this, sidebar will never render
+    // IMPORTANT: without this, sidebar will never render
     $suggestion_invoice_id = (int)$row['id'];
 
     $suggestion_invoice_ref = (string)($row['reference_number'] ?? '');
@@ -167,6 +180,65 @@ if ($suggestion_res && ($row = $suggestion_res->fetch_assoc())) {
         $reason_text = "No automatic match found.";
     }
 }
+// aus filters.php (unconfirmed.php) kommen diese Keys:
+$filterBeneficiary  = trim($_GET['beneficiary'] ?? '');        // Ordering Name -> t.beneficiary
+$filterRefNumber    = trim($_GET['reference_number'] ?? '');   // Reference Number -> t.reference_number
+$filterText         = trim($_GET['q'] ?? '');                  // Textsuche -> t.reference + t.description
+
+$filterFrom         = trim($_GET['from'] ?? '');
+$filterTo           = trim($_GET['to'] ?? '');
+$filterMin          = trim($_GET['amount_min'] ?? '');
+$filterMax          = trim($_GET['amount_max'] ?? '');
+
+$clauses = [];
+$clauses[] = "t.student_id IS NULL"; // BASE: unconfirmed only
+
+// Ordering Name
+if ($filterBeneficiary !== '') {
+    $like = "%" . $conn->real_escape_string($filterBeneficiary) . "%";
+    $clauses[] = "t.beneficiary LIKE '{$like}'";
+}
+
+// Reference Number
+if ($filterRefNumber !== '') {
+    $like = "%" . $conn->real_escape_string($filterRefNumber) . "%";
+    $clauses[] = "t.reference_number LIKE '{$like}'";
+}
+
+// Text search (reference + description)
+if ($filterText !== '') {
+    $like = "%" . $conn->real_escape_string($filterText) . "%";
+    $clauses[] = "(t.reference LIKE '{$like}' OR t.description LIKE '{$like}')";
+}
+
+
+// Date range
+if ($filterFrom !== '') {
+    $clauses[] = "t.processing_date >= '" . $conn->real_escape_string($filterFrom) . "'";
+}
+if ($filterTo !== '') {
+    $clauses[] = "t.processing_date <= '" . $conn->real_escape_string($filterTo) . "'";
+}
+
+// Amount range
+if ($filterMin !== '' && is_numeric($filterMin)) {
+    $clauses[] = "t.amount_total >= " . (float)$filterMin;
+}
+if ($filterMax !== '' && is_numeric($filterMax)) {
+    $clauses[] = "t.amount_total <= " . (float)$filterMax;
+}
+
+$whereSql = "WHERE " . implode(" AND ", $clauses);
+
+$transactions_sql = "
+  SELECT id, reference_number, beneficiary, reference, description, transaction_type, amount_total, processing_date
+  FROM INVOICE_TAB t
+  {$whereSql}
+  ORDER BY t.id DESC
+  LIMIT 50
+";
+
+$transactions_result = $conn->query($transactions_sql);
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -242,6 +314,12 @@ if ($suggestion_res && ($row = $suggestion_res->fetch_assoc())) {
     }
     .amount{text-align:right;font-variant-numeric:tabular-nums;}
     tbody tr:hover { background-color:#f5f5f5; transition:background-color 0.2s ease-in-out; cursor:pointer; }
+
+    /* ACTIVE ROW HIGHLIGHT */
+    tbody tr.active-row{
+      outline: 2px solid var(--red-main);
+      background: #fff2ee;
+    }
 
     .stack{display:flex;flex-direction:column;gap:16px;}
     .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
@@ -323,7 +401,11 @@ if ($suggestion_res && ($row = $suggestion_res->fetch_assoc())) {
             <tbody>
               <?php if ($transactions_result && $transactions_result->num_rows > 0): ?>
                 <?php while($row = $transactions_result->fetch_assoc()): ?>
-                  <tr>
+                  <?php $row_id = (int)$row['id']; ?>
+                  <tr
+                    data-invoice-id="<?= $row_id ?>"
+                    class="<?= ($active_id === $row_id) ? 'active-row' : '' ?>"
+                  >
                     <td><?= htmlspecialchars($row['reference_number'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
                     <td><?= htmlspecialchars($row['beneficiary'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
                     <td><?= htmlspecialchars($row['reference'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
@@ -405,44 +487,65 @@ if ($suggestion_res && ($row = $suggestion_res->fetch_assoc())) {
 
   <?php include 'filters.php'; ?>
 
-  <script>
-    const sidebar   = document.getElementById("sidebar");
-    const content   = document.getElementById("content");
-    const overlay   = document.getElementById("overlay");
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
 
-    function openSidebar(){ sidebar.classList.add("open"); content.classList.add("shifted"); overlay.classList.add("show"); }
-    function closeSidebar(){ sidebar.classList.remove("open"); content.classList.remove("shifted"); overlay.classList.remove("show"); }
-    function toggleSidebar(){ sidebar.classList.contains("open") ? closeSidebar() : openSidebar(); }
+    // --- Sidebar vars (may be null depending on includes)
+    const sidebar = document.getElementById("sidebar");
+    const content = document.getElementById("content");
+    const overlay = document.getElementById("overlay");
 
-    document.addEventListener('DOMContentLoaded', () => {
-      const navLeft = document.querySelector('.nav-left');
-      if (navLeft && !document.getElementById('filterToggle')) {
-        const filterIcon = document.createElement('span');
-        filterIcon.id = 'filterToggle';
-        filterIcon.className = 'nav-icon material-icons-outlined';
-        filterIcon.textContent = 'filter_list';
-        filterIcon.style.cursor = 'pointer';
-        navLeft.appendChild(filterIcon);
-      }
+    function openSidebar(){
+      if (!sidebar || !content || !overlay) return;
+      sidebar.classList.add("open");
+      content.classList.add("shifted");
+      overlay.classList.add("show");
+    }
+    function closeSidebar(){
+      if (!sidebar || !content || !overlay) return;
+      sidebar.classList.remove("open");
+      content.classList.remove("shifted");
+      overlay.classList.remove("show");
+    }
+    function toggleSidebar(){
+      if (!sidebar) return;
+      sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
+    }
 
-      const filterPanel = document.getElementById("filterPanel");
-      const filterOverlay = document.getElementById("filterOverlay");
-      const filterToggle = document.getElementById("filterToggle");
+  document.addEventListener('DOMContentLoaded', () => { 
+    const navLeft = document.querySelector('.nav-left'); 
+    if (navLeft && !document.getElementById('filterToggle')) { 
+      const filterIcon = document.createElement('span'); 
+      filterIcon.id = 'filterToggle'; 
+      filterIcon.className = 'nav-icon material-icons-outlined'; 
+      filterIcon.textContent = 'filter_list'; 
+      filterIcon.style.cursor = 'pointer'; 
+      navLeft.appendChild(filterIcon); } 
+      const filterPanel = document.getElementById("filterPanel"); 
+      const filterOverlay = document.getElementById("filterOverlay"); 
+      const filterToggle = document.getElementById("filterToggle"); 
+      if (filterToggle) { 
+        filterToggle.addEventListener("click", () => { 
+          filterPanel.classList.toggle("open"); 
+          filterOverlay.classList.toggle("show"); }); } 
+          if (filterOverlay) { 
+            filterOverlay.addEventListener("click", () => { 
+              filterPanel.classList.remove("open");
+              filterOverlay.classList.remove("show"); }); } });
 
-      if (filterToggle) {
-        filterToggle.addEventListener("click", () => {
-          filterPanel.classList.toggle("open");
-          filterOverlay.classList.toggle("show");
-        });
-      }
+    // --- CLICK ROW -> LOAD SELECTED INVOICE (this is what you need)
+    document.querySelectorAll('tbody tr[data-invoice-id]').forEach(tr => {
+      tr.addEventListener('click', () => {
+        const id = tr.getAttribute('data-invoice-id');
+        if (!id) return;
 
-      if (filterOverlay) {
-        filterOverlay.addEventListener("click", () => {
-          filterPanel.classList.remove("open");
-          filterOverlay.classList.remove("show");
-        });
-      }
+        const url = new URL(window.location.href);
+        url.searchParams.set('invoice_id', id);
+        window.location.href = url.toString();
+      });
     });
-  </script>
+
+  });
+</script>
 </body>
 </html>
