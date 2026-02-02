@@ -197,81 +197,6 @@ $result = $conn->query($selectSql);
     <!-- Bootstrap für Pagination -->
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
 
-    <style>
-        body { font-family: 'Roboto', sans-serif; }
-        #sidebar a { text-decoration:none; color:#222; transition:0.2s; }
-        #sidebar a:hover { background-color:#FAE4D5; color:#B31E32; }
-        .content { transition:margin-left 0.3s ease; margin-left:0; padding:100px 30px 60px; }
-        .content.shifted { margin-left:260px; }
-        #overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.2); opacity:0; visibility:hidden; transition:opacity 0.3s ease; z-index:8; }
-        #overlay.show { opacity:1; visibility:visible; }
-
-        .page-title { font-family:'Space Grotesk',sans-serif; font-weight:700; color:#B31E32; text-align:center; margin-bottom:20px; font-size:28px; }
-
-        /* === Table Design === */
-        .student-table th {
-            font-family:'Montserrat',sans-serif;
-            font-weight:600;
-            color:#B31E32;
-            background-color:#FAE4D5;
-            text-align:center;
-        }
-        .student-table td {
-            font-family:'Roboto',sans-serif;
-            color:#222;
-            vertical-align:middle;
-            text-align:center;
-        }
-        .student-table tbody tr:nth-child(odd){background-color:#FFFFFF;}
-        .student-table tbody tr:nth-child(even){background-color:#fff8eb;}
-        .student-table tr:hover { background-color:#FAE4D5; transition:0.2s; }
-
-        .material-icons-outlined { font-size:24px; vertical-align:middle; cursor:pointer; }
-        .edit-row td { background:#FFF8EB; border-top:2px solid #D4463B; padding:15px; }
-        .edit-row input { width:100%; border:1px solid #ccc; border-radius:5px; padding:5px 8px; }
-        .edit-row button { background:#D4463B; color:white; border:none; border-radius:5px; padding:5px 12px; font-weight:600; }
-        .edit-row button:hover { background:#B31E32; }
-        .alert { max-width:600px; margin:0 auto 20px auto; padding:10px 15px; border-radius:8px; font-weight:500; text-align:center; }
-        .alert-success { background:#EAF9E6; color:#2E7D32; border:1px solid #C5E1A5; }
-        .alert-error { background:#FFE4E1; color:#B71C1C; border:1px solid #FFAB91; }
-
-        /* === Pagination Styling === */
-        .pagination { font-family:'Montserrat',sans-serif; }
-        .pagination .page-link {
-            color:#B31E32;
-            border:1px solid #FAE4D5;
-            background-color:#fff;
-            font-weight:500;
-        }
-        .pagination .page-link:hover {
-            background-color:#FAE4D5;
-            color:#B31E32;
-        }
-        .pagination .active .page-link {
-            background-color:#B31E32;
-            border-color:#B31E32;
-            color:#fff;
-        }
-        .pagination .disabled .page-link {
-            color:#ccc;
-            border-color:#eee;
-        }
-
-        .content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-        }
-        .table-wrapper {
-            width: 100%;
-            max-width: 1300px;
-            margin: 0 auto;
-        }
-        .student-table {
-            margin: 0 auto;
-        }
-    </style>
 </head>
 <body>
 <?php require __DIR__ . '/navigator.php'; ?>
@@ -284,8 +209,8 @@ $result = $conn->query($selectSql);
 
     <?php require __DIR__ . '/filters.php'; ?>
 
-    <div class="table-wrapper" style="margin-top:25px;">
-        <table class="student-table" style="width:100%; border-collapse:collapse;">
+    <div class="table-wrapper">
+        <table class="student-table">
             <thead>
                 <tr>
                     <th>Student ID</th>
@@ -326,35 +251,35 @@ $result = $conn->query($selectSql);
                     echo '</td>';
                     if ($isAdmin) {
                     // Actions
-                    echo '<td style="text-align:center;">
-                            <span class="material-icons-outlined" style="color:#D4463B;"
+                    echo '<td>
+                            <span class="material-icons-outlined"
                                   onclick="toggleEdit(\''.$studentId.'\')">edit</span>
                             &nbsp;
                             <a href="?'.htmlspecialchars(http_build_query(array_merge($paginationBase, ['delete_id' => $externKey]))).'"
                                onclick="return confirm(\'Are you sure you want to delete this student?\');">
-                                <span class="material-icons-outlined" style="color:#B31E32;">delete</span>
+                                <span class="material-icons-outlined">delete</span>
                             </a>
                           </td>';
                     echo '</tr>';
 
                     // Inline-Edit-Zeile
-                    echo '<tr class="edit-row" id="edit-'.$studentId.'" style="display:none;">
+                    echo '<tr class="edit-row" id="edit-'.$studentId.'">
                             <td colspan="8">
-                                <form method="POST" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                                <form method="POST">
                                     <input type="hidden" name="extern_key" value="'.htmlspecialchars($externKey).'">
                                     <input type="hidden" name="student_id" value="'.htmlspecialchars($studentId).'">
                                     <input type="hidden" name="update_student" value="1">
 
-                                    <label style="margin-right:5px;">Name:</label>
+                                    <label>Name:</label>
                                     <input type="text" name="name" value="'.htmlspecialchars($row['name']).'" required style="width:120px;">
 
-                                    <label style="margin-right:5px;">Long Name:</label>
+                                    <label>Long Name:</label>
                                     <input type="text" name="long_name" value="'.htmlspecialchars($studentName).'" style="width:150px;">
 
-                                    <label style="margin-right:5px;">Left to Pay (<?= CURRENCY ?>):</label>
+                                    <label>Left to Pay (<?= CURRENCY ?>):</label>
                                     <input type="number" step="0.01" name="left_to_pay" value="'.htmlspecialchars($row['left_to_pay']).'" style="width:100px;">
 
-                                    <label style="margin-right:5px;">Additional Payments Status (<?= CURRENCY ?>):</label>
+                                    <label>Additional Payments Status (<?= CURRENCY ?>):</label>
                                     <input type="number" step="0.01" name="additional_payments_status" value="'.htmlspecialchars($row['additional_payments_status'] ?? '0', ENT_QUOTES, 'UTF-8').'" style="width:150px;" required>
 
                                     <button type="submit">Save</button>
@@ -365,7 +290,7 @@ $result = $conn->query($selectSql);
                     }
                 }
             } else {
-                echo '<tr><td colspan="8" style="text-align:center; color:#888;">No students found</td></tr>';
+                echo '<tr><td colspan="8">No students found</td></tr>';
             }
             ?>
             </tbody>
@@ -373,7 +298,7 @@ $result = $conn->query($selectSql);
     </div>
 
     <?php if ($totalPages > 1): ?>
-    <nav aria-label="Student pagination" style="margin-top:20px;">
+    <nav aria-label="Student pagination">
         <ul class="pagination justify-content-center">
             <?php
             // Helper für Link mit Filtern
@@ -426,14 +351,15 @@ $result = $conn->query($selectSql);
 
 <script>
 function toggleEdit(id) {
-    const row = document.getElementById("edit-" + id);
-    if (!row) return;
+  const row = document.getElementById("edit-" + id);
+  if (!row) return;
 
-    // Toggle visibility
-    row.style.display =
-        (row.style.display === "none" || row.style.display === "")
-        ? "table-row"
-        : "none";
+  // Optional: close all other open edit rows (clean UX)
+  document.querySelectorAll(".edit-row.is-open").forEach(r => {
+    if (r !== row) r.classList.remove("is-open");
+  });
+
+  row.classList.toggle("is-open");
 }
 </script>
 

@@ -2,88 +2,395 @@
     --red-dark: #B31E32;
     --red-main: #D4463B;
     --red-light: #FAE4D5;
+  
     --off-white: #FFF8EB;
     --gray-light: #E3E5E0;
     --text: #222;
+  
     --radius: 8px;
     --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.05);
-}
-
-* {
+  
+    /* Layout */
+    --page-max: 1400px;
+    --gutter: clamp(16px, 3vw, 40px);
+    --content-top: 100px;
+    --content-bottom: 60px;
+  
+    /* Sidebar */
+    --sidebar-width: 260px;
+  }
+  
+  /* =========================
+     2) Reset / Base
+     ========================= */
+  * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-}
-
-body {
-    font-family: 'Roboto', sans-serif;
+  }
+  
+  body {
+    font-family: "Roboto", sans-serif;
     background: var(--off-white);
     color: var(--text);
-}
-
-.content {
-    padding: 100px 40px 60px;
-    max-width: 1400px;
-    margin: 0 auto;
-}
-
-.page-title {
+  }
+  
+  /* =========================
+     3) Sidebar (from navigator)
+     ========================= */
+  #sidebar a {
+    text-decoration: none;
+    color: var(--text);
+    transition: 0.2s;
+  }
+  
+  #sidebar a:hover {
+    background-color: var(--red-light);
+    color: var(--red-dark);
+  }
+  
+  /* Overlay for sidebar (mobile/overlay mode) */
+  #overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.2);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease;
+    z-index: 8;
+  }
+  
+  #overlay.show {
+    opacity: 1;
+    visibility: visible;
+  }
+  
+  /* =========================
+     4) Page Layout / Container
+     ========================= */
+  /* This is the key fix: true centering on huge screens */
+  .content {
+    width: min(var(--page-max), calc(100% - (var(--gutter) * 2)));
+    margin-inline: auto;
+    padding: var(--content-top) 0 var(--content-bottom);
+    transition: margin-left 0.3s ease;
+  
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     text-align: center;
-    font-family: 'Montserrat', sans-serif;
-    font-size: 32px;
+  }
+  
+  /* Desktop behavior when sidebar pushes content */
+  .content.shifted {
+    margin-left: var(--sidebar-width);
+    width: min(
+      var(--page-max),
+      calc(100% - var(--sidebar-width) - (var(--gutter) * 2))
+    );
+  }
+  
+  /* On smaller screens: do NOT push content; sidebar should overlay */
+  @media (max-width: 992px) {
+    .content.shifted {
+      margin-left: 0;
+      width: min(var(--page-max), calc(100% - (var(--gutter) * 2)));
+    }
+  }
+  
+  /* =========================
+     5) Page Title
+     ========================= */
+  .page-title {
+    font-family: "Space Grotesk", sans-serif;
     font-weight: 700;
     color: var(--red-dark);
-    margin-bottom: 30px;
-}
-
-/* Table Wrapper */
-.table-wrapper {
-    overflow-x: auto;
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 28px;
+    letter-spacing: 0.5px;
+  }
+  
+  /* If you still use .main h1 somewhere */
+  .main h1 {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--red-dark);
+    letter-spacing: 0.5px;
+    margin: 0 0 18px;
+  }
+  
+  /* =========================
+     6) Alerts
+     ========================= */
+  .alert {
+    width: min(600px, 100%);
+    margin: 0 auto 20px auto;
+    padding: 10px 15px;
+    border-radius: var(--radius);
+    font-weight: 500;
+    text-align: center;
+  }
+  
+  .alert-success {
+    background: #EAF9E6;
+    color: #2E7D32;
+    border: 1px solid #C5E1A5;
+  }
+  
+  .alert-error {
+    background: #FFE4E1;
+    color: #B71C1C;
+    border: 1px solid #FFAB91;
+  }
+  
+  /* =========================
+     7) Table Wrapper
+     ========================= */
+  .table-wrapper {
+    width: 100%;
+    margin: 25px auto 0;
+    padding: 10px;
+  
     background: var(--off-white);
     box-shadow: var(--shadow);
     border-radius: var(--radius);
-    padding: 10px;
-    margin: 0 auto;            
-    max-width: 100%;
-}
-
-/* Student Table */
-.student-table {
+  
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* =========================
+     8) Student Table
+     ========================= */
+  .student-table {
     width: 100%;
     border-collapse: collapse;
-    text-align: left;
-    min-width: 1000px;
-}
-
-.student-table thead {
+    margin: 0 auto;
+  
+    /* Keeps desktop look; allows scroll on small screens */
+    min-width: 900px;
+  }
+  
+  .student-table thead {
     background: var(--red-light);
-}
-
-.student-table th {
-    font-family: 'Montserrat', sans-serif;
+  }
+  
+  .student-table th {
+    font-family: "Montserrat", sans-serif;
     font-weight: 600;
     font-size: 15px;
     color: var(--red-dark);
+    background-color: var(--red-light);
+  
     padding: 14px 12px;
     border-bottom: 2px solid var(--gray-light);
-}
-
-.student-table td {
-    padding: 14px 12px;
+    text-align: center;
+    white-space: nowrap;
+  }
+  
+  .student-table td {
+    font-family: "Roboto", sans-serif;
     font-size: 14px;
+    color: var(--text);
+  
+    padding: 14px 12px;
     border-bottom: 1px solid var(--gray-light);
-}
-
-.student-table tbody tr:hover {
-    background: #f9f9f9;
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  
+  /* Zebra rows */
+  .student-table tbody tr:nth-child(odd) {
+    background-color: #FFFFFF;
+  }
+  .student-table tbody tr:nth-child(even) {
+    background-color: var(--off-white);
+  }
+  
+  /* Hover */
+  .student-table tbody tr:hover {
+    background-color: var(--red-light);
     transition: 0.2s;
+  }
+  
+  /* =========================
+     9) Inline Edit Row
+     ========================= */
+  .material-icons-outlined {
+    font-size: 24px;
+    vertical-align: middle;
+    cursor: pointer;
+  }
+  
+  .edit-row td {
+    background: var(--off-white);
+    border-top: 2px solid var(--red-main);
+    padding: 15px;
+  }
+  
+  /* Inputs inside inline edit */
+  .edit-row input {
+    width: 100%;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 5px 8px;
+  }
+  
+  /* Buttons inside inline edit */
+  .edit-row button {
+    background: var(--red-main);
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  
+  .edit-row button:hover {
+    background: var(--red-dark);
+  }
+  
+  /* Make the inline-edit form not explode on small screens */
+  .edit-row form {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  
+  .edit-row label {
+    font-size: 14px;
+    color: var(--text);
+  }
+  
+  /* =========================
+     10) Pagination (Bootstrap)
+     ========================= */
+  .pagination {
+    font-family: "Montserrat", sans-serif;
+  }
+  
+  .pagination .page-link {
+    color: var(--red-dark);
+    border: 1px solid var(--red-light);
+    background-color: #fff;
+    font-weight: 500;
+  }
+  
+  .pagination .page-link:hover {
+    background-color: var(--red-light);
+    color: var(--red-dark);
+  }
+  
+  .pagination .active .page-link {
+    background-color: var(--red-dark);
+    border-color: var(--red-dark);
+    color: #fff;
+  }
+  
+  .pagination .disabled .page-link {
+    color: #ccc;
+    border-color: #eee;
+  }
+
+  /* Keep edit rows closed by default */
+.edit-row {
+    display: none;
+  }
+  
+  /* When opened via JS */
+  .edit-row.is-open {
+    display: table-row;
+  }
+
+  .action-icon {
+    font-size: 22px;
+    cursor: pointer;
+    color: var(--red-main);
+    transition: color 0.2s ease, transform 0.15s ease;
+  }
+  
+  .action-icon:hover {
+    color: var(--red-dark);
+    transform: scale(1.1);
+  }
+  
+  /* Slight distinction if you want delete stronger */
+  .action-icon.delete {
+    color: var(--red-dark);
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  .student-table td:last-child .material-icons-outlined,
+.student-table td:last-child a,
+.student-table td:last-child a:visited {
+  color: var(--red-main) !important;
 }
 
-  #content {transition: margin-left 0.3s ease;margin-left: 0;padding: 100px 30px 60px;}
-    #content.shifted { margin-left: 260px; }
-    .main h1{
-      font-family:'Space Grotesk',sans-serif;
-      font-size:28px; font-weight:700; color:var(--red-dark);
-      letter-spacing:.5px;
-      margin:0 0 18px;}
-      
+/* Make delete a bit stronger (optional) */
+.student-table td:last-child a .material-icons-outlined {
+  color: var(--red-main) !important;
+}
+
+/* Hover polish */
+.student-table td:last-child a:hover .material-icons-outlined,
+.student-table td:last-child .material-icons-outlined:hover {
+  color: var(--red-dark) !important;
+  transform: scale(1.08);
+}
+
+/* ---------- Pagination spacing (gap from table) ---------- */
+nav[aria-label="Student pagination"] {
+  margin-top: 28px !important; /* more space under table */
+  padding-top: 10px !important;
+}
+
+/* Also ensure the list itself has breathing room */
+.pagination {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* ---------- Pagination colors (beat Bootstrap blue) ---------- */
+.pagination .page-link {
+  color: var(--red-dark) !important;
+  border: 1px solid var(--red-light) !important;
+  background: #fff !important;
+}
+
+/* Hover */
+.pagination .page-link:hover {
+  background: var(--red-light) !important;
+  color: var(--red-dark) !important;
+}
+
+/* Active page (this is what Bootstrap makes blue) */
+.pagination .page-item.active .page-link {
+  background: var(--red-dark) !important;
+  border-color: var(--red-dark) !important;
+  color: #fff !important;
+}
+
+/* Disabled */
+.pagination .page-item.disabled .page-link {
+  color: #bbb !important;
+  border-color: #eee !important;
+  background: #fff !important;
+}
