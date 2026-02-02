@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
 
-  <link rel="stylesheet" href="help.css" />
+  <link rel="stylesheet" href="help.css"?v=<?= time() ?>/>
 </head>
 
 <body class="page-help">
@@ -26,22 +26,20 @@
           <div class="help-nav__search">
             <input id="helpSearch" class="input" type="search" placeholder="Search help..." />
           </div>
-
-          <div class="help-nav__role">
-            <div class="segmented" role="tablist" aria-label="Role toggle">
-              <button class="segmented__btn is-active" data-role="all" type="button">All</button>
-              <button class="segmented__btn" data-role="admin" type="button">Admin</button>
-              <button class="segmented__btn" data-role="reader" type="button">Reader</button>
-            </div>
-            <p class="help-nav__hint">Choose a role to hide irrelevant actions.</p>
-          </div>
-
+          
           <nav class="help-nav__links">
             <a class="help-link" href="#getting-started">Getting Started</a>
             <a class="help-link" href="#login">Login</a>
             <a class="help-link" href="#dashboard">Dashboard</a>
             <a class="help-link" href="#menu">Menu & Navigation</a>
             <a class="help-link" href="#notifications">Notifications</a>
+            <a class="help-link" href="#add_transactions">Add Transactions</a>
+            <a class="help-link" href="#transactions">Transactions</a>
+            <a class="help-link" href="#add_students">Add Students</a>
+            <a class="help-link" href="#import_files">Import Files</a>
+            <a class="help-link" href="#unconfirmed">Unconfirmed</a>
+            <a class="help-link" href="#student_state">Student State</a>
+            <a class="help-link" href="#latencies">Latencies</a>
             <a class="help-link" href="#schoolyear">School Year & Limits</a>
           </nav>
 
@@ -96,14 +94,14 @@
                 <h3>Overview & control</h3>
                 <p>
                 In addition to individual student balances, the system provides statistics and overviews that show the current state of payments across all students — including totals, outstanding amounts, and critical cases.
-                </p>
+                </p>       
               
-
                 <div class="callout callout--info">
                   <strong>Role-based access:</strong> Only authorized users can confirm, adjust, or override payment data.
                 </div>
               </div>
 
+              <div class="stack">
               <div class="panel flow">
                 <h3>Payment lifecycle</h3>
                 <ul class="flow-list">
@@ -114,6 +112,7 @@
                   <li><span class="flow-dot"></span><span>Monitoring & notifications</span></li>
                 </ul>
               </div>
+              
 
               <div class="panel role-split">
                 <h3>Who does what</h3>
@@ -151,6 +150,8 @@
                   If something needs your attention, the system will clearly indicate it.
                 </p>
               </div> 
+              </div>
+            </div>
           </article>
 
           <!-- Login -->
@@ -160,24 +161,23 @@
               <p class="muted">How to access the system and what the fields mean.</p>
             </header>
 
+          
+
             <div class="media">
               <figure class="shot">
-                <img src="assets/help/login.png" alt="Login page screenshot" />
-                <span class="marker m1">1</span>
-                <span class="marker m2">2</span>
-                <span class="marker m3">3</span>
+                <img src="/help_page_images/Login_page.png" alt="Login page screenshot" />
               </figure>
 
               <div class="legend">
                 <h3>On this screen</h3>
                 <ul class="legend__list">
-                  <li><span class="dot">1</span> Username or Email</li>
-                  <li><span class="dot">2</span> Password (eye icon shows/hides it)</li>
-                  <li><span class="dot">3</span> Log in button</li>
+                  <li><span class="dot">1</span> Put your username or email</li>
+                  <li><span class="dot">2</span> Put your password <br>(The eye icon shows/hides it)</li>
+                  <li><span class="dot">3</span> Press to log in</li>
                 </ul>
 
                 <div class="callout callout--warning">
-                  <strong>Roles:</strong> Admin can confirm/override; Reader can only view.
+                  <strong>Roles:</strong> <br> Admin can confirm/override<br>Reader can only view.
                 </div>
               </div>
             </div>
@@ -201,27 +201,75 @@
 
             <div class="media">
               <figure class="shot">
-                <img src="assets/help/dashboard.png" alt="Dashboard screenshot" />
-                <span class="marker m1">1</span>
-                <span class="marker m2">2</span>
-                <span class="marker m3">3</span>
-                <span class="marker m4">4</span>
-                <span class="marker m5">5</span>
+                <img src="/help_page_images/dashboard.png" alt="Dashboard screenshot" />
               </figure>
 
               <div class="legend">
-                <h3>What the dashboard shows</h3>
-                <ul class="legend__list">
-                  <li><span class="dot">1</span> Payments chart (month-by-month)</li>
-                  <li><span class="dot">2</span> Number of students</li>
-                  <li><span class="dot">3</span> Critical cases</li>
-                  <li><span class="dot">4</span> Total transactions</li>
-                  <li><span class="dot">5</span> Left to pay (outstanding total)</li>
-                </ul>
+              <h3>What the dashboard shows</h3>
+              <ul class="legend__list">
 
-                <div class="callout callout--info">
-                  Dashboard is <strong>informational</strong>. It does not change data.
-                </div>
+                <li>
+                  <div>
+                    <span class="dot">1</span>
+                    <strong>Payments chart (month-by-month)</strong><br>
+                    This chart shows how much money has been processed throughout the year. Each bar represents the total payment amount for a month, helping you spot trends, increases, or unusual drops in payment activity.
+                  </div>
+                </li>
+
+                <li>
+                  
+                  <div>
+                    <span class="dot">2</span>
+                    <strong>Number of students</strong><br>
+                    Displays the total number of students currently registered in the system. It gives context to financial data and shows how many student records are actively being managed.
+                  </div>
+                </li>
+
+                <li>
+                  <div>
+                    <span class="dot">3</span>
+                    <strong>Critical cases</strong><br>
+                    Highlights students or situations that require attention, such as payment issues or transaction matching problems. This acts as an alert area so administrators can quickly identify problems that need action.
+                  </div>
+                </li>
+
+                <li>
+                  <div>
+                    <span class="dot">4</span>
+                    <strong>Total transactions</strong><br>
+                    Shows the total number of processed payment transactions in the system. It reflects overall system activity and how frequently payments are being recorded and matched.
+                  </div>
+                </li>
+
+                <li>
+                  <div>
+                    <span class="dot">5</span>
+                    <strong>Left to pay (outstanding total)</strong><br>
+                    Indicates the total remaining unpaid amount across all students for the current school year. This is a key financial indicator that helps monitor how much money is still expected to be collected.
+                  </div>
+                </li>
+
+                <li>
+                  <div>
+                    <span class="dot">6</span>
+                    <strong>Transaction summary</strong><br>
+                    This section gives a quick financial overview of the current month. It shows how many payments have been processed and the total amount collected so far. It helps administrators track monthly progress at a glance without checking detailed reports.
+                  </div>
+                </li>
+
+                <li>
+                  <div>
+                    <span class="dot">7</span>
+                    <strong>Messages</strong><br>
+                    Displays important system status information. This includes payments waiting for administrator confirmation, whether transactions were successfully calculated, and the date of the last data import. It acts as a system health and activity indicator.
+                    </div>
+                  </div>
+                </li>
+
+              </ul>
+
+              <div class="callout callout--info">
+                The dashboard is <strong>informational</strong> and gives a real-time overview. It does not modify any data.
               </div>
             </div>
           </article>
@@ -235,7 +283,7 @@
 
             <div class="media">
               <figure class="shot">
-                <img src="assets/help/menu.png" alt="Sidebar menu screenshot" />
+                <img src="/help_page_images/menu.png" alt="Sidebar menu screenshot" />
               </figure>
 
               <div class="legend">
@@ -255,18 +303,319 @@
                 </div>
               </div>
             </div>
-          </article>
+          </article>  
 
-          <!-- Notifications -->
+         <!-- Notifications -->
           <article id="notifications" class="help-section card" data-title="notifications">
             <header class="help-section__header">
               <h2>Notifications</h2>
+              <p class="muted">
+                Your notifications center: new matches, late-fee events, and data issues information.
+              </p>
+            </header>
+
+            <div class="media">
+              <figure class="shot">
+                <img src="/help_page_images/notifications.png" alt="Notifications page screenshot" />
+              </figure>
+
+              <div class="legend">
+                <h3>How to use this page</h3>
+
+                <ul class="legend__list">
+
+                  <li>
+                    <span class="dot">1</span>
+                    <strong>Notifications table:</strong>
+                    Each row shows what happened (Description), 
+                    who it affects (Student ID), 
+                    which transaction is involved (Invoice ID), 
+                    how serious it is (Urgency), 
+                    and when it occurred (Timestamp).
+                  </li>
+
+                  <li>
+                    <span class="dot">2</span>  
+                    <strong>Search bar:</strong>
+                    Use the search bar to narrow results by Student ID, Invoice ID,
+                    Urgency (<em>Critical / Warning / Info</em>), or keywords (e.g. <code>HTL-…</code>).
+                  </li>
+
+                  <li>
+                      <span class="dot">3</span> 
+                      <strong>Mark as read (checkbox):</strong>
+                      Tick the box on a row to select that notification. Selecting does not change the notification.
+                  </li>
+
+                  <li>
+                    <span class="dot">4</span>
+                    <strong>Mark all selected as read (button):</strong>
+                    Click <em>“Mark all selected as read”</em> to confirm you reviewed the selected notifications.
+                    This will hide them from the default “unread” view.
+                  </li>
+          
+                </ul>
+
+                <div class="callout callout--danger">
+                  <strong>Mark as read ≠ fixed.</strong> “Mark as read only acknowledges the message. Fixing the invoice/match must be done in the relevant page.”
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- Add transactions -->
+          <article id="add_transactions" class="help-section card" data-title="add transactions">
+            <header class="help-section__header">
+              <h2>Add Transaction</h2>
+              <p class="muted">
+                Manually record a payment. The better the reference/details, the more accurate the automatic matching.
+              </p>
+            </header>
+
+            <div class="media">
+              <figure class="shot">
+                <img src="/help_page_images/add_transactions.png" alt="Add Transaction page screenshot" />
+              </figure>
+
+              <div class="legend">
+                <h3>How to fill the form</h3>
+
+                <ul class="legend__list">
+                  <li><span class="dot">1</span> <strong>Reference</strong>: enter the student reference ID (<code>HTL-…</code>) if available</li>
+                  <li><span class="dot">2</span> <strong>Reference Number</strong>: keep the bank/payment identifier exactly as given</li>
+                  <li><span class="dot">3</span> <strong>Ordering Name</strong>: payer name (parent/student) — helps fallback matching</li>
+                  <li><span class="dot">4</span> <strong>Processing Date</strong>: real booking date (affects lateness/fees and timeline)</li>
+                  <li><span class="dot">5</span> <strong>Amount</strong>: paid amount (use the correct currency and decimals)</li>
+                </ul>
+
+                <div class="callout callout--info">
+                  <strong>Best practice:</strong> If you have a valid reference ID, use it. It’s the strongest signal for correct assignment.
+                </div>
+
+                <div class="callout callout--warning">
+                  <strong>Common mistake:</strong> Missing/incorrect reference → payment may land in <em>Unconfirmed</em> and require admin review.
+                </div>
+              </div>
+            </div>
+          </article>
+
+
+          <!-- Transactions -->
+          <article id="transactions" class="help-section card" data-title="transactions">
+            <header class="help-section__header">
+              <h2>Transactions</h2>
+              <p class="muted">
+                Complete list of all recorded payments, with tools to review, edit, and audit financial data.
+              </p>
+            </header>
+
+            <div class="media">
+              <figure class="shot">
+                <img src="/help_page_images/transactions.png" alt="Transactions overview screenshot" />
+              </figure>
+
+              <div class="legend">
+                <h3>Table columns</h3>
+
+                <ul class="legend__list">
+                  <li>
+                    <span class="dot">1</span>
+                    <strong>Beneficiary:</strong>
+                    Name of the person who made the payment.
+                  </li>
+
+                  <li>
+                    <span class="dot">2</span>
+                    <strong>Reference:</strong>
+                    The structured payment reference used for automatic matching.
+                  </li>
+
+                  <li>
+                    <span class="dot">3</span>
+                    <strong>Reference Nr:</strong>
+                    Bank-provided transaction identifier.
+                  </li>
+
+                  <li>
+                    <span class="dot">4</span>
+                    <strong>Description:</strong>
+                    Payment note imported from the bank.
+                  </li>
+
+                  <li>
+                    <span class="dot">5</span>
+                    <strong>Processing Date:</strong>
+                    Date the transaction was processed.
+                  </li>
+
+                  <li>
+                    <span class="dot">6</span>
+                    <strong>Amount:</strong>
+                    Total payment value.
+                  </li>
+
+                  <li>
+                    <span class="dot">7</span>
+                    <strong>Actions:</strong>
+                    <strong>Pen</strong> = edit the transaction.  
+                    <strong>Trash bin</strong> = delete the transaction from the database.
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+
+            <div class="media">
+              <div class="legend">
+                <h3>Editing a transaction</h3>
+                  <figure class="shot" id="transactions_edit">
+                    <img src="/help_page_images/transactions_edit.png" alt="Transaction edit screenshot" />
+                  </figure>
+                <ul class="legend__list">
+                  <li>
+                    <span class="dot">1</span>
+                    <strong>Amount:</strong>
+                    Update the payment value if it was recorded incorrectly.
+                  </li>
+
+                  <li>
+                    <span class="dot">2</span>
+                    <strong>Description:</strong>
+                    Modify the payment note for clarity or correction.
+                  </li>
+
+                  <li>
+                    <span class="dot">3</span>
+                    <strong>Save:</strong>
+                    Applies the changes immediately.
+                  </li>
+
+                  <li>
+                    <span class="dot">4</span>
+                    <strong>Cancel:</strong>
+                    Discards all changes.
+                  </li>
+                </ul>
+
+                <div class="callout callout--warning">
+                  Editing a transaction directly impacts balances, matching results, and financial records.
+                  Only modify entries when you are certain the change is correct.
+                </div>
+              </div>
+            </div>
+
+          </article>
+
+
+
+          <!-- Add Students -->
+          <article id="add_students" class="help-section card" data-title="add_students">
+            <header class="help-section__header">
+              <h2>Add Students</h2>
+              <p class="muted">
+                Create a new student record that payments, balances, and notifications can be linked to.
+              </p>
+            </header>
+
+            <div class="media">
+              <figure class="shot">
+                <img src="/help_page_images/add_student.png" alt="Add student form screenshot" />
+              </figure>
+
+              <div class="legend">
+                <h3>How to fill this form</h3>
+
+                <ul class="legend__list">
+                  <li><span class="dot">1</span> Enter the student’s <strong>official name</strong> (used for matching)</li>
+                  <li><span class="dot">2</span> Use <strong>Long Name</strong> for full legal or descriptive naming</li>
+                  <li><span class="dot">3</span> Assign the correct <strong>class</strong> — this affects grouping and statistics</li>
+                  <li><span class="dot">4</span> Set initial <strong>Left to Pay</strong> if required</li>
+                </ul>
+
+                <div class="callout callout--info">
+                  Student records are the <strong>anchor</strong> for transactions, balances, late fees, and notifications.
+                </div>
+
+                <div class="callout callout--warning">
+                  Incorrect names or classes may cause <strong>failed or inaccurate payment matching</strong>.
+                  Always double-check before submitting.
+                </div>
+              </div>
+            </div>
+          </article>
+
+
+           <!-- Import Files -->
+           <article id="import_files" class="help-section card" data-title="import_files">
+            <header class="help-section__header">
+              <h2>Import Files</h2>
+              <p class="muted">
+                Upload structured CSV files into the system and access previously imported files for auditing.
+              </p>
+            </header>
+
+            <div class="media">
+              <figure class="shot">
+                <img src="/help_page_images/import_files.png" alt="Import files screenshot" />
+              </figure>
+
+              <div class="legend">
+                <h3>What you see here</h3>
+
+                <p>
+                  The screenshot shows the <strong>Transactions</strong> import tab. The <strong>Students</strong> and
+                  <strong>Legal Guardians</strong> tabs work the exact same way. To switch, use the tabs above the table.
+                </p>
+
+                <h3>Table columns</h3>
+                <ul class="legend__list">
+                  <li>
+                    <span class="dot">1</span>
+                    <strong>Filename:</strong> Name of the uploaded CSV file stored by the system.
+                  </li>
+                  <li>
+                    <span class="dot">2</span>
+                    <strong>Import Date:</strong> When the file was uploaded (used for tracking and auditing).
+                  </li>
+                  <li>
+                    <span class="dot">3</span>
+                    <strong>Imported By:</strong> User account that performed the import.
+                  </li>
+                  <li>
+                    <span class="dot">4</span>
+                    <strong>Import File:</strong> Upload a new CSV into the currently selected tab (Transactions / Students / Legal Guardians).
+                  </li>
+                  <li>
+                    <span class="dot">5</span>
+                    <strong>Download:</strong> Download the original imported file again for verification or documentation.
+                  </li>
+                </ul>
+
+                <div class="callout callout--warning">
+                  <strong>Duplicate prevention:</strong>
+                  The system blocks files that were already imported to avoid duplicate database entries.
+                </div>
+
+                <div class="callout callout--danger">
+                  <strong>Strict CSV validation:</strong>
+                  Only the expected CSV format is accepted for the selected tab. If the file type or structure does not match,
+                  the import stops immediately with an error.
+                </div>
+              </div>
+            </div>
+          </article>
+
+
+           <!-- Student State -->
+           <article id="student_state" class="help-section card" data-title="student_state">
+            <header class="help-section__header">
+              <h2>Student State</h2>
               <p class="muted">Warnings and system messages you must review.</p>
             </header>
 
             <div class="media">
               <figure class="shot">
-                <img src="assets/help/notifications.png" alt="Notifications screenshot" />
+                <img src="/help_page_images/student_state.png" alt="Notifications screenshot" />
               </figure>
 
               <div class="legend">
@@ -284,6 +633,56 @@
             </div>
           </article>
 
+
+
+           <!-- Latencies -->
+           <article id="latencies" class="help-section card" data-title="latencies">
+            <header class="help-section__header">
+              <h2>Latencies</h2>
+              <p class="muted">
+                Overview of how late each student is based on the most recent recorded transaction compared to the latest import.
+              </p>
+            </header>
+
+            <div class="media">
+              <figure class="shot">
+                <img src="/help_page_images/latencies.png" alt="Latencies table screenshot" />
+              </figure>
+
+              <div class="legend">
+                <h3>Table columns</h3>
+
+                <ul class="legend__list">
+                  <li>
+                    <span class="dot">1</span>
+                    <strong>Student Name:</strong>
+                    The student this row refers to.
+                  </li>
+
+                  <li>
+                    <span class="dot">2</span>
+                    <strong>Last Transaction Date:</strong>
+                    The date of the student’s most recent payment recorded in the system.
+                    If it shows <strong>—</strong>, no transaction exists for that student yet.
+                  </li>
+
+                  <li>
+                    <span class="dot">3</span>
+                    <strong>Last Import Date:</strong>
+                    The timestamp of the latest import run (the moment the system last received new bank data).
+                  </li>
+
+                  <li>
+                    <span class="dot">4</span>
+                    <strong>Days Late:</strong>
+                    The number of days between the last transaction date and the last import date.
+                    If the student is not late, it shows <strong>Paid on time</strong>.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </article>
+
           <!-- Schoolyear -->
           <article id="schoolyear" class="help-section card" data-title="school year limits">
             <header class="help-section__header">
@@ -293,7 +692,7 @@
 
             <div class="media">
               <figure class="shot">
-                <img src="assets/help/schoolyear.png" alt="School year popup screenshot" />
+                <img src="/help_page_images/schoolyear.png" alt="School year popup screenshot" />
               </figure>
 
               <div class="legend">
@@ -366,3 +765,5 @@
   </script>
 </body>
 </html>
+
+

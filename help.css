@@ -24,7 +24,7 @@ body{
    If your global CSS already sets #content padding, remove this block.
    If not, keep it here for Help page only. */
 .page-help #content{
-  padding: 120px 30px 60px;
+  padding-top: 120px;
 }
 
 /* Make sure anchor jumps don't hide headings under fixed header */
@@ -131,13 +131,6 @@ body{
   line-height: 1.4;
 }
 
-/* Make the right column panel stack feel intentional */
-#helpPage .help-section .grid2 > .panel{
-  min-height: 420px; /* gives the right side presence on desktop */
-  display: flex;
-  flex-direction: column;
-}
-
 /* If you use multiple stacked panels inside the right column */
 #helpPage .stack{
   display: flex;
@@ -202,49 +195,6 @@ body{
   inset: 5px;
   border-radius: 999px;
   background: rgba(213,71,63,.85);
-}
-
-/* ---------- ROLE SPLIT (two cards) ---------- */
-#helpPage .role-split{
-  background: #fff;
-}
-
-#helpPage .role{
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 12px;
-  background: #fff;
-}
-
-#helpPage .role + .role{
-  margin-top: 10px;
-}
-
-#helpPage .role strong{
-  display: block;
-  margin-bottom: 6px;
-  font-size: 14px;
-}
-
-#helpPage .role ul{
-  margin: 0;
-  padding-left: 18px;
-  color: var(--muted);
-}
-
-#helpPage .role ul li{
-  margin: 6px 0;
-}
-
-/* subtle visual distinction */
-#helpPage .role-admin{
-  border-color: rgba(213,71,63,.25);
-  background: rgba(213,71,63,.04);
-}
-
-#helpPage .role-reader{
-  border-color: rgba(107,114,128,.22);
-  background: rgba(107,114,128,.05);
 }
 
 /* ---------- GUIDANCE / CHECKLIST ---------- */
@@ -384,40 +334,7 @@ body{
   gap:14px;
 }
 
-/* Getting Started: left tall panel, right three stacked cards */
-#helpPage #getting-started .grid2{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: repeat(3, minmax(0, 1fr));
-  gap:14px;
-  align-items:stretch;
-}
-#helpPage #getting-started .grid2 > .panel:not(.flow):not(.role-split):not(.guidance){
-  grid-column:1;
-  grid-row:1 / span 3;
-  height:100%;
-}
-#helpPage #getting-started .grid2 > .panel.flow{
-  grid-column:2;
-  grid-row:1;
-  height:100%;
-  display:flex;
-  flex-direction:column;
-}
-#helpPage #getting-started .grid2 > .panel.role-split{
-  grid-column:2;
-  grid-row:2;
-  height:100%;
-  display:flex;
-  flex-direction:column;
-}
-#helpPage #getting-started .grid2 > .panel.guidance{
-  grid-column:2;
-  grid-row:3;
-  height:100%;
-  display:flex;
-  flex-direction:column;
-}
+
 #helpPage .panel{
   border:1px solid var(--line);
   border-radius:12px;
@@ -438,6 +355,7 @@ body{
   gap:16px;
   align-items:start;
 }
+
 #helpPage .shot{
   position:relative;
   margin:0;
@@ -567,4 +485,62 @@ body{
     grid-column:auto;
     grid-row:auto;
   }
+}
+
+#helpPage #getting-started .grid2{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:14px;
+  align-items:start;
+}
+
+/* Kill the global min-height ONLY for getting-started panels */
+#helpPage #getting-started .grid2 > .panel,
+#helpPage #getting-started .grid2 > .stack > .panel{
+  min-height: unset !important;
+  height: auto;
+}
+
+/* Right column wrapper: stack panels naturally (content decides height) */
+#helpPage #getting-started .grid2 > .stack{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  align-self:start;
+  height:auto;
+}
+
+/* Ensure right panels don’t stretch artificially */
+#helpPage #getting-started .grid2 > .stack > .panel{
+  flex: unset;
+  height: auto;
+}
+
+/* Mobile: already stacks; keep it clean */
+@media (max-width:1100px){
+  #helpPage #getting-started .grid2{
+    grid-template-columns:1fr;
+  }
+}
+
+
+/* Dashboard section: stack screenshot and legend vertically */
+
+#helpPage #dashboard .media,
+#helpPage #notifications .media,
+#helpPage #import_files .media,
+#helpPage #transactions .media{
+  grid-template-columns: 1fr !important;   /* remove 2-column grid */
+}
+
+#helpPage #dashboard .legend,
+#helpPage #notifications .legend,
+#helpPage #import_files .legend,
+#helpPage #transactions .legend{
+  margin-top: 10px; /* space under the image */
+}
+
+#helpPage #transactions #transactions_edit{
+  margin-top: 10px;
+  margin-bottom: 10px;
 }
