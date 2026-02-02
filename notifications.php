@@ -27,6 +27,90 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['mark_many'])) {
 }
 
 /* ===============================================================
+   1b) SEND EMAIL TO PARENT (urgent only)   <-- NEW
+   =============================================================== */
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['send_parent_email'])) {
+
+    // Hard gate: only admins can trigger emails
+    if (empty($isAdmin) || $isAdmin !== true) {
+        http_response_code(403);
+        echo "FORBIDDEN";
+        exit;
+    }
+
+    $notifId = intval($_POST['send_parent_email']);
+    if ($notifId <= 0) {
+        http_response_code(400);
+        echo "BAD_ID";
+        exit;
+    }
+
+    // Fetch notification and ensure it's urgent
+    $stmt = $conn->prepare("
+        SELECT id, urgency, student_id, invoice_reference, description, time_from
+        FROM NOTIFICATION_TAB
+        WHERE id = ?
+        LIMIT 1
+    ");
+    if (!$stmt) {
+        http_response_code(500);
+        echo "DB_PREP_FAIL";
+        exit;
+    }
+
+    $stmt->bind_param("i", $notifId);
+    $stmt->execute();
+    $notif = $stmt->get_result() ? $stmt->get_result()->fetch_assoc() : null;
+    $stmt->close();
+
+    if (!$notif) {
+        http_response_code(404);
+        echo "NOT_FOUND";
+        exit;
+    }
+
+    if (($notif['urgency'] ?? '') !== 'urgent') {
+        http_response_code(400);
+        echo "NOT_URGENT";
+        exit;
+    }
+
+    // ------------------------------------------------------------
+    // HOOK: call your existing PHP mail script here
+    // You decide how to resolve parent email(s).
+    // ------------------------------------------------------------
+
+    // Example: you might have a function already:
+    // require_once "mail/send_parent_latefee.php";
+    // $ok = sendLateFeeEmailToParents($conn, $notif);
+
+    // For now, we call a placeholder include that YOU implement.
+    // It should return true/false and set $errorMsg if needed.
+    $ok = false;
+    $errorMsg = "";
+
+    try {
+        require_once "send_parent_email.php"; // <-- YOU provide this file
+        if (function_exists('sendParentEmailForNotification')) {
+            $ok = sendParentEmailForNotification($conn, $notif, $errorMsg);
+        } else {
+            $errorMsg = "Missing function sendParentEmailForNotification() in send_parent_email.php";
+        }
+    } catch (Throwable $e) {
+        $errorMsg = $e->getMessage();
+        $ok = false;
+    }
+
+    if ($ok) {
+        echo "OK";
+    } else {
+        http_response_code(500);
+        echo "MAIL_FAIL: " . $errorMsg;
+    }
+    exit;
+}
+
+/* ===============================================================
    NAVIGATOR
    =============================================================== */
 require "navigator.php";
@@ -54,7 +138,6 @@ $countResult = $conn->query("SELECT COUNT(*) as total FROM NOTIFICATION_TAB $sea
 $totalRows = ($countResult && ($r = $countResult->fetch_assoc())) ? (int)$r["total"] : 0;
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
 
-/* clamp page so ?page=999 doesn't show empty table */
 $page = min($page, $totalPages);
 $offset = ($page - 1) * $perPage;
 
@@ -190,6 +273,33 @@ body {
 }
 .mark-read-button:hover { background:#8d1727; }
 
+/* NEW: send email button */
+/* Link-style admin action */
+.notify-btn{
+    background:none;
+    border:none;
+    padding:0;
+    margin:0;
+    font-family:'Montserrat';
+    font-weight:600;
+    font-size:13px;
+    color:#444;
+    cursor:pointer;
+    text-decoration:underline;
+    transition: color .18s ease;
+}
+
+.notify-btn:hover{
+    color:#B31E32; /* your red-dark */
+}
+
+.notify-btn:disabled{
+    color:#aaa;
+    cursor:not-allowed;
+    text-decoration:none;
+}
+
+
 /* PAGINATION */
 .pagination{
     display:flex;
@@ -247,7 +357,6 @@ body {
     <input type="text" name="search" placeholder="Search…"
            value="<?= htmlspecialchars($search) ?>"
            style="flex:1; border:none; background:transparent; outline:none; font-family:'Montserrat'; font-size: 13px;">
-    <!-- keep page=1 when searching -->
     <?php if ($search !== ""): ?>
         <input type="hidden" name="page" value="1">
     <?php endif; ?>
@@ -257,13 +366,14 @@ body {
 <table class="notification-table">
 <thead>
 <tr>
-    <th>Description</th>
+    <th style="width:350px;">Description</th>
     <th>Student ID</th>
     <th>Invoice ID</th>
     <th>Urgency</th>
     <th>Timestamp</th>
     <?php if ($isAdmin): ?>
-    <th style="width:140px;">Mark as read</th>
+      <th style="width:140px;">Mark as read</th>
+<th style="width:120px;">Notify Parent</th>
     <?php endif; ?>
 </tr>
 </thead>
@@ -288,6 +398,8 @@ body {
         $badgeClass = "info";
         $badgeText = "Info";
     }
+
+    $isUrgent = ($row["urgency"] === "urgent");
 ?>
 <tr id="row_<?= (int)$row['id'] ?>" class="<?= $urgencyRowClass ?> <?= $isRead ? 'read-row' : '' ?>">
     <td><?= nl2br(htmlspecialchars($row["description"])) ?></td>
@@ -305,6 +417,19 @@ body {
     <td>
         <input type="checkbox" class="bulk-check" value="<?= (int)$row['id'] ?>"
                style="width:16px; height:16px; cursor:pointer;">
+    </td>
+
+    <!-- NEW: Notify Parent column -->
+    <td>
+        <?php if ($isUrgent): ?>
+            <button type="button"
+        class="notify-btn"
+        onclick="sendParentEmail(<?= (int)$row['id'] ?>, this)">
+    Send Email
+</button>
+        <?php else: ?>
+            <!-- empty for info/warning -->
+        <?php endif; ?>
     </td>
     <?php endif; ?>
 </tr>
@@ -399,6 +524,37 @@ function markAllSelected() {
         } else {
             alert("Error: " + resp);
         }
+    });
+}
+
+/* NEW: Send parent email for urgent notifications only */
+function sendParentEmail(notifId, btn){
+    if (!confirm("Send an email to the parent(s) for this CRITICAL notification?")) return;
+
+    btn.disabled = true;
+    const oldText = btn.innerHTML;
+    btn.innerHTML = '<span class="material-icons-outlined" style="font-size:18px;">hourglass_top</span> SENDING...';
+
+    const formData = new URLSearchParams();
+    formData.append('send_parent_email', notifId);
+
+    fetch("notifications.php", {
+        method: "POST",
+        headers: {"Content-Type":"application/x-www-form-urlencoded"},
+        body: formData.toString()
+    })
+    .then(r => r.text().then(t => ({ok:r.ok, text:t})))
+    .then(({ok, text}) => {
+        if (ok && text.trim() === "OK") {
+            alert("Email sent.");
+        } else {
+            alert("Email failed:\n" + text);
+        }
+    })
+    .catch(err => alert("Network error: " + err))
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = oldText;
     });
 }
 </script>

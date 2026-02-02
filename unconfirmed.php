@@ -8,7 +8,102 @@ require 'db_connect.php';
 require_once 'matching_functions.php';
 
 $success_message = "";
-$error_message = "";
+$error_message   = "";
+
+/* ===============================================================
+   FILTERS (from filters.php for unconfirmed.php)
+   Keys:
+   - beneficiary
+   - reference_number
+   - q
+   - transaction_type (optional)
+   - from / to
+   - amount_min / amount_max
+   - page
+   - invoice_id (selected row)
+   =============================================================== */
+$filterBeneficiary = trim($_GET['beneficiary'] ?? '');
+$filterRefNumber   = trim($_GET['reference_number'] ?? '');
+$filterText        = trim($_GET['q'] ?? '');
+$filterType        = trim($_GET['transaction_type'] ?? '');
+
+$filterFrom        = trim($_GET['from'] ?? '');
+$filterTo          = trim($_GET['to'] ?? '');
+$filterMin         = trim($_GET['amount_min'] ?? '');
+$filterMax         = trim($_GET['amount_max'] ?? '');
+
+/* ===============================================================
+   PAGINATION
+   =============================================================== */
+$limit = 10;
+$page  = isset($_GET['page']) && is_numeric($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+
+$paginationBase = $_GET;
+unset($paginationBase['page']);
+
+/* ===============================================================
+   BASE WHERE (UNCONFIRMED = student_id IS NULL)
+   =============================================================== */
+$clauses = [];
+$clauses[] = "t.student_id IS NULL";
+
+// Ordering Name
+if ($filterBeneficiary !== '') {
+    $like = "%" . $conn->real_escape_string($filterBeneficiary) . "%";
+    $clauses[] = "t.beneficiary LIKE '{$like}'";
+}
+
+// Reference Number
+if ($filterRefNumber !== '') {
+    $like = "%" . $conn->real_escape_string($filterRefNumber) . "%";
+    $clauses[] = "t.reference_number LIKE '{$like}'";
+}
+
+// Text search (reference + description)
+if ($filterText !== '') {
+    $like = "%" . $conn->real_escape_string($filterText) . "%";
+    $clauses[] = "(t.reference LIKE '{$like}' OR t.description LIKE '{$like}')";
+}
+
+// Transaction type (optional)
+if ($filterType !== '') {
+    $type = $conn->real_escape_string($filterType);
+    $clauses[] = "t.transaction_type = '{$type}'";
+}
+
+// Date range
+if ($filterFrom !== '') {
+    $clauses[] = "t.processing_date >= '" . $conn->real_escape_string($filterFrom) . "'";
+}
+if ($filterTo !== '') {
+    $clauses[] = "t.processing_date <= '" . $conn->real_escape_string($filterTo) . "'";
+}
+
+// Amount range
+if ($filterMin !== '' && is_numeric($filterMin)) {
+    $clauses[] = "t.amount_total >= " . (float)$filterMin;
+}
+if ($filterMax !== '' && is_numeric($filterMax)) {
+    $clauses[] = "t.amount_total <= " . (float)$filterMax;
+}
+
+$whereSql = "WHERE " . implode(" AND ", $clauses);
+
+/* ===============================================================
+   COUNT for pagination (MUST match same WHERE)
+   =============================================================== */
+$count_sql = "
+    SELECT COUNT(*) AS total
+    FROM INVOICE_TAB t
+    {$whereSql}
+";
+$count_res  = $conn->query($count_sql);
+$totalRows  = $count_res ? (int)$count_res->fetch_assoc()['total'] : 0;
+
+$totalPages = max(1, (int)ceil($totalRows / $limit));
+if ($page > $totalPages) $page = $totalPages;
+
+$offset = ($page - 1) * $limit;
 
 /* ===============================================================
    HANDLE ADMIN CONFIRMATION (manual assign)
@@ -67,25 +162,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_invoice'])) {
 }
 
 /* ===============================================================
-   1) UNCONFIRMED TRANSACTIONS (student_id IS NULL)
+   UNCONFIRMED TRANSACTIONS (FILTERED + PAGINATED)
    =============================================================== */
 $transactions_sql = "
     SELECT 
-        id,
-        reference_number,
-        beneficiary,
-        reference,
-        amount_total,
-        processing_date
-    FROM INVOICE_TAB
-    WHERE student_id IS NULL
-    ORDER BY id DESC
-    LIMIT 50
+        t.id,
+        t.reference_number,
+        t.beneficiary,
+        t.reference,
+        t.description,
+        t.transaction_type,
+        t.amount_total,
+        t.processing_date
+    FROM INVOICE_TAB t
+    {$whereSql}
+    ORDER BY t.id DESC
+    LIMIT {$limit} OFFSET {$offset}
 ";
 $transactions_result = $conn->query($transactions_sql);
 
 /* ===============================================================
-   2) STAT CARDS
+   STAT CARDS
    =============================================================== */
 $pending_sql = "SELECT COUNT(*) AS c FROM INVOICE_TAB WHERE student_id IS NULL";
 $pending_res = $conn->query($pending_sql);
@@ -96,7 +193,7 @@ $confirmed_res = $conn->query($confirmed_sql);
 $confirmed = $confirmed_res ? (int)$confirmed_res->fetch_assoc()['c'] : 0;
 
 /* ===============================================================
-   3) SUGGESTION BOX (selected unconfirmed invoice)
+   SUGGESTION BOX (selected unconfirmed invoice)
    =============================================================== */
 $suggestion_invoice_id = null;
 $suggestion_student_id = null;
@@ -114,7 +211,7 @@ if ($active_id > 0) {
         SELECT id, reference_number, beneficiary, reference, processing_date
         FROM INVOICE_TAB
         WHERE student_id IS NULL
-          AND id = $active_id
+          AND id = {$active_id}
         LIMIT 1
     ";
 } else {
@@ -131,7 +228,6 @@ $suggestion_res = $conn->query($suggestion_sql);
 
 if ($suggestion_res && ($row = $suggestion_res->fetch_assoc())) {
 
-    // IMPORTANT: without this, sidebar will never render
     $suggestion_invoice_id = (int)$row['id'];
 
     $suggestion_invoice_ref = (string)($row['reference_number'] ?? '');
@@ -180,65 +276,6 @@ if ($suggestion_res && ($row = $suggestion_res->fetch_assoc())) {
         $reason_text = "No automatic match found.";
     }
 }
-// aus filters.php (unconfirmed.php) kommen diese Keys:
-$filterBeneficiary  = trim($_GET['beneficiary'] ?? '');        // Ordering Name -> t.beneficiary
-$filterRefNumber    = trim($_GET['reference_number'] ?? '');   // Reference Number -> t.reference_number
-$filterText         = trim($_GET['q'] ?? '');                  // Textsuche -> t.reference + t.description
-
-$filterFrom         = trim($_GET['from'] ?? '');
-$filterTo           = trim($_GET['to'] ?? '');
-$filterMin          = trim($_GET['amount_min'] ?? '');
-$filterMax          = trim($_GET['amount_max'] ?? '');
-
-$clauses = [];
-$clauses[] = "t.student_id IS NULL"; // BASE: unconfirmed only
-
-// Ordering Name
-if ($filterBeneficiary !== '') {
-    $like = "%" . $conn->real_escape_string($filterBeneficiary) . "%";
-    $clauses[] = "t.beneficiary LIKE '{$like}'";
-}
-
-// Reference Number
-if ($filterRefNumber !== '') {
-    $like = "%" . $conn->real_escape_string($filterRefNumber) . "%";
-    $clauses[] = "t.reference_number LIKE '{$like}'";
-}
-
-// Text search (reference + description)
-if ($filterText !== '') {
-    $like = "%" . $conn->real_escape_string($filterText) . "%";
-    $clauses[] = "(t.reference LIKE '{$like}' OR t.description LIKE '{$like}')";
-}
-
-
-// Date range
-if ($filterFrom !== '') {
-    $clauses[] = "t.processing_date >= '" . $conn->real_escape_string($filterFrom) . "'";
-}
-if ($filterTo !== '') {
-    $clauses[] = "t.processing_date <= '" . $conn->real_escape_string($filterTo) . "'";
-}
-
-// Amount range
-if ($filterMin !== '' && is_numeric($filterMin)) {
-    $clauses[] = "t.amount_total >= " . (float)$filterMin;
-}
-if ($filterMax !== '' && is_numeric($filterMax)) {
-    $clauses[] = "t.amount_total <= " . (float)$filterMax;
-}
-
-$whereSql = "WHERE " . implode(" AND ", $clauses);
-
-$transactions_sql = "
-  SELECT id, reference_number, beneficiary, reference, description, transaction_type, amount_total, processing_date
-  FROM INVOICE_TAB t
-  {$whereSql}
-  ORDER BY t.id DESC
-  LIMIT 50
-";
-
-$transactions_result = $conn->query($transactions_sql);
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -378,6 +415,41 @@ $transactions_result = $conn->query($transactions_sql);
     .btn:hover{opacity:.9;}
     #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; z-index: 98; }
     #overlay.show {display:block;}
+
+    /* Pagination */
+    .pager{
+      margin-top:14px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      font-size:13px;
+    }
+    .pager .meta{ color:#444; }
+    .pager .links{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+    .pager a, .pager span{
+      display:inline-block;
+      padding:8px 10px;
+      border-radius:8px;
+      border:1px solid var(--gray-light);
+      background:#fff;
+      color:#333;
+      text-decoration:none;
+      box-shadow:var(--shadow);
+      font-family:'Montserrat',sans-serif;
+      font-weight:600;
+      font-size:12px;
+    }
+    .pager span.active{
+      background:var(--red-light);
+      border-color:var(--red-main);
+      color:#000;
+    }
+    .pager a:hover{ opacity:.9; }
+    .pager a.disabled{
+      pointer-events:none;
+      opacity:.45;
+    }
   </style>
 </head>
 <body>
@@ -388,6 +460,18 @@ $transactions_result = $conn->query($transactions_sql);
 
       <div class="layout">
         <section class="card">
+
+          <?php if ($success_message): ?>
+            <div class="card" style="background:#E7F7E7; color:#2E7D32; padding:12px; border:1px solid #C8E6C9; margin-bottom:14px;">
+              <?= htmlspecialchars($success_message, ENT_QUOTES, 'UTF-8') ?>
+            </div>
+          <?php endif; ?>
+          <?php if ($error_message): ?>
+            <div class="card" style="background:#FCE8E6; color:#B71C1C; padding:12px; border:1px solid #F5C6CB; margin-bottom:14px;">
+              <?= htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8') ?>
+            </div>
+          <?php endif; ?>
+
           <table>
             <thead>
               <tr>
@@ -402,15 +486,12 @@ $transactions_result = $conn->query($transactions_sql);
               <?php if ($transactions_result && $transactions_result->num_rows > 0): ?>
                 <?php while($row = $transactions_result->fetch_assoc()): ?>
                   <?php $row_id = (int)$row['id']; ?>
-                  <tr
-                    data-invoice-id="<?= $row_id ?>"
-                    class="<?= ($active_id === $row_id) ? 'active-row' : '' ?>"
-                  >
-                    <td><?= htmlspecialchars($row['reference_number'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-                    <td><?= htmlspecialchars($row['beneficiary'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
-                    <td><?= htmlspecialchars($row['reference'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+                  <tr data-invoice-id="<?= $row_id ?>" class="<?= ($active_id === $row_id) ? 'active-row' : '' ?>">
+                    <td><?= htmlspecialchars((string)($row['reference_number'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars((string)($row['beneficiary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars((string)($row['reference'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                     <td><?= !empty($row['processing_date']) ? date("d/m/Y", strtotime($row['processing_date'])) : '-' ?></td>
-                    <td class="amount"><?= number_format((float)$row['amount_total'], 2, ',', '.') ?> <?= CURRENCY ?></td>
+                    <td class="amount"><?= number_format((float)($row['amount_total'] ?? 0), 2, ',', '.') ?> <?= CURRENCY ?></td>
                   </tr>
                 <?php endwhile; ?>
               <?php else: ?>
@@ -418,20 +499,61 @@ $transactions_result = $conn->query($transactions_sql);
               <?php endif; ?>
             </tbody>
           </table>
+
+          <!-- Pagination UI -->
+          <div class="pager">
+            <div class="meta">
+              <?= (int)$totalRows ?> results • Page <?= (int)$page ?> / <?= (int)$totalPages ?>
+            </div>
+
+            <div class="links">
+              <?php
+                $baseQuery = http_build_query($paginationBase);
+
+                $prevPage = max(1, $page - 1);
+                $nextPage = min($totalPages, $page + 1);
+
+                $prevUrl = "?" . ($baseQuery ? $baseQuery . "&" : "") . "page=" . $prevPage;
+                $nextUrl = "?" . ($baseQuery ? $baseQuery . "&" : "") . "page=" . $nextPage;
+
+                $prevClass = ($page <= 1) ? "disabled" : "";
+                $nextClass = ($page >= $totalPages) ? "disabled" : "";
+              ?>
+              <a class="<?= $prevClass ?>" href="<?= htmlspecialchars($prevUrl, ENT_QUOTES, 'UTF-8') ?>">&laquo; Prev</a>
+
+              <?php
+                $window = 2;
+                $start = max(1, $page - $window);
+                $end   = min($totalPages, $page + $window);
+
+                if ($start > 1) {
+                  $u = "?" . ($baseQuery ? $baseQuery . "&" : "") . "page=1";
+                  echo '<a href="'.htmlspecialchars($u, ENT_QUOTES, 'UTF-8').'">1</a>';
+                  if ($start > 2) echo '<span>…</span>';
+                }
+
+                for ($p = $start; $p <= $end; $p++) {
+                  if ($p === $page) {
+                    echo '<span class="active">'.(int)$p.'</span>';
+                  } else {
+                    $u = "?" . ($baseQuery ? $baseQuery . "&" : "") . "page=" . $p;
+                    echo '<a href="'.htmlspecialchars($u, ENT_QUOTES, 'UTF-8').'">'.(int)$p.'</a>';
+                  }
+                }
+
+                if ($end < $totalPages) {
+                  if ($end < $totalPages - 1) echo '<span>…</span>';
+                  $u = "?" . ($baseQuery ? $baseQuery . "&" : "") . "page=" . $totalPages;
+                  echo '<a href="'.htmlspecialchars($u, ENT_QUOTES, 'UTF-8').'">'.(int)$totalPages.'</a>';
+                }
+              ?>
+
+              <a class="<?= $nextClass ?>" href="<?= htmlspecialchars($nextUrl, ENT_QUOTES, 'UTF-8') ?>">Next &raquo;</a>
+            </div>
+          </div>
         </section>
 
         <aside class="stack">
-          <?php if ($success_message): ?>
-            <div class="card" style="background:#E7F7E7; color:#2E7D32; padding:12px; border:1px solid #C8E6C9;">
-              <?= htmlspecialchars($success_message, ENT_QUOTES, 'UTF-8') ?>
-            </div>
-          <?php endif; ?>
-          <?php if ($error_message): ?>
-            <div class="card" style="background:#FCE8E6; color:#B71C1C; padding:12px; border:1px solid #F5C6CB;">
-              <?= htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8') ?>
-            </div>
-          <?php endif; ?>
-
           <div class="stats">
             <div class="stat"><div class="num"><?= (int)$pending ?></div><div class="label">Pending</div></div>
             <div class="stat"><div class="num"><?= (int)$confirmed ?></div><div class="label">Confirmed</div></div>
@@ -472,9 +594,9 @@ $transactions_result = $conn->query($transactions_sql);
                 <p class="reason-text"><?= htmlspecialchars($reason_text, ENT_QUOTES, 'UTF-8') ?></p>
               </div>
 
-              <div style="margin-top:12px;display:flex;gap:10px;">
+              <div style="margin-top:12px;display:flex;">
                 <button type="submit" name="confirm_invoice" class="btn btn-primary">
-                  <span class="material-icons-outlined">check_circle</span> Confirm
+                  <span class="material-icons-outlined_toggleSidebar"></span>Confirm
                 </button>
               </div>
             </form>
@@ -488,64 +610,30 @@ $transactions_result = $conn->query($transactions_sql);
   <?php include 'filters.php'; ?>
 
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => {
+  // Inject filter icon once
+  const navLeft = document.querySelector('.nav-left');
+  if (navLeft && !document.getElementById('filterToggle')) {
+    const filterIcon = document.createElement('span');
+    filterIcon.id = 'filterToggle';
+    filterIcon.className = 'nav-icon material-icons-outlined';
+    filterIcon.textContent = 'filter_list';
+    filterIcon.style.cursor = 'pointer';
+    navLeft.appendChild(filterIcon);
+  }
 
-    // --- Sidebar vars (may be null depending on includes)
-    const sidebar = document.getElementById("sidebar");
-    const content = document.getElementById("content");
-    const overlay = document.getElementById("overlay");
+  // Row click -> reload with selected invoice_id (keep query params)
+  document.querySelectorAll('tbody tr[data-invoice-id]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const id = tr.getAttribute('data-invoice-id');
+      if (!id) return;
 
-    function openSidebar(){
-      if (!sidebar || !content || !overlay) return;
-      sidebar.classList.add("open");
-      content.classList.add("shifted");
-      overlay.classList.add("show");
-    }
-    function closeSidebar(){
-      if (!sidebar || !content || !overlay) return;
-      sidebar.classList.remove("open");
-      content.classList.remove("shifted");
-      overlay.classList.remove("show");
-    }
-    function toggleSidebar(){
-      if (!sidebar) return;
-      sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
-    }
-
-  document.addEventListener('DOMContentLoaded', () => { 
-    const navLeft = document.querySelector('.nav-left'); 
-    if (navLeft && !document.getElementById('filterToggle')) { 
-      const filterIcon = document.createElement('span'); 
-      filterIcon.id = 'filterToggle'; 
-      filterIcon.className = 'nav-icon material-icons-outlined'; 
-      filterIcon.textContent = 'filter_list'; 
-      filterIcon.style.cursor = 'pointer'; 
-      navLeft.appendChild(filterIcon); } 
-      const filterPanel = document.getElementById("filterPanel"); 
-      const filterOverlay = document.getElementById("filterOverlay"); 
-      const filterToggle = document.getElementById("filterToggle"); 
-      if (filterToggle) { 
-        filterToggle.addEventListener("click", () => { 
-          filterPanel.classList.toggle("open"); 
-          filterOverlay.classList.toggle("show"); }); } 
-          if (filterOverlay) { 
-            filterOverlay.addEventListener("click", () => { 
-              filterPanel.classList.remove("open");
-              filterOverlay.classList.remove("show"); }); } });
-
-    // --- CLICK ROW -> LOAD SELECTED INVOICE (this is what you need)
-    document.querySelectorAll('tbody tr[data-invoice-id]').forEach(tr => {
-      tr.addEventListener('click', () => {
-        const id = tr.getAttribute('data-invoice-id');
-        if (!id) return;
-
-        const url = new URL(window.location.href);
-        url.searchParams.set('invoice_id', id);
-        window.location.href = url.toString();
-      });
+      const url = new URL(window.location.href);
+      url.searchParams.set('invoice_id', id);
+      window.location.href = url.toString();
     });
-
   });
+});
 </script>
 </body>
 </html>

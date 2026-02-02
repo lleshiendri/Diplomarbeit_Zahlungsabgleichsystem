@@ -157,7 +157,7 @@ $filter_used = isset($_GET['applied']);
       </div>
 
       <div class="filter-group">
-        <label>Textsuche</label>
+        <label>Search</label>
         <input type="text" name="q" class="filter-input"
                placeholder="Reference or Description…"
                value="<?= htmlspecialchars($u_text, ENT_QUOTES, 'UTF-8'); ?>">
