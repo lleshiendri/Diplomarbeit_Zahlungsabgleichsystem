@@ -312,6 +312,80 @@ function createNotificationOnce($conn, $urgency, $student_id, $invoice_reference
     return $ok;
 }
 
+function monthKeyFromDate($dt) {
+    $ts = strtotime((string)$dt);
+    if ($ts === false) $ts = time();
+    return date('Y-m', $ts);
+}
+
+function isLateForMonth($processing_date, $cutoffDay = 10) {
+    $ts = strtotime((string)$processing_date);
+    if ($ts === false) return false;
+    return (int)date('j', $ts) > (int)$cutoffDay;
+}
+
+function notificationExistsExact($conn, $student_id, $urgency, $description) {
+    $stmt = $conn->prepare("
+        SELECT 1
+        FROM NOTIFICATION_TAB
+        WHERE student_id = ?
+          AND urgency = ?
+          AND description = ?
+        LIMIT 1
+    ");
+    if (!$stmt) return false;
+    $sid = (int)$student_id;
+    $urg = (string)$urgency;
+    $desc = (string)$description;
+    $stmt->bind_param("iss", $sid, $urg, $desc);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $exists = ($res && $res->fetch_assoc()) ? true : false;
+    $stmt->close();
+    return $exists;
+}
+
+function getStudentReferenceOrFallback($conn, $student_id) {
+    $ref = "SID-" . (int)$student_id;
+    $stmt = $conn->prepare("SELECT reference_id FROM STUDENT_TAB WHERE id = ? LIMIT 1");
+    if (!$stmt) return $ref;
+    $sid = (int)$student_id;
+    $stmt->bind_param("i", $sid);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if ($row = ($res ? $res->fetch_assoc() : null)) {
+        $rid = trim((string)($row['reference_id'] ?? ''));
+        if ($rid !== '') $ref = $rid;
+    }
+    $stmt->close();
+    return $ref;
+}
+
+/**
+ * Late fee type: payment too late (confirmed payment after 10th)
+ * Creates once per student+month.
+ */
+function createLateFeeLatePaymentOnce($conn, $student_id, $processing_date, $invoice_ref_number, $amountLek = 500, $applyAmountToStudent = true) {
+    $monthKey = monthKeyFromDate($processing_date);
+    $desc = "Late fee $monthKey: +{$amountLek} LEK (payment made too late for this month)";
+
+    if (notificationExistsExact($conn, $student_id, "urgent", $desc)) return true;
+
+    // For late-payment latefee, invoice_reference should be the invoice reference_number
+    $invRef = trim((string)$invoice_ref_number);
+    if ($invRef === '') $invRef = 'N/A';
+
+    $ok = createNotificationOnce($conn, "urgent", (int)$student_id, $invRef, toDateString($processing_date), $desc);
+
+    if ($ok && $applyAmountToStudent) {
+        $conn->query("UPDATE STUDENT_TAB
+                      SET additional_payments_status = COALESCE(additional_payments_status,0) + " . (int)$amountLek . "
+                      WHERE id = " . (int)$student_id);
+    }
+    return $ok;
+}
+
+
 /* ===============================================================
    MAIN PIPELINE
    =============================================================== */
@@ -358,6 +432,10 @@ function processInvoiceMatching($conn, $invoice_id, $reference_number, $benefici
 
         $desc = "Confirmed: $invoice_reference matched to Student #$student_id (by $matched_by, " . round($confidence, 1) . "%)";
         $notif_info_ok = createNotificationOnce($conn, "info", $student_id, $invoice_reference, $time_from_date, $desc);
+        // Late fee if confirmed payment is after the 10th
+if (isLateForMonth($processing_date, 10)) {
+    createLateFeeLatePaymentOnce($conn, $student_id, $processing_date, $invoice_reference, 500, true);
+}
 
     } else {
 
