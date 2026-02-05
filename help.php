@@ -30,8 +30,8 @@
           <nav class="help-nav__links">
             <a class="help-link" href="#getting-started">Getting Started</a>
             <a class="help-link" href="#login">Login</a>
+            <a class="help-link" href="#schoolyear">Top Navigation & School Year</a>
             <a class="help-link" href="#dashboard">Dashboard</a>
-            <a class="help-link" href="#menu">Menu & Navigation</a>
             <a class="help-link" href="#notifications">Notifications</a>
             <a class="help-link" href="#add_transactions">Add Transactions</a>
             <a class="help-link" href="#transactions">Transactions</a>
@@ -40,7 +40,7 @@
             <a class="help-link" href="#unconfirmed">Unconfirmed</a>
             <a class="help-link" href="#student_state">Student State</a>
             <a class="help-link" href="#latencies">Latencies</a>
-            <a class="help-link" href="#schoolyear">School Year & Limits</a>
+            
           </nav>
 
           <div class="help-nav__footer">
@@ -192,6 +192,49 @@
             </details>
           </article>
 
+           <!-- Icons and Schoolyear --> 
+           <article id="schoolyear" class="help-section card" data-title="school year limits">
+            <header class="help-section__header">
+              <h2>Top Navigation & School Year</h2>
+              <p class="muted">The top bar contains quick system actions and the school year controls.</p>
+            </header>
+
+            <div class="media media--component">
+              <!-- LEFT -->
+              <div class="shots">
+                <figure class="shot shot--component">
+                  <img src="/help_page_images/school_year.png" alt="School Year popup." />
+                  <figcaption>School Year popup: view and edit the total amount.</figcaption>
+                </figure>
+              </div>
+
+              <!-- RIGHT -->
+              <div class="legend legend--component">
+                <h3>Top navigation icons</h3>
+
+                <ul class="icon-list">
+                  <li><span class="icon material-icons-outlined">menu</span> Opens the main navigation.</li>
+                  <li><span class="icon material-icons-outlined">notifications</span> Shows unread notifications and warnings.</li>
+                  <li><span class="icon material-icons-outlined">priority_high</span> Displays critical system alerts.</li>
+                  <li><span class="icon material-icons-outlined">calendar_month</span> Opens the School Year settings.</li>
+                </ul>
+
+                <h3>School year popup</h3>
+
+                <p>The School Year popup allows you to view and edit the yearly School Fee for the current school year.</p>
+                <ul class="steps">
+                  <li><span class="dot">1</span> Select <strong>Edit amount</strong></li>
+                  <li><span class="dot">2</span> Enter the new total amount (Lek)</li>
+                  <li><span class="dot">3</span> Press <strong>Save</strong></li>
+                </ul>
+
+                <div class="callout callout--danger" data-role="admin">
+                  <strong>Admin only:</strong> This changes the system’s maximum transaction limit.
+                </div>
+              </div>
+            </div>
+          </article>
+
           <!-- Dashboard -->
           <article id="dashboard" class="help-section card" data-title="dashboard">
             <header class="help-section__header">
@@ -273,37 +316,6 @@
               </div>
             </div>
           </article>
-
-          <!-- Menu -->
-          <article id="menu" class="help-section card" data-title="menu navigation">
-            <header class="help-section__header">
-              <h2>Menu & Navigation</h2>
-              <p class="muted">How to access each module from the sidebar.</p>
-            </header>
-
-            <div class="media">
-              <figure class="shot">
-                <img src="/help_page_images/menu.png" alt="Sidebar menu screenshot" />
-              </figure>
-
-              <div class="legend">
-                <h3>Menu items</h3>
-                <div class="table">
-                  <div class="table__row table__head">
-                    <div>Page</div><div>Purpose</div>
-                  </div>
-                  <div class="table__row"><div>Add Transaction</div><div>Create a payment manually</div></div>
-                  <div class="table__row"><div>Transactions</div><div>View all payments</div></div>
-                  <div class="table__row"><div>Add Students</div><div>Register students</div></div>
-                  <div class="table__row"><div>Import File</div><div>Upload bank data</div></div>
-                  <div class="table__row"><div>Unconfirmed</div><div>Review uncertain matches</div></div>
-                  <div class="table__row"><div>Student State</div><div>See balance per student</div></div>
-                  <div class="table__row"><div>Latencies</div><div>Late payment overview</div></div>
-                  <div class="table__row"><div>Notifications</div><div>System alerts</div></div>
-                </div>
-              </div>
-            </div>
-          </article>  
 
          <!-- Notifications -->
           <article id="notifications" class="help-section card" data-title="notifications">
@@ -513,7 +525,7 @@
             <header class="help-section__header">
               <h2>Add Students</h2>
               <p class="muted">
-                Create a new student record that payments, balances, and notifications can be linked to.
+                Create a new student record with its payments, balances, and notifications.
               </p>
             </header>
 
@@ -526,14 +538,14 @@
                 <h3>How to fill this form</h3>
 
                 <ul class="legend__list">
-                  <li><span class="dot">1</span> Enter the student’s <strong>official name</strong> (used for matching)</li>
-                  <li><span class="dot">2</span> Use <strong>Long Name</strong> for full legal or descriptive naming</li>
-                  <li><span class="dot">3</span> Assign the correct <strong>class</strong> — this affects grouping and statistics</li>
-                  <li><span class="dot">4</span> Set initial <strong>Left to Pay</strong> if required</li>
+                  <li><span class="dot">1</span> Enter the student’s Name </li>
+                  <li><span class="dot">2</span> Use Long Name for full legal or descriptive naming</li>
+                  <li><span class="dot">3</span> Assign the correct class</li>
+                  <li><span class="dot">4</span> Set the remaining amount of payments for this student</li>
                 </ul>
 
                 <div class="callout callout--info">
-                  Student records are the <strong>anchor</strong> for transactions, balances, late fees, and notifications.
+                  Student records are the anchor point for transactions, balances, late fees, and notifications.
                 </div>
 
                 <div class="callout callout--warning">
@@ -606,28 +618,46 @@
           </article>
 
 
-           <!-- Student State -->
-           <article id="student_state" class="help-section card" data-title="student_state">
+          <!-- Student State -->
+          <article id="student_state" class="help-section card" data-title="student_state">
             <header class="help-section__header">
               <h2>Student State</h2>
-              <p class="muted">Warnings and system messages you must review.</p>
+              <p class="muted">
+                Overview of each student’s current payment status: paid amount, remaining balance, and the latest activity.
+              </p>
             </header>
 
             <div class="media">
               <figure class="shot">
-                <img src="/help_page_images/student_state.png" alt="Notifications screenshot" />
+                <img src="/help_page_images/student_state.png" alt="Student State table screenshot" />
               </figure>
 
               <div class="legend">
-                <h3>What to do here</h3>
+                <h3>What each column means</h3>
+
                 <ul class="legend__list">
-                  <li><span class="dot">✓</span> Use search to find a student or invoice</li>
-                  <li><span class="dot">✓</span> Check urgency: Info / Warning / Critical</li>
-                  <li><span class="dot">✓</span> Mark selected rows as read</li>
+                  <li><span class="dot">1</span> <strong>Student ID</strong> — Unique identifier used internally for linking payments and history.</li>
+                  <li><span class="dot">2</span> <strong>Student Name</strong> — The student record this balance belongs to.</li>
+                  <li><span class="dot">3</span> <strong>Amount Paid</strong> — Total confirmed payments assigned to this student.</li>
+                  <li><span class="dot">4</span> <strong>Left to Pay</strong> — Remaining amount the student still owes (0 means fully paid).</li>
+                  <li><span class="dot">5</span> <strong>Last Transaction</strong> — Date of the most recent confirmed payment (helps spot inactive cases).</li>
+                  <li><span class="dot">6</span> <strong>Additional Payment Status</strong> — Extra/alternative payments tracked separately (depends on your school rules).</li>
+                  <li><span class="dot">7</span> <strong>Actions</strong> — Manual tools for admins (edit / delete).</li>
                 </ul>
 
-                <div class="callout callout--danger">
-                  Marking as read does <strong>not</strong> undo the cause. It only confirms you saw it.
+                <h3 style="margin-top:14px;">Actions (Admin)</h3>
+                <ul class="legend__list">
+                  <li><span class="dot">✎</span> <strong>Edit</strong> — Correct values when a case was handled outside the normal flow (audit-required).</li>
+                  <li><span class="dot">🗑</span> <strong>Delete</strong> — Removes the student entry (use only if the record is wrong/duplicate).</li>
+                </ul>
+
+                <div class="callout callout--warning">
+                  <strong>Important:</strong> Only edit balances if you know exactly why the automatic matching is incorrect.
+                  Manual changes should be rare, otherwise your system becomes untrustworthy.
+                </div>
+
+                <div class="callout callout--info">
+                  Tip: Sort/filter by <strong>Left to Pay</strong> and <strong>Last Transaction</strong> to find overdue or inactive accounts fast.
                 </div>
               </div>
             </div>
@@ -683,33 +713,8 @@
             </div>
           </article>
 
-          <!-- Schoolyear -->
-          <article id="schoolyear" class="help-section card" data-title="school year limits">
-            <header class="help-section__header">
-              <h2>School Year & Limits</h2>
-              <p class="muted">The total amount is a hard system limit.</p>
-            </header>
+         
 
-            <div class="media">
-              <figure class="shot">
-                <img src="/help_page_images/schoolyear.png" alt="School year popup screenshot" />
-              </figure>
-
-              <div class="legend">
-                <h3>Editing the total amount</h3>
-                <ol class="steps">
-                  <li>Open the School Year popup</li>
-                  <li>Click “Edit amount”</li>
-                  <li>Enter the new total</li>
-                  <li>Save</li>
-                </ol>
-
-                <div class="callout callout--danger" data-role="admin">
-                  <strong>Admin only:</strong> This changes the allowed maximum for transactions.
-                </div>
-              </div>
-            </div>
-          </article>
 
           <footer class="help-footer">
             <p class="muted">
