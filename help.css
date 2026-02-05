@@ -528,6 +528,7 @@ body{
 
 #helpPage #dashboard .media,
 #helpPage #notifications .media,
+#helpPage #student_state .media,
 #helpPage #import_files .media,
 #helpPage #transactions .media{
   grid-template-columns: 1fr !important;   /* remove 2-column grid */
@@ -535,6 +536,7 @@ body{
 
 #helpPage #dashboard .legend,
 #helpPage #notifications .legend,
+#helpPage #student_state .legend,
 #helpPage #import_files .legend,
 #helpPage #transactions .legend{
   margin-top: 10px; /* space under the image */
@@ -543,4 +545,93 @@ body{
 #helpPage #transactions #transactions_edit{
   margin-top: 10px;
   margin-bottom: 10px;
+}
+#helpPage #schoolyear .media--component{
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* left column */
+#helpPage #schoolyear .shots{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+/* component screenshot */
+#helpPage #schoolyear .shot--component{
+  padding: 10px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  width: 100%;
+  max-width: 340px;
+  margin: 0;
+}
+
+#helpPage #schoolyear .shot--component img{
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 10px;
+}
+
+#helpPage #schoolyear .shot--component figcaption{
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+/* right column */
+#helpPage #schoolyear .legend--component{
+  padding: 14px;
+}
+
+/* icon explanation list */
+#helpPage #schoolyear .icon-list{
+  list-style: none;
+  padding: 0;
+  margin: 0 0 14px 0;
+  display: grid;
+  gap: 8px;
+}
+
+#helpPage #schoolyear .icon-list li{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+#helpPage #schoolyear .icon{
+  font-size: 20px;
+  color: var(--red-dark);
+}
+
+#helpPage #schoolyear .icon-inline{
+  font-size: 18px;
+  vertical-align: middle;
+  color: var(--red-dark);
+  margin: 0 2px;
+}
+
+/* responsive */
+@media (max-width: 1100px){
+  #helpPage #schoolyear .media--component{
+    grid-template-columns: 1fr;
+  }
+  #helpPage #schoolyear .shot--component{
+    max-width: 100%;
+  }
+}
+.steps{
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
