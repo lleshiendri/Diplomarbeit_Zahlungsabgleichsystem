@@ -618,6 +618,73 @@
           </article>
 
 
+
+          <!-- Unconfirmed -->
+          <article id="unconfirmed" class="help-section card" data-title="unconfirmed payments">
+            <header class="help-section__header">
+              <h2>Unconfirmed</h2>
+              <p class="muted">
+                Review and confirm transactions that require manual verification. Select a row, check and validate the details, then confirm.
+              </p>
+            </header>
+
+            <div class="media">
+              <figure class="shot">
+                <img src="/help_page_images/unconfirmed.png" alt="Unconfirmed page with table and manual confirmation sidebar." />
+              </figure>
+
+
+
+              <div class="legend">
+                <h3>Purpose of this page</h3>
+
+                <p>
+                  The Unconfirmed page contains transactions that the system
+                  could not match automatically to a student or invoice with sufficient confidence.
+                  These cases require manual review by an administrator.
+                </p>
+
+                <p>
+                  A transaction ends up here when important information is missing,
+                  incorrect, or ambiguous. Typical reasons include:
+                </p>
+
+                <ul class="legend__list">
+                  <li><span class="dot">1</span> Missing or incorrect reference number</li>
+                  <li><span class="dot">2</span> Name does not clearly match a student or guardian</li>
+                  <li><span class="dot">3</span> Multiple possible matches with low confidence</li>
+                  <li><span class="dot">4</span> Free-text bank descriptions without identifiers</li>
+                </ul>
+
+                <p>
+                  The administrator must manually review each transaction, select the
+                  correct student, and confirm the connection.
+                </p>
+              </div>
+              
+              <div class="legend">
+                <h3>
+                  How to review and confirm the transactions
+                </h3>
+
+                <ul class="legend__list">
+                <li><span class="dot">1</span> Select a transaction from the table</li>
+                <li><span class="dot">2</span> Check the payer name, description, and amount</li>
+                <li><span class="dot">3</span> Review the connection reason in the right panel</li>
+                <li><span class="dot">4</span> Choose the correct student from the dropdown</li>
+                <li><span class="dot">5</span> Press Confirm to finalize the match</li>
+              </ul>
+
+                <div class="callout callout--warning">
+                  Always verify the student and payment details before confirming.
+                  A wrong confirmation leads to incorrect balances and accounting errors.
+                </div>
+              </div>
+            </div>
+          </article>
+
+
+
           <!-- Student State -->
           <article id="student_state" class="help-section card" data-title="student_state">
             <header class="help-section__header">

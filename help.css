@@ -530,6 +530,7 @@ body{
 #helpPage #notifications .media,
 #helpPage #student_state .media,
 #helpPage #import_files .media,
+#helpPage #unconfirmed .media,
 #helpPage #transactions .media{
   grid-template-columns: 1fr !important;   /* remove 2-column grid */
 }
@@ -538,6 +539,7 @@ body{
 #helpPage #notifications .legend,
 #helpPage #student_state .legend,
 #helpPage #import_files .legend,
+#helpPage #unconfirmed .legend,
 #helpPage #transactions .legend{
   margin-top: 10px; /* space under the image */
 }
