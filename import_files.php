@@ -6,8 +6,24 @@ ini_set('display_errors', 1);
 require 'db_connect.php';
 require 'matching_functions.php';
 
+
+
+function makeTransactionHash($reference_number, $processing_date, $amount, $beneficiary, $reference, $transaction_type) {
+    $parts = [
+        trim((string)$reference_number),
+        trim((string)$processing_date),
+        number_format((float)$amount, 2, '.', ''), // normalize
+        mb_strtolower(trim((string)$beneficiary)),
+        mb_strtolower(trim((string)$reference)),
+        mb_strtolower(trim((string)$transaction_type)),
+    ];
+    return hash('sha256', implode('|', $parts));
+}
+
+
+
 function validateCSVStructure($filePath, $fileType) {
-    // 1️⃣ Expected header sets
+    // Expected header sets
     $expectedHeaders = [
         'Students' => [
             'name', 'longName', 'foreName', 'gender', 'birthDate',
@@ -30,13 +46,13 @@ function validateCSVStructure($filePath, $fileType) {
         ]
     ];
 
-    // 2️⃣ Detect delimiter automatically
+    // Detect delimiter automatically
     $firstLine = fgets(fopen($filePath, 'r'));
     if (strpos($firstLine, "\t") !== false) $delimiter = "\t";
     elseif (strpos($firstLine, ";") !== false) $delimiter = ";";
     else $delimiter = ",";
 
-    // 3️⃣ Read header
+    // Read header
     $handle = fopen($filePath, "r");
 
     if ($fileType === 'Students' || $fileType === 'LegalGuardians') {
@@ -66,11 +82,11 @@ function validateCSVStructure($filePath, $fileType) {
     $header = array_map('trim', $header);
     $expected = $expectedHeaders[$fileType] ?? [];
 
-    // 4️⃣ Compare header with expected columns
+    // Compare header with expected columns
     $missing = array_diff($expected, $header);
     $extra   = array_diff($header, $expected);
 
-    // ✅ If structure matches → valid
+    // If structure matches → valid
     if (empty($missing) && empty($extra)) {
         return [
             'valid' => true,
@@ -79,7 +95,7 @@ function validateCSVStructure($filePath, $fileType) {
         ];
     }
 
-    // 5️⃣ Try to guess which file type it actually is
+    // Try to guess which file type it actually is
     $bestMatch = null;
     $bestScore = 0;
     foreach ($expectedHeaders as $type => $cols) {
@@ -91,7 +107,7 @@ function validateCSVStructure($filePath, $fileType) {
         }
     }
 
-    // 6️⃣ Build return message
+    // Build return message
     $msg = "Invalid file structure for {$fileType}.";
     if ($bestMatch && $bestMatch !== $fileType && $bestScore > 0.3) {
         $msg .= " This file looks more like a {$bestMatch} file.";
@@ -296,8 +312,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                         // Prepare insert statement for INVOICE_TAB
                         $stmtTrans = $conn->prepare("
                             INSERT INTO INVOICE_TAB 
-                                (reference_number,  beneficiary, reference, transaction_type, processing_date, amount, amount_total) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                (reference_number,  beneficiary, reference, transaction_type, processing_date, amount, amount_total, import_hash) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                         ");
                         if (!$stmtTrans) {
                             error_log("TRANSACTION PREPARE FAILED: " . $conn->error);
@@ -337,24 +353,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             $amount           = $data[8] ?? 0;
                             $amount_total     = $data[9] ?? 0;
 
+                            $import_hash = makeTransactionHash(
+                                $reference_number,
+                                $processing_date,
+                                $amount,
+                                $beneficiary,
+                                $reference,
+                                $transaction_type
+                            );
+
                             $stmtTrans->bind_param(
-                                "sssssdd",
+                                "sssssdds",
                                 $reference_number,
                                 $beneficiary,
                                 $reference,
                                 $transaction_type,
                                 $processing_date,
                                 $amount,
-                                $amount_total
+                                $amount_total,
+                                $import_hash
                             );
-                            if ($stmtTrans->execute()) {
-                                // Get the inserted invoice ID
-                                $invoice_id = $conn->insert_id;
-                                
-                                // Run matching algorithm and log to MATCHING_HISTORY_TAB
-                                if ($invoice_id) {
-                                    processInvoiceMatching($conn, $invoice_id, $reference_number, $beneficiary, $reference);
+                            if (!$stmtTrans->execute()) {
+
+                                // 1062 = duplicate key (same transaction already imported)
+                                if ($stmtTrans->errno === 1062) {
+                                    continue; // skip duplicate row safely
                                 }
+                            
+                                error_log("TRANSACTION INSERT ERROR ({$stmtTrans->errno}): {$stmtTrans->error}");
+                                continue;
+                            }
+                            
+                            // Insert succeeded
+                            $invoice_id = $conn->insert_id;
+                            
+                            if ($invoice_id) {
+                                processInvoiceMatching($conn, $invoice_id, $reference_number, $beneficiary, $reference);
                             }
                         }
 
