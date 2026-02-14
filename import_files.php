@@ -4,22 +4,22 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 require 'db_connect.php';
-require 'matching_functions.php';
+// require 'matching_functions.php';
 
 
 
-function makeTransactionHash($reference_number, $processing_date, $amount, $beneficiary, $reference, $transaction_type) {
+function makeTransactionHash($reference_number, $beneficiary, $description, $reference, $transaction_type, $processing_date, $amount) {
     $parts = [
         trim((string)$reference_number),
         trim((string)$processing_date),
         number_format((float)$amount, 2, '.', ''), // normalize
         mb_strtolower(trim((string)$beneficiary)),
         mb_strtolower(trim((string)$reference)),
+        mb_strtolower(trim((string)$description)),
         mb_strtolower(trim((string)$transaction_type)),
     ];
     return hash('sha256', implode('|', $parts));
 }
-
 
 
 function validateCSVStructure($filePath, $fileType) {
@@ -47,7 +47,9 @@ function validateCSVStructure($filePath, $fileType) {
     ];
 
     // Detect delimiter automatically
-    $firstLine = fgets(fopen($filePath, 'r'));
+    $fh = fopen($filePath, 'r');
+    $firstLine = fgets($fh);
+    fclose($fh);
     if (strpos($firstLine, "\t") !== false) $delimiter = "\t";
     elseif (strpos($firstLine, ";") !== false) $delimiter = ";";
     else $delimiter = ",";
@@ -312,8 +314,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                         // Prepare insert statement for INVOICE_TAB
                         $stmtTrans = $conn->prepare("
                             INSERT INTO INVOICE_TAB 
-                                (reference_number,  beneficiary, reference, transaction_type, processing_date, amount, amount_total, import_hash) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                (reference_number,  beneficiary, description, reference, transaction_type, processing_date, amount, amount_total, import_hash) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ");
                         if (!$stmtTrans) {
                             error_log("TRANSACTION PREPARE FAILED: " . $conn->error);
@@ -347,25 +349,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             // Only parse rows where first column is numeric (valid transaction rows)
                             $reference_number = $data[2] ?? null;
                             $beneficiary      = $data[3] ?? null;
+                            $description      = $data[4] ?? null;
                             $reference        = $data[5] ?? null;
                             $transaction_type = $data[6] ?? null;
                             $processing_date  = normalizeDate($data[7] ?? null);
                             $amount           = $data[8] ?? 0;
                             $amount_total     = $data[9] ?? 0;
 
+
                             $import_hash = makeTransactionHash(
                                 $reference_number,
+                                $beneficiary,
+                                $description,
+                                $reference,
+                                $transaction_type,
                                 $processing_date,
                                 $amount,
-                                $beneficiary,
-                                $reference,
-                                $transaction_type
                             );
 
                             $stmtTrans->bind_param(
-                                "sssssdds",
+                                "ssssssdds",
                                 $reference_number,
                                 $beneficiary,
+                                $description,
                                 $reference,
                                 $transaction_type,
                                 $processing_date,
@@ -388,7 +394,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             $invoice_id = $conn->insert_id;
                             
                             if ($invoice_id) {
-                                processInvoiceMatching($conn, $invoice_id, $reference_number, $beneficiary, $reference);
+                                //processInvoiceMatching($conn, $invoice_id, $reference_number, $beneficiary, $reference);
                             }
                         }
 

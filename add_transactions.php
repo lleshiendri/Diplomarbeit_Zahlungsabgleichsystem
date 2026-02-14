@@ -9,8 +9,21 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 require 'navigator.php'; 
 require 'db_connect.php';
 
+function makeTransactionHash($reference_number, $beneficiary, $description, $reference, $transaction_type, $processing_date, $amount) {
+    $parts = [
+        trim((string)$reference_number),
+        trim((string)$processing_date),
+        number_format((float)$amount, 2, '.', ''), // normalize
+        mb_strtolower(trim((string)$beneficiary)),
+        mb_strtolower(trim((string)$reference)),
+        mb_strtolower(trim((string)$description)),
+        mb_strtolower(trim((string)$transaction_type)),
+    ];
+    return hash('sha256', implode('|', $parts));
+}
+
 // ✅ Use new matching + notifications pipeline
-require_once __DIR__ . '/matching_functions.php';
+//require_once __DIR__ . '/matching_functions.php';
 
 $success_message = "";
 $error_message = "";
@@ -25,6 +38,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $processing_date = trim($_POST['processing_date'] ?? '');
     $description     = trim($_POST['description'] ?? '');
     $amount          = isset($_POST['amount']) ? (float) $_POST['amount'] : 0;
+    $transaction_type = "Payment";
+
+    $import_hash = makeTransactionHash(
+        $ref_number,
+        $ordering_name,
+        $description,
+        $reference,
+        $transaction_type,
+        $processing_date,
+        $amount
+    );
 
     // Ensure DATETIME string (input type="date" => YYYY-MM-DD)
     if ($processing_date && strlen($processing_date) === 10) {
@@ -35,12 +59,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = $conn->prepare("
             INSERT INTO INVOICE_TAB 
-                (reference_number, reference, beneficiary, processing_date, description, amount_total) 
-            VALUES (?, ?, ?, ?, ?, ?)
+                (reference_number, reference, beneficiary, processing_date, description, amount, transaction_type, import_hash) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ");
 
         if ($stmt) {
-            $stmt->bind_param("sssssd", $ref_number, $reference, $ordering_name, $processing_date, $description, $amount);
+            $stmt->bind_param("sssssdss", $ref_number, $reference, $ordering_name, $processing_date, $description, $amount, $transaction_type, $import_hash);
 
             if ($stmt->execute()) {
 
@@ -49,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($newInvoiceId > 0) {
 
                     // ✅ Run full pipeline (matching + history + invoice update + notifications)
-                  $matchResult = processInvoiceMatching($conn, $newInvoiceId, $ref_number, $ordering_name, $reference, true);
+                  //$matchResult = processInvoiceMatching($conn, $newInvoiceId, $ref_number, $ordering_name, $reference, true);
 
 
                     $success_message = "Transaction was successfully added.";
@@ -57,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Optional debug box
                     if (defined('ENV_DEBUG') && ENV_DEBUG) {
                         $debug_box = "<pre style='background:#111;color:#0f0;padding:12px;border-radius:10px;max-width:900px;margin:20px auto;overflow:auto;'>";
-                        $debug_box .= "DEBUG: processInvoiceMatching() result\n";
+                       // $debug_box .= "DEBUG: processInvoiceMatching() result\n";
                         $debug_box .= htmlspecialchars(json_encode($matchResult, JSON_PRETTY_PRINT), ENT_QUOTES, 'UTF-8');
                         $debug_box .= "</pre>";
                     }
