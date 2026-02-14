@@ -4,7 +4,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 require 'db_connect.php';
-// require 'matching_functions.php';
+require 'matching_functions.php';
 
 
 
@@ -394,7 +394,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             $invoice_id = $conn->insert_id;
                             
                             if ($invoice_id) {
-                                //processInvoiceMatching($conn, $invoice_id, $reference_number, $beneficiary, $reference);
+                                processInvoiceMatching($conn, $invoice_id, $reference_number, $beneficiary, $reference);
                             }
                         }
 

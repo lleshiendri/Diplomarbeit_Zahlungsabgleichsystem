@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($newInvoiceId > 0) {
 
                     // ✅ Run full pipeline (matching + history + invoice update + notifications)
-                  //$matchResult = processInvoiceMatching($conn, $newInvoiceId, $ref_number, $ordering_name, $reference, true);
+                    $matchResult = processInvoiceMatching($conn, $newInvoiceId, $ref_number, $ordering_name, $reference, true);
 
 
                     $success_message = "Transaction was successfully added.";
@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Optional debug box
                     if (defined('ENV_DEBUG') && ENV_DEBUG) {
                         $debug_box = "<pre style='background:#111;color:#0f0;padding:12px;border-radius:10px;max-width:900px;margin:20px auto;overflow:auto;'>";
-                       // $debug_box .= "DEBUG: processInvoiceMatching() result\n";
+                        $debug_box .= "DEBUG: processInvoiceMatching() result\n";
                         $debug_box .= htmlspecialchars(json_encode($matchResult, JSON_PRETTY_PRINT), ENT_QUOTES, 'UTF-8');
                         $debug_box .= "</pre>";
                     }
