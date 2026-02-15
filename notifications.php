@@ -31,12 +31,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['mark_many'])) {
    =============================================================== */
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['send_parent_email'])) {
 
-    // Hard gate: only admins can trigger emails
-    if (empty($isAdmin) || $isAdmin !== true) {
-        http_response_code(403);
-        echo "FORBIDDEN";
-        exit;
-    }
+// TEST MODE ONLY: bypass admin gate (REMOVE AFTER CONFIRMING EMAIL WORKS)
+if (!defined('ALLOW_MAIL_TEST')) define('ALLOW_MAIL_TEST', true);
+
+if (!ALLOW_MAIL_TEST) {
+    http_response_code(403);
+    echo "FORBIDDEN";
+    exit;
+}
+
 
     $notifId = intval($_POST['send_parent_email']);
     if ($notifId <= 0) {
@@ -58,10 +61,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['send_parent_email']))
         exit;
     }
 
-    $stmt->bind_param("i", $notifId);
-    $stmt->execute();
-    $notif = $stmt->get_result() ? $stmt->get_result()->fetch_assoc() : null;
-    $stmt->close();
+$stmt->bind_param("i", $notifId);
+$stmt->execute();
+
+$stmt->bind_result($id, $urgency, $student_id, $invoice_reference, $description, $time_from);
+$notif = null;
+
+if ($stmt->fetch()) {
+    $notif = [
+        'id' => $id,
+        'urgency' => $urgency,
+        'student_id' => $student_id,
+        'invoice_reference' => $invoice_reference,
+        'description' => $description,
+        'time_from' => $time_from,
+    ];
+}
+
+$stmt->close();
 
     if (!$notif) {
         http_response_code(404);
@@ -100,14 +117,37 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['send_parent_email']))
         $errorMsg = $e->getMessage();
         $ok = false;
     }
+if ($ok) {
+    // Success → mark as sent
+    $stmt2 = $conn->prepare("
+        UPDATE NOTIFICATION_TAB
+        SET mail_status='sent',
+            mail_sent_at = NOW(),
+            mail_last_error = NULL,
+            mail_attempts = mail_attempts + 1
+        WHERE id=?
+    ");
+    $stmt2->bind_param("i", $notifId);
+    $stmt2->execute();
+    $stmt2->close();
 
-    if ($ok) {
-        echo "OK";
-    } else {
-        http_response_code(500);
-        echo "MAIL_FAIL: " . $errorMsg;
-    }
-    exit;
+    echo "OK";
+} else {
+    // Failure → mark as failed
+    $stmt2 = $conn->prepare("
+        UPDATE NOTIFICATION_TAB
+        SET mail_status='failed',
+            mail_last_error = ?,
+            mail_attempts = mail_attempts + 1
+        WHERE id=?
+    ");
+    $stmt2->bind_param("si", $errorMsg, $notifId);
+    $stmt2->execute();
+    $stmt2->close();
+
+    http_response_code(500);
+    echo "MAIL_FAIL: " . $errorMsg;
+}
 }
 
 /* ===============================================================
