@@ -157,6 +157,25 @@ require "db_connect.php";
 
         $result = $conn->query($sql);
 
+        // #region agent log
+        $logEntry = json_encode([
+            'sessionId' => 'debug-session',
+            'runId' => 'pre-fix',
+            'hypothesisId' => 'LAT1',
+            'location' => 'latencies.php:158',
+            'message' => 'Latencies main query executed',
+            'data' => [
+                'page' => $page,
+                'perPage' => $perPage,
+                'totalStudents' => $totalStudents,
+                'totalPages' => $totalPages,
+                'query_ok' => (bool)$result,
+            ],
+            'timestamp' => round(microtime(true) * 1000)
+        ]) . PHP_EOL;
+        @file_put_contents(__DIR__ . '/.cursor/debug.log', $logEntry, FILE_APPEND);
+        // #endregion
+
         if ($result) {
             while ($row = $result->fetch_assoc()) {
 

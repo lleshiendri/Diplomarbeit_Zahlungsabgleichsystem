@@ -2,6 +2,12 @@
 /**
  * Matching + Notifications (schema-safe)
  * Late Fee Policy handled by MySQL EVENT (NOT in PHP).
+ *
+ * NOTE: Matching decisions (student_id selection, history) are now delegated
+ * to the pipeline in matching_engine.php. This file focuses on schema-safe
+ * helpers and notifications only.
+ *
+ * DB schema: table/column names must match buchhaltung_16_1_2026 (see includes/schema_buchhaltung_16_1_2026.php).
  */
 
 define('ENV_DEBUG', false);
@@ -11,6 +17,11 @@ function dbg_log($msg) {
     if (ENV_DEBUG) error_log("[MATCH/NOTIF] " . $msg);
 }
 
+// Ensure the pipeline engine is available for all automatic matching.
+if (!function_exists('runMatchingPipeline')) {
+    require_once __DIR__ . '/matching_engine.php';
+}
+
 function toDateString($dt) {
     $ts = strtotime((string)$dt);
     if ($ts === false) return date('Y-m-d');
@@ -18,106 +29,12 @@ function toDateString($dt) {
 }
 
 /* ===============================================================
-   MATCHING ALGORITHM
+   LEGACY MATCHING ALGORITHM (NO LONGER USED FOR AUTOMATIC MATCHING)
    =============================================================== */
 function matchInvoiceToStudent($conn, $reference_number, $beneficiary, $reference) {
+    // Kept only for backward compatibility / potential manual tools.
+    // All automatic matching is delegated to runMatchingPipeline() in matching_engine.php.
     $result = ['student_id'=>null,'confidence'=>0.0,'matched_by'=>'none'];
-
-    if (empty($reference_number) && empty($beneficiary) && empty($reference)) return $result;
-
-    // ✅ Strategy 1: use the REAL constant reference id (INVOICE_TAB.reference) if present,
-    // otherwise fallback to reference_number
-    $ref_id = trim((string)$reference);
-    if ($ref_id === '') $ref_id = trim((string)$reference_number);
-
-    if ($ref_id !== '') {
-        $stmt = $conn->prepare("
-            SELECT id
-            FROM STUDENT_TAB
-            WHERE reference_id = ?
-            LIMIT 1
-        ");
-        if ($stmt) {
-            $stmt->bind_param("s", $ref_id);
-            $stmt->execute();
-            $res = $stmt->get_result();
-            if ($row = ($res ? $res->fetch_assoc() : null)) {
-                $result['student_id'] = (int)$row['id'];
-                $result['confidence'] = 95.0;
-                $result['matched_by'] = 'reference_id';
-                $stmt->close();
-                return $result;
-            }
-            $stmt->close();
-        } else {
-            dbg_log("Strategy1 prepare failed: " . $conn->error);
-        }
-    }
-
-    // Strategy 2: beneficiary last name match vs long_name
-    if (!empty($beneficiary)) {
-        $parts = preg_split('/\s+/', trim($beneficiary));
-        $last_name = $parts ? end($parts) : '';
-
-        if (!empty($last_name)) {
-            $stmt = $conn->prepare("
-                SELECT id, long_name
-                FROM STUDENT_TAB
-                WHERE long_name LIKE ?
-                LIMIT 1
-            ");
-            if ($stmt) {
-                $pattern = '%' . $last_name . '%';
-                $stmt->bind_param("s", $pattern);
-                $stmt->execute();
-                $res = $stmt->get_result();
-                if ($row = ($res ? $res->fetch_assoc() : null)) {
-                    $long_name = (string)($row['long_name'] ?? '');
-                    similar_text(mb_strtolower($long_name), mb_strtolower((string)$beneficiary), $percent);
-
-                    $result['student_id'] = (int)$row['id'];
-                    $result['confidence'] = min(90.0, max(60.0, (float)$percent));
-                    $result['matched_by'] = 'name';
-                    $stmt->close();
-                    return $result;
-                }
-                $stmt->close();
-            } else {
-                dbg_log("Strategy2 prepare failed: " . $conn->error);
-            }
-        }
-    }
-
-    // Strategy 3: reference field regex extraction (optional)
-    if (!empty($reference)) {
-        if (preg_match('/student[:\s]+([^\s]+)/i', (string)$reference, $matches)) {
-            $search_term = trim($matches[1]);
-
-            $stmt = $conn->prepare("
-                SELECT id
-                FROM STUDENT_TAB
-                WHERE long_name LIKE ? OR name LIKE ? OR forename LIKE ?
-                LIMIT 1
-            ");
-            if ($stmt) {
-                $pattern = '%' . $search_term . '%';
-                $stmt->bind_param("sss", $pattern, $pattern, $pattern);
-                $stmt->execute();
-                $res = $stmt->get_result();
-                if ($row = ($res ? $res->fetch_assoc() : null)) {
-                    $result['student_id'] = (int)$row['id'];
-                    $result['confidence'] = 75.0;
-                    $result['matched_by'] = 'regex';
-                    $stmt->close();
-                    return $result;
-                }
-                $stmt->close();
-            } else {
-                dbg_log("Strategy3 prepare failed: " . $conn->error);
-            }
-        }
-    }
-
     return $result;
 }
 
@@ -329,33 +246,84 @@ function processInvoiceMatching($conn, $invoice_id, $reference_number, $benefici
         $invoice_reference = "INV-" . (int)$invoice_id;
     }
 
-    $match = matchInvoiceToStudent($conn, $reference_number, $beneficiary, $reference);
-
-    $student_id = $match['student_id'];
-    $confidence = (float)$match['confidence'];
-    $matched_by = (string)$match['matched_by'];
-
-    if ($forceInfo && $invoice_reference !== '' && $student_id !== null) {
-        $is_confirmed = true;
-    } else {
-        $is_confirmed = ($student_id !== null && $confidence >= CONFIRM_THRESHOLD);
+    // Delegate matching to the pipeline engine. This will set INVOICE_TAB.student_id
+    // and insert MATCHING_HISTORY_TAB rows if the engine finds a match.
+    if (function_exists('runMatchingPipeline')) {
+        runMatchingPipeline((int)$invoice_id);
     }
 
-    logMatchingAttempt($conn, $invoice_id, $student_id, $confidence, $matched_by, $is_confirmed);
+    // Derive final decision from DB state after the pipeline ran.
+    $student_id = null;
+    $confidence = 0.0;
+    $matched_by = 'none';
+    $is_confirmed = false;
+
+    // 1) Read student_id from invoice
+    $stmt = $conn->prepare("SELECT student_id FROM INVOICE_TAB WHERE id = ?");
+    if ($stmt) {
+        $stmt->bind_param("i", $invoice_id);
+        $stmt->execute();
+        $stmt->bind_result($sid);
+        if ($stmt->fetch() && $sid !== null) {
+            $student_id = (int)$sid;
+        }
+        $stmt->close();
+    }
+
+    // 2) Read latest history row, if table exists
+    $history_ok = null;
+    $colsHistory = getTableColumnsCached($conn, "MATCHING_HISTORY_TAB");
+    if (!empty($colsHistory)) {
+        $hasIsConfirmed = in_array('is_confirmed', $colsHistory, true);
+
+        $selectCols = "student_id, confidence_score, matched_by";
+        if ($hasIsConfirmed) {
+            $selectCols .= ", is_confirmed";
+        }
+
+        $sqlHist = "
+            SELECT {$selectCols}
+            FROM MATCHING_HISTORY_TAB
+            WHERE invoice_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+        ";
+        $stmtH = $conn->prepare($sqlHist);
+        if ($stmtH) {
+            $stmtH->bind_param("i", $invoice_id);
+            if ($stmtH->execute()) {
+                $resH = $stmtH->get_result();
+                if ($rowH = ($resH ? $resH->fetch_assoc() : null)) {
+                    if ($rowH['student_id'] !== null) {
+                        $student_id = (int)$rowH['student_id'];
+                    }
+                    $confidence = (float)($rowH['confidence_score'] ?? 0.0);
+                    $matched_by = (string)($rowH['matched_by'] ?? 'none');
+
+                    if ($hasIsConfirmed) {
+                        $is_confirmed = ((int)($rowH['is_confirmed'] ?? 0)) === 1;
+                    } else {
+                        $is_confirmed = ($student_id !== null && $confidence >= CONFIRM_THRESHOLD);
+                    }
+                    $history_ok = true;
+                }
+            }
+            $stmtH->close();
+        }
+    } else {
+        // No history table: fall back to invoice student_id only.
+        $is_confirmed = ($student_id !== null);
+    }
+
+    // Respect forceInfo behavior as before: allow callers to force confirmation.
+    if ($forceInfo && $invoice_reference !== '' && $student_id !== null) {
+        $is_confirmed = true;
+    }
 
     $notif_info_ok = null;
     $notif_warn_ok = null;
 
     if ($is_confirmed) {
-
-        $stmt = $conn->prepare("UPDATE INVOICE_TAB SET student_id = ? WHERE id = ?");
-        if ($stmt) {
-            $sid = (int)$student_id;
-            $stmt->bind_param("ii", $sid, $invoice_id);
-            $stmt->execute();
-            $stmt->close();
-        }
-
         $desc = "Confirmed: $invoice_reference matched to Student #$student_id (by $matched_by, " . round($confidence, 1) . "%)";
         $notif_info_ok = createNotificationOnce($conn, "info", $student_id, $invoice_reference, $time_from_date, $desc);
 
@@ -366,7 +334,7 @@ function processInvoiceMatching($conn, $invoice_id, $reference_number, $benefici
         $notif_warn_ok = createNotificationOnce($conn, "warning", $student_id, $invoice_reference, $time_from_date, $desc);
     }
 
-    return [
+    $result = [
         'success' => true,
         'invoice_id' => (int)$invoice_id,
         'invoice_reference' => $invoice_reference,
@@ -377,5 +345,20 @@ function processInvoiceMatching($conn, $invoice_id, $reference_number, $benefici
         'notif_info_ok' => $notif_info_ok,
         'notif_warn_ok' => $notif_warn_ok
     ];
+
+    // #region agent log
+    $logEntry = json_encode([
+        'sessionId' => 'debug-session',
+        'runId' => 'pre-fix',
+        'hypothesisId' => 'MF1',
+        'location' => 'matching_functions.php:369',
+        'message' => 'processInvoiceMatching result',
+        'data' => $result,
+        'timestamp' => round(microtime(true) * 1000)
+    ]) . PHP_EOL;
+    @file_put_contents(__DIR__ . '/.cursor/debug.log', $logEntry, FILE_APPEND);
+    // #endregion
+
+    return $result;
 }
 ?>

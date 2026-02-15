@@ -20,10 +20,14 @@ $sql = "SELECT SUM(amount) AS total_transactions FROM INVOICE_TAB";
 $result_transactions = $conn->query($sql);
 $transactions = ($result_transactions && $row = $result_transactions->fetch_assoc()) ? $row['total_transactions'] : 0;
 
-//Offene Zahlungen
-$sql = "SELECT SUM(amount - paid_amount) AS left_to_pay FROM INVOICE_TAB";
+//Offene Zahlungen (INVOICE_TAB may have paid_amount or only amount_total, e.g. buchhaltung_16_1_2026)
+$res_col = @$conn->query("SHOW COLUMNS FROM INVOICE_TAB LIKE 'paid_amount'");
+$has_paid = $res_col && $res_col->num_rows > 0;
+$sql = $has_paid
+    ? "SELECT SUM(amount - paid_amount) AS left_to_pay FROM INVOICE_TAB"
+    : "SELECT SUM(amount_total) AS left_to_pay FROM INVOICE_TAB";
 $result_left = $conn->query($sql);
-$left = ($result_left && $row = $result_left->fetch_assoc()) ? $row['left_to_pay'] : 0;
+$left = ($result_left && $row = $result_left->fetch_assoc()) ? (float)($row['left_to_pay'] ?? 0) : 0;
 
 //Erinnerung
 $sql = "SELECT COUNT(*) AS reminders FROM EMAIL_LOGS_TAB";
