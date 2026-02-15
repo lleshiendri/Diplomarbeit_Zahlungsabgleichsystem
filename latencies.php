@@ -2,6 +2,28 @@
 require_once 'auth_check.php';
 require "navigator.php";
 require "db_connect.php";
+if (!function_exists('maybeCreateLateFeeUrgent')) {
+    require_once __DIR__ . '/matching_functions.php';
+}
+
+// Ensure NOTIFICATION_TAB has an "urgent" row for every late payment this month (deadline 10th).
+// So the notifications page can show "send email" for each late transaction.
+$lateInvoices = $conn->query("
+    SELECT student_id, reference_number, processing_date
+    FROM INVOICE_TAB
+    WHERE student_id IS NOT NULL
+      AND YEAR(processing_date) = YEAR(CURDATE())
+      AND MONTH(processing_date) = MONTH(CURDATE())
+      AND DATE(processing_date) > STR_TO_DATE(CONCAT(DATE_FORMAT(CURDATE(), '%Y-%m'), '-10'), '%Y-%m-%d')
+");
+if ($lateInvoices) {
+    while ($row = $lateInvoices->fetch_assoc()) {
+        $ref = isset($row['reference_number']) ? trim((string)$row['reference_number']) : '';
+        if ($ref !== '') {
+            maybeCreateLateFeeUrgent($conn, (int)$row['student_id'], $ref, $row['processing_date']);
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -156,25 +178,6 @@ require "db_connect.php";
         ";
 
         $result = $conn->query($sql);
-
-        // #region agent log
-        $logEntry = json_encode([
-            'sessionId' => 'debug-session',
-            'runId' => 'pre-fix',
-            'hypothesisId' => 'LAT1',
-            'location' => 'latencies.php:158',
-            'message' => 'Latencies main query executed',
-            'data' => [
-                'page' => $page,
-                'perPage' => $perPage,
-                'totalStudents' => $totalStudents,
-                'totalPages' => $totalPages,
-                'query_ok' => (bool)$result,
-            ],
-            'timestamp' => round(microtime(true) * 1000)
-        ]) . PHP_EOL;
-        @file_put_contents(__DIR__ . '/.cursor/debug.log', $logEntry, FILE_APPEND);
-        // #endregion
 
         if ($result) {
             while ($row = $result->fetch_assoc()) {
