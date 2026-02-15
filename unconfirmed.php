@@ -120,8 +120,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_invoice'])) {
 
             if ($stmt->execute()) {
 
-                // 1) Log manual confirmation
-                logMatchingAttempt($conn, $invoice_id, $student_id, 100.0, 'manual', true);
+                // 1) Log manual confirmation (engine is single place for matching history writes)
+                if (function_exists('recordManualConfirmation')) {
+                    recordManualConfirmation($conn, $invoice_id, $student_id, 100.0, 'manual');
+                } else {
+                    require_once __DIR__ . '/matching_engine.php';
+                    recordManualConfirmation($conn, $invoice_id, $student_id, 100.0, 'manual');
+                }
 
                 // 2) Fetch invoice meta (processing_date + reference_number)
                 $meta = getInvoiceMeta($conn, $invoice_id);

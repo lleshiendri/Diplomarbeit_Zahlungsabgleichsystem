@@ -24,6 +24,9 @@ function makeTransactionHash($reference_number, $beneficiary, $description, $ref
 
 // ✅ Use new matching + notifications pipeline
 //require_once __DIR__ . '/matching_functions.php';
+// ✅ Matching pipeline: load engine first so runMatchingPipeline exists, then functions (processInvoiceMatching)
+require_once __DIR__ . '/matching_engine.php';
+require_once __DIR__ . '/matching_functions.php';
 
 $success_message = "";
 $error_message = "";
@@ -77,9 +80,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 
                     $success_message = "Transaction was successfully added.";
+                    $matchResult = null;
+                    if (!function_exists('processInvoiceMatching')) {
+                        $error_message = "Matching module not loaded. Check that matching_engine.php and matching_functions.php exist.";
+                    } else {
+                        $matchResult = processInvoiceMatching($conn, $newInvoiceId, $ref_number, $ordering_name, $reference, true);
+                        $success_message = "Transaction was successfully added.";
+                    }
 
                     // Optional debug box
-                    if (defined('ENV_DEBUG') && ENV_DEBUG) {
+                    if ($matchResult !== null && defined('ENV_DEBUG') && ENV_DEBUG) {
                         $debug_box = "<pre style='background:#111;color:#0f0;padding:12px;border-radius:10px;max-width:900px;margin:20px auto;overflow:auto;'>";
                         $debug_box .= "DEBUG: processInvoiceMatching() result\n";
                         $debug_box .= htmlspecialchars(json_encode($matchResult, JSON_PRETTY_PRINT), ENT_QUOTES, 'UTF-8');
