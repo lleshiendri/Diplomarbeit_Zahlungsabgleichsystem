@@ -1,7 +1,7 @@
 <?php
 /**
  * Matching + Notifications (schema-safe)
- * Late Fee Policy handled by MySQL EVENT (NOT in PHP).
+ * Late-fee urgent notifications: created in PHP when payment date is after the 10th of its month (see maybeCreateLateFeeUrgent).
  *
  * NOTE: Matching decisions (student_id selection, history) are now delegated
  * to the pipeline in matching_engine.php. This file focuses on schema-safe
@@ -230,6 +230,40 @@ function createNotificationOnce($conn, $urgency, $student_id, $invoice_reference
 }
 
 /* ===============================================================
+   LATE FEE NOTIFICATION (Rule: payment after 10th of month = late)
+   =============================================================== */
+/**
+ * If the payment date is after the 10th of its month, create an "urgent" notification (late fee).
+ * Deduplicated by createNotificationOnce (invoice_reference + urgency).
+ *
+ * @param mysqli $conn
+ * @param int|null $student_id
+ * @param string $invoice_reference
+ * @param string $processing_date e.g. Y-m-d or Y-m-d H:i:s
+ * @return bool true if urgent notification was created or already existed
+ */
+function maybeCreateLateFeeUrgent($conn, $student_id, $invoice_reference, $processing_date) {
+    $invoice_reference = trim((string)$invoice_reference);
+    if ($invoice_reference === '') return false;
+
+    $ts = strtotime((string)$processing_date);
+    if ($ts === false) return false;
+
+    $payDate = date('Y-m-d', $ts);
+    $year = date('Y', $ts);
+    $month = date('m', $ts);
+    $deadline = $year . '-' . $month . '-10';
+
+    if ($payDate <= $deadline) return true; // on time, nothing to do
+
+    $daysLate = (int)floor((strtotime($payDate) - strtotime($deadline)) / 86400);
+    $desc = "Late fee: payment received on $payDate (deadline was 10th; {$daysLate} day(s) late). Ref: $invoice_reference";
+    $time_from = date('Y-m-d', $ts);
+
+    return createNotificationOnce($conn, 'urgent', $student_id, $invoice_reference, $time_from, $desc);
+}
+
+/* ===============================================================
    MAIN PIPELINE
    =============================================================== */
 function processInvoiceMatching($conn, $invoice_id, $reference_number, $beneficiary, $reference, $forceInfo = false) {
@@ -326,7 +360,8 @@ function processInvoiceMatching($conn, $invoice_id, $reference_number, $benefici
     if ($is_confirmed) {
         $desc = "Confirmed: $invoice_reference matched to Student #$student_id (by $matched_by, " . round($confidence, 1) . "%)";
         $notif_info_ok = createNotificationOnce($conn, "info", $student_id, $invoice_reference, $time_from_date, $desc);
-
+        // Late fee: if payment date is after 10th of month, create urgent notification
+        maybeCreateLateFeeUrgent($conn, $student_id, $invoice_reference, $processing_date);
     } else {
 
         $who = ($student_id !== null) ? "suggested Student #$student_id" : "no student suggested";
