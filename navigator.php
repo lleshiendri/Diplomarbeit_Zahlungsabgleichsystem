@@ -318,7 +318,7 @@ if ($syRes && $syRes->num_rows === 1) {
     </span>
 
     <?php if ($currentPage !== 'dashboard.php'): ?>
-      <?php if (in_array($currentPage, ['unconfirmed.php','student_state.php,', 'Transactions.php'], true)): ?>
+      <?php if (in_array($currentPage, ['unconfirmed.php', 'student_state.php', 'Transactions.php', 'matching_history.php'], true)): ?>
         <span id="filterToggle" class="nav-icon-wrapper">
           <span class="nav-icon material-icons-outlined">filter_list</span>
         </span>
@@ -337,6 +337,7 @@ if ($syRes && $syRes->num_rows === 1) {
     <?php if ($isAdmin): ?> 
       <a href="add_transactions.php"><span class="material-icons-outlined">swap_horiz</span> Add Transaction</a>
       <a href="Transactions.php"><span class="material-icons-outlined">receipt_long</span> Transactions</a>
+      <a href="matching_history.php"><span class="material-icons-outlined">history</span> Matching History</a>
       <a href="add_students.php"><span class="material-icons-outlined">group_add</span> Add Students</a>
       <a href="import_files.php"><span class="material-icons-outlined">upload_file</span> Import File</a>
       <a href="unconfirmed.php"><span class="material-icons-outlined">priority_high</span> Unconfirmed</a>
@@ -416,7 +417,7 @@ if ($syRes && $syRes->num_rows === 1) {
 
 <!-- FILTER PANEL -->
 <?php
-$filtersPages = ['unconfirmed.php', 'student_state.php', 'Transactions.php'];
+$filtersPages = ['unconfirmed.php', 'student_state.php', 'Transactions.php', 'matching_history.php'];
 if (in_array($currentPage, $filtersPages, true)) {
     define('APP_HAS_OVERLAY', true);
     include 'filters.php';
