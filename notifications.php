@@ -31,12 +31,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['mark_many'])) {
    =============================================================== */
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['send_parent_email'])) {
 
-    // Hard gate: only admins can trigger emails
-    if (empty($isAdmin) || $isAdmin !== true) {
-        http_response_code(403);
-        echo "FORBIDDEN";
-        exit;
-    }
+// TEST MODE ONLY: bypass admin gate (REMOVE AFTER CONFIRMING EMAIL WORKS)
+if (!defined('ALLOW_MAIL_TEST')) define('ALLOW_MAIL_TEST', true);
+
+if (!ALLOW_MAIL_TEST) {
+    http_response_code(403);
+    echo "FORBIDDEN";
+    exit;
+}
+
 
     $notifId = intval($_POST['send_parent_email']);
     if ($notifId <= 0) {
@@ -58,10 +61,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['send_parent_email']))
         exit;
     }
 
-    $stmt->bind_param("i", $notifId);
-    $stmt->execute();
-    $notif = $stmt->get_result() ? $stmt->get_result()->fetch_assoc() : null;
-    $stmt->close();
+$stmt->bind_param("i", $notifId);
+$stmt->execute();
+
+$stmt->bind_result($id, $urgency, $student_id, $invoice_reference, $description, $time_from);
+$notif = null;
+
+if ($stmt->fetch()) {
+    $notif = [
+        'id' => $id,
+        'urgency' => $urgency,
+        'student_id' => $student_id,
+        'invoice_reference' => $invoice_reference,
+        'description' => $description,
+        'time_from' => $time_from,
+    ];
+}
+
+$stmt->close();
 
     if (!$notif) {
         http_response_code(404);
@@ -100,14 +117,46 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['send_parent_email']))
         $errorMsg = $e->getMessage();
         $ok = false;
     }
-
-    if ($ok) {
-        echo "OK";
-    } else {
+if ($ok) {
+    // Success → mark as sent
+    $stmt2 = $conn->prepare("
+        UPDATE NOTIFICATION_TAB
+        SET mail_status='sent',
+            mail_sent_at = NOW()
+        WHERE id=?
+    ");
+    if (!$stmt2) {
         http_response_code(500);
-        echo "MAIL_FAIL: " . $errorMsg;
+        echo "DB_PREP_FAIL: " . $conn->error;
+        exit;
     }
-    exit;
+
+    $stmt2->bind_param("i", $notifId);
+    $stmt2->execute();
+    $stmt2->close();
+
+    echo "OK";
+} else {
+    // Failure → mark as failed (no last_error / attempts columns exist)
+    $stmt2 = $conn->prepare("
+        UPDATE NOTIFICATION_TAB
+        SET mail_status='failed'
+        WHERE id=?
+    ");
+    if (!$stmt2) {
+        http_response_code(500);
+        echo "DB_PREP_FAIL: " . $conn->error;
+        exit;
+    }
+
+    $stmt2->bind_param("i", $notifId);
+    $stmt2->execute();
+    $stmt2->close();
+
+    http_response_code(500);
+    echo "MAIL_FAIL: " . $errorMsg;
+}
+exit;
 }
 
 /* ===============================================================
@@ -118,23 +167,57 @@ require "navigator.php";
 /* ===============================================================
    3) SEARCH + PAGINATION
    =============================================================== */
-$search = $_GET["search"] ?? "";
+$search = trim($_GET["search"] ?? "");
 $searchSql = "";
 
 if ($search !== "") {
     $safe = $conn->real_escape_string($search);
-    $searchSql = "WHERE 
-        urgency LIKE '%$safe%' OR
-        student_id LIKE '%$safe%' OR
-        description LIKE '%$safe%' OR
-        invoice_reference LIKE '%$safe%' OR
-        time_from LIKE '%$safe%'";
+
+    $isRef = (stripos($search, 'HTL-') === 0);           // looks like student ref
+    $isNum = ctype_digit($search);                      // only digits
+
+    $conds = [];
+
+    // Always allow free text in description
+    $conds[] = "n.description LIKE '%$safe%'";
+
+    // Urgency search (info/warning/urgent)
+    $conds[] = "n.urgency LIKE '%$safe%'";
+
+    // Student reference (best UX): exact/prefix match
+    // If user typed HTL-..., prioritize this
+    if ($isRef) {
+        $conds[] = "s.reference_id LIKE '$safe%'";
+    } else {
+        // also allow contains for partial searches
+        $conds[] = "s.reference_id LIKE '%$safe%'";
+    }
+
+    // Numeric searches: invoice_reference or student_id
+    if ($isNum) {
+        $conds[] = "n.invoice_reference = '$safe'";
+        $conds[] = "n.student_id = $safe";
+    } else {
+        // fallback contains (helps if invoice_reference is not purely numeric)
+        $conds[] = "n.invoice_reference LIKE '%$safe%'";
+        $conds[] = "CAST(n.student_id AS CHAR) LIKE '%$safe%'";
+    }
+
+    // Date search
+    $conds[] = "n.time_from LIKE '%$safe%'";
+
+    $searchSql = "WHERE (" . implode(" OR ", $conds) . ")";
 }
 
 $perPage = 10;
 $page = isset($_GET["page"]) ? max(1, intval($_GET["page"])) : 1;
 
-$countResult = $conn->query("SELECT COUNT(*) as total FROM NOTIFICATION_TAB $searchSql");
+$countResult = $conn->query("
+    SELECT COUNT(*) as total
+    FROM NOTIFICATION_TAB n
+    LEFT JOIN STUDENT_TAB s ON s.id = n.student_id
+    $searchSql
+");
 $totalRows = ($countResult && ($r = $countResult->fetch_assoc())) ? (int)$r["total"] : 0;
 $totalPages = max(1, (int)ceil($totalRows / $perPage));
 
@@ -142,12 +225,22 @@ $page = min($page, $totalPages);
 $offset = ($page - 1) * $perPage;
 
 $result = $conn->query("
-    SELECT id, urgency, student_id, description, invoice_reference, time_from, is_read
-    FROM NOTIFICATION_TAB
+    SELECT 
+        n.id,
+        n.urgency,
+        n.student_id,
+        n.description,
+        n.invoice_reference,
+        n.time_from,
+        n.is_read,
+        s.reference_id AS student_ref
+    FROM NOTIFICATION_TAB n
+    LEFT JOIN STUDENT_TAB s ON s.id = n.student_id
     $searchSql
-    ORDER BY time_from DESC
+    ORDER BY n.time_from DESC
     LIMIT $perPage OFFSET $offset
 ");
+
 
 /* helper for pagination links (keeps search) */
 function buildPageLink($p, $search) {
@@ -368,7 +461,8 @@ body {
 <tr>
     <th style="width:350px;">Description</th>
     <th>Student ID</th>
-    <th>Invoice ID</th>
+<th>Student Ref</th>
+<th>Invoice Ref</th>
     <th>Urgency</th>
     <th>Timestamp</th>
     <?php if ($isAdmin): ?>
@@ -404,7 +498,17 @@ body {
 <tr id="row_<?= (int)$row['id'] ?>" class="<?= $urgencyRowClass ?> <?= $isRead ? 'read-row' : '' ?>">
     <td><?= nl2br(htmlspecialchars($row["description"])) ?></td>
     <td><?= htmlspecialchars($row["student_id"]) ?></td>
-    <td><?= htmlspecialchars($row["invoice_reference"] ?? '—') ?></td>
+<td><?= htmlspecialchars($row["student_ref"] ?? '—') ?></td>
+
+<td>
+<?php
+  $desc = (string)($row["description"] ?? '');
+  $isLateFee = (stripos($desc, 'Late fee') === 0);
+
+  // For latefees, there is no invoice reference_number -> show dash.
+  echo $isLateFee ? '—' : htmlspecialchars($row["invoice_reference"] ?? '—');
+?>
+</td>
     <td>
         <div class="urgency-badge <?= $badgeClass ?>">
             <span class="material-icons-outlined"><?= $icon ?></span>

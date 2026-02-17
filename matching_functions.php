@@ -113,10 +113,64 @@ function logMatchingAttempt($conn, $invoice_id, $student_id, $confidence, $match
     return $ok;
 }
 
+function isSeptemberDate($dt) {
+    $ts = strtotime((string)$dt);
+    if ($ts === false) return false;
+    return ((int)date('n', $ts) === 9);
+}
+
+function hasPaidFullYearAmount($conn, $student_id, $dt) {
+    $ts = strtotime((string)$dt);
+    if ($ts === false) return false;
+
+    $year = (int)date('Y', $ts);
+    if ((int)date('n', $ts) < 9) $year -= 1;
+
+    $syStart = "$year-09-01";
+    $syEnd   = ($year + 1) . "-08-31";
+
+    // Fetch annual limit
+    $stmt = $conn->prepare("
+        SELECT total_amount
+        FROM SCHOOLYEAR_TAB
+        WHERE schoolyear LIKE CONCAT(?, '%')
+        ORDER BY schoolyear DESC
+        LIMIT 1
+    ");
+    if (!$stmt) return false;
+    $stmt->bind_param("s", $year);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    if (!$res || !($row = $res->fetch_assoc())) { $stmt->close(); return false; }
+    $limit = (float)$row['total_amount'];
+    $stmt->close();
+
+    // Sum paid in schoolyear
+    $stmt = $conn->prepare("
+        SELECT COALESCE(SUM(amount_total),0) AS paid
+        FROM INVOICE_TAB
+        WHERE student_id = ?
+          AND processing_date IS NOT NULL
+          AND DATE(processing_date) BETWEEN ? AND ?
+    ");
+    if (!$stmt) return false;
+    $sid = (int)$student_id;
+    $stmt->bind_param("iss", $sid, $syStart, $syEnd);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $paid = ($res && ($r = $res->fetch_assoc())) ? (float)$r['paid'] : 0.0;
+    $stmt->close();
+
+    return ($paid >= $limit);
+}
+
 /* ===============================================================
    NOTIFICATIONS (SCHEMA-SAFE INSERT)
    =============================================================== */
 function createNotificationOnce($conn, $urgency, $student_id, $invoice_reference, $time_from, $description) {
+    if (isSeptemberDate($processing_date)) return true;
+    if (hasPaidFullYearAmount($conn, $student_id, $processing_date)) return true;
+    
     $cols = getTableColumnsCached($conn, "NOTIFICATION_TAB");
 
     // invoice_reference must never be empty
