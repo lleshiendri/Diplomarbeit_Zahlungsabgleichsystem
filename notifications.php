@@ -122,32 +122,41 @@ if ($ok) {
     $stmt2 = $conn->prepare("
         UPDATE NOTIFICATION_TAB
         SET mail_status='sent',
-            mail_sent_at = NOW(),
-            mail_last_error = NULL,
-            mail_attempts = mail_attempts + 1
+            mail_sent_at = NOW()
         WHERE id=?
     ");
+    if (!$stmt2) {
+        http_response_code(500);
+        echo "DB_PREP_FAIL: " . $conn->error;
+        exit;
+    }
+
     $stmt2->bind_param("i", $notifId);
     $stmt2->execute();
     $stmt2->close();
 
     echo "OK";
 } else {
-    // Failure → mark as failed
+    // Failure → mark as failed (no last_error / attempts columns exist)
     $stmt2 = $conn->prepare("
         UPDATE NOTIFICATION_TAB
-        SET mail_status='failed',
-            mail_last_error = ?,
-            mail_attempts = mail_attempts + 1
+        SET mail_status='failed'
         WHERE id=?
     ");
-    $stmt2->bind_param("si", $errorMsg, $notifId);
+    if (!$stmt2) {
+        http_response_code(500);
+        echo "DB_PREP_FAIL: " . $conn->error;
+        exit;
+    }
+
+    $stmt2->bind_param("i", $notifId);
     $stmt2->execute();
     $stmt2->close();
 
     http_response_code(500);
     echo "MAIL_FAIL: " . $errorMsg;
 }
+exit;
 }
 
 /* ===============================================================

@@ -2,32 +2,68 @@
 declare(strict_types=1);
 
 /**
- * test.php (Graph helper) — CONFIG INLINE
- * Reused by notifications.php -> send_parent_email.php
+ * test.php (Graph helper) — BAT LOGIC (graph_env.php)
  *
- * IMPORTANT:
- * - Put your teacher's values below ONCE.
- * - Do NOT retype them per click.
- * - Do NOT commit to GitHub.
+ * Flow:
+ * - You run make_graph_env.bat on your PC
+ * - It generates graph_env.php
+ * - You upload graph_env.php next to this test.php
+ * - This file loads credentials from graph_env.php
  */
 
 const GRAPH_CFG = [
     'tenant_id'     => '175ca58f-8107-41fa-b4a8-2aaf43790b87',
     'client_id'     => '66b0890a-fe1a-4630-97ae-fdb1e96c7c19',
-    'client_secret' => 'yTO8Q~rivKPlzSc-jjDyoyqL1Te05YSkJJRm7bu_',
-    'sender_user'   => 'EndLle19@htl-shkoder.com', // mailbox that sends the email
+    'client_secret' => '...', // placeholder (should be overridden by graph_env.php)
+    'sender_user'   => 'EndLle19@htl-shkoder.com',
 ];
+
+function graph_cfg_from_env_file_if_available(string &$errorMsg = ''): array
+{
+    $errorMsg = '';
+    $envFile = __DIR__ . '/graph_env.php';
+
+    if (!is_file($envFile) || !is_readable($envFile)) {
+        // env file missing → fallback to inline
+        return GRAPH_CFG;
+    }
+
+    $cfg = require $envFile;
+    if (!is_array($cfg)) {
+        $errorMsg = "graph_env.php did not return an array.";
+        return GRAPH_CFG;
+    }
+
+    $out = [
+        'tenant_id'     => trim((string)($cfg['tenant_id'] ?? '')),
+        'client_id'     => trim((string)($cfg['client_id'] ?? '')),
+        'client_secret' => trim((string)($cfg['client_secret'] ?? '')),
+        'sender_user'   => trim((string)($cfg['sender_user'] ?? '')),
+    ];
+
+    // If env file incomplete, fallback
+    foreach (['tenant_id','client_id','client_secret','sender_user'] as $k) {
+        if ($out[$k] === '') {
+            $errorMsg = "graph_env.php missing key: {$k}";
+            return GRAPH_CFG;
+        }
+    }
+
+    return $out;
+}
 
 function graph_get_access_token(string &$errorMsg): ?string
 {
     $errorMsg = '';
 
-    $tenantId     = (string)(GRAPH_CFG['tenant_id'] ?? '');
-    $clientId     = (string)(GRAPH_CFG['client_id'] ?? '');
-    $clientSecret = (string)(GRAPH_CFG['client_secret'] ?? '');
+    $cfg = graph_cfg_from_env_file_if_available($errorMsg);
 
-    if ($tenantId === '' || $clientId === '' || $clientSecret === '') {
-        $errorMsg = "Missing Graph config in test.php (tenant_id/client_id/client_secret).";
+    $tenantId     = (string)($cfg['tenant_id'] ?? '');
+    $clientId     = (string)($cfg['client_id'] ?? '');
+    $clientSecret = (string)($cfg['client_secret'] ?? '');
+
+    if ($tenantId === '' || $clientId === '' || $clientSecret === '' || $clientSecret === '...') {
+        $errorMsg = "Missing/placeholder Graph config. Ensure graph_env.php contains the real client_secret VALUE.";
         return null;
     }
 
@@ -67,9 +103,11 @@ function graph_send_mail(array $toEmails, string $subject, string $content, stri
 {
     $errorMsg = '';
 
-    $senderUserId = (string)(GRAPH_CFG['sender_user'] ?? '');
+    $cfg = graph_cfg_from_env_file_if_available($errorMsg);
+
+    $senderUserId = (string)($cfg['sender_user'] ?? '');
     if ($senderUserId === '') {
-        $errorMsg = "Missing Graph config in test.php (sender_user).";
+        $errorMsg = "Missing Graph config (sender_user).";
         return false;
     }
 
