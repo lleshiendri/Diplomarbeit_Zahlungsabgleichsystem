@@ -28,6 +28,14 @@ $u_to              = trim($_GET['to'] ?? '');
 $u_min             = trim($_GET['amount_min'] ?? '');
 $u_max             = trim($_GET['amount_max'] ?? '');
 
+/* =========================
+   MATCHING HISTORY FILTER KEYS
+   ========================= */
+$mh_student = trim($_GET['student'] ?? '');
+$mh_ref     = trim($_GET['reference_number'] ?? '');
+$mh_from    = trim($_GET['from'] ?? '');
+$mh_to      = trim($_GET['to'] ?? '');
+
 $filter_used = isset($_GET['applied']);
 ?>
 
@@ -141,7 +149,28 @@ $filter_used = isset($_GET['applied']);
   <form class="filter-form" method="GET">
     <input type="hidden" name="applied" value="1">
 
-    <?php if ($currentPage === 'unconfirmed.php'): ?>
+    <?php if ($currentPage === 'matching_history.php'): ?>
+
+      <!-- MATCHING HISTORY FILTERS -->
+      <div class="filter-group">
+        <label>Student</label>
+        <input type="text" name="student" class="filter-input"
+               value="<?= htmlspecialchars($mh_student, ENT_QUOTES, 'UTF-8'); ?>">
+      </div>
+      <div class="filter-group">
+        <label>Reference Number</label>
+        <input type="text" name="reference_number" class="filter-input"
+               value="<?= htmlspecialchars($mh_ref, ENT_QUOTES, 'UTF-8'); ?>">
+      </div>
+      <div class="filter-group">
+        <label>Date Range (created_at)</label>
+        <div class="date-group">
+          <input type="date" name="from" class="filter-input" value="<?= htmlspecialchars($mh_from, ENT_QUOTES, 'UTF-8'); ?>">
+          <input type="date" name="to"   class="filter-input" value="<?= htmlspecialchars($mh_to, ENT_QUOTES, 'UTF-8'); ?>">
+        </div>
+      </div>
+
+    <?php elseif ($currentPage === 'unconfirmed.php'): ?>
 
       <!-- UNCONFIRMED FILTERS -->
       <div class="filter-group">
