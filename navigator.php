@@ -349,7 +349,7 @@ if ($syRes && $syRes->num_rows === 1) {
       <a href="help.php"><span class="material-icons-outlined">help_outline</span> Help & Tutorial</a>
     </nav>
     <div class="logout-wrap">
-      <a class="logout-link" href="http://buchhaltung.htl-projekt.com/login/login.php">
+      <a class="logout-link" href="logout.php">
         <span class="material-icons-outlined">logout</span> Logout
       </a>
     </div>
