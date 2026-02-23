@@ -23,11 +23,22 @@ if ($class_res && $class_res->num_rows > 0) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
     $name        = htmlspecialchars(trim($_POST['name'] ?? ''), ENT_QUOTES, 'UTF-8');
     $forename    = htmlspecialchars(trim($_POST['forename'] ?? ''), ENT_QUOTES, 'UTF-8');
-    $long_name   = htmlspecialchars(trim($_POST['long_name'] ?? ''), ENT_QUOTES, 'UTF-8');
     $birth_date  = htmlspecialchars($_POST['birth_date'] ?? '', ENT_QUOTES, 'UTF-8');
     $class_id    = htmlspecialchars(trim($_POST['class_id'] ?? ''), ENT_QUOTES, 'UTF-8');
     $additional  = htmlspecialchars(trim($_POST['additional_payments_status'] ?? ''), ENT_QUOTES, 'UTF-8');
     $left_to_pay = isset($_POST['left_to_pay']) ? (float) $_POST['left_to_pay'] : 0;
+
+    // Normalize gender to 'm' / 'w' or NULL
+    $gender_raw = isset($_POST['gender']) ? trim($_POST['gender']) : '';
+    if ($gender_raw === 'm' || $gender_raw === 'w') {
+        $gender = $gender_raw;
+    } else {
+        $gender = null;
+    }
+
+    // Optional entry date: empty => NULL
+    $entry_date_raw = isset($_POST['entry_date']) ? trim($_POST['entry_date']) : '';
+    $entry_date = $entry_date_raw !== '' ? htmlspecialchars($entry_date_raw, ENT_QUOTES, 'UTF-8') : null;
 
     if ($name && $forename && $birth_date && $class_id) {
         $duplicateFound = false;
@@ -58,12 +69,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
             
             $stmt = $conn->prepare("
                 INSERT INTO STUDENT_TAB 
-                    (name, forename, long_name, birth_date, class_id, additional_payments_status, left_to_pay)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (name, forename, birth_date, class_id, additional_payments_status, left_to_pay, gender, entry_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ");
 
             if ($stmt) {
-                $stmt->bind_param("ssssssd", $name, $forename, $long_name, $birth_date, $class_id, $additional, $left_to_pay);
+                // name, forename, birth_date, class_id, additional_payments_status, left_to_pay, gender, entry_date
+                $stmt->bind_param(
+                    "sssssdss",
+                    $name,
+                    $forename,
+                    $birth_date,
+                    $class_id,
+                    $additional,
+                    $left_to_pay,
+                    $gender,
+                    $entry_date
+                );
                 
                 // Execute INSERT first, then get the generated student ID
                 if ($stmt->execute()) {
@@ -254,11 +276,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
                         <input type="text" id="forename" name="forename" required>
                     </div>
                 </div>
-                <div class="full-width">
-                    <label for="long_name">Long Name</label>
+                <div>
+                    <label for="gender">Gender</label>
                     <div class="input-group">
-                        <span class="material-icons-outlined">assignment</span>
-                        <input type="text" id="long_name" name="long_name">
+                        <span class="material-icons-outlined">person</span>
+                        <select id="gender" name="gender">
+                            <option value="">-- Select Gender --</option>
+                            <option value="m">Male</option>
+                            <option value="w">Female</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label for="entry_date">Entry Date</label>
+                    <div class="input-group">
+                        <span class="material-icons-outlined">event</span>
+                        <input type="date" id="entry_date" name="entry_date">
                     </div>
                 </div>
                 <div>
