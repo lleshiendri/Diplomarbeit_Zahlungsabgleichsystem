@@ -22,6 +22,24 @@ if (isset($_GET['delete_id']) && $_GET['delete_id'] !== '') {
     }
 }
 
+// ============================================================
+// PDF GENERATION ALERT (from pdf_creator ui=1 flow)
+// ============================================================
+if (isset($_GET['pdf_ok'])) {
+    $pdfOk = (int)$_GET['pdf_ok'] === 1;
+    if ($pdfOk) {
+        $msg = "<div class='alert alert-success'>PDF successfully generated.</div>";
+    } else {
+        $errorMsg = isset($_GET['pdf_error']) ? htmlspecialchars($_GET['pdf_error'], ENT_QUOTES, 'UTF-8') : 'PDF generation failed.';
+        $msg = "<div class='alert alert-error'>PDF error: {$errorMsg}</div>";
+    }
+    if ($alert !== "") {
+        $alert .= "<br>" . $msg;
+    } else {
+        $alert = $msg;
+    }
+}
+
 /* ============================================================
    UPDATE STUDENT
    ============================================================ */
@@ -259,6 +277,10 @@ $result = $conn->query($selectSql);
                                onclick="return confirm(\'Are you sure you want to delete this student?\');">
                                 <span class="material-icons-outlined">delete</span>
                             </a>
+                            &nbsp;
+                            <a href="pdf_creator.php?student_id='.htmlspecialchars($studentId).'&ui=1" title="Create PDF">
+                                <span class="material-icons-outlined">picture_as_pdf</span>
+                            </a>
                           </td>';
                     echo '</tr>';
 
@@ -361,6 +383,24 @@ function toggleEdit(id) {
 
   row.classList.toggle("is-open");
 }
+</script>
+
+<script>
+// Auto-open generated PDF in a new tab when coming back from pdf_creator ui=1
+(function() {
+    const url = new URL(window.location.href);
+    const pdfOk = url.searchParams.get('pdf_ok');
+    const pdfFile = url.searchParams.get('pdf_file');
+    if (pdfOk === '1' && pdfFile) {
+        window.open(pdfFile, '_blank');
+        // Clean pdf_* params from URL so reload doesn't reopen
+        url.searchParams.delete('pdf_ok');
+        url.searchParams.delete('pdf_file');
+        url.searchParams.delete('pdf_error');
+        url.searchParams.delete('pdf_student_id');
+        window.history.replaceState({}, document.title, url.pathname + (url.search ? '?' + url.searchParams.toString() : ''));
+    }
+})();
 </script>
 
 </body>

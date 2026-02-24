@@ -23,51 +23,110 @@ if ($class_res && $class_res->num_rows > 0) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
     $name        = htmlspecialchars(trim($_POST['name'] ?? ''), ENT_QUOTES, 'UTF-8');
     $forename    = htmlspecialchars(trim($_POST['forename'] ?? ''), ENT_QUOTES, 'UTF-8');
-    $long_name   = htmlspecialchars(trim($_POST['long_name'] ?? ''), ENT_QUOTES, 'UTF-8');
     $birth_date  = htmlspecialchars($_POST['birth_date'] ?? '', ENT_QUOTES, 'UTF-8');
     $class_id    = htmlspecialchars(trim($_POST['class_id'] ?? ''), ENT_QUOTES, 'UTF-8');
     $additional  = htmlspecialchars(trim($_POST['additional_payments_status'] ?? ''), ENT_QUOTES, 'UTF-8');
     $left_to_pay = isset($_POST['left_to_pay']) ? (float) $_POST['left_to_pay'] : 0;
 
+    // Normalize gender to 'm' / 'w' or NULL
+    $gender_raw = isset($_POST['gender']) ? trim($_POST['gender']) : '';
+    if ($gender_raw === 'm' || $gender_raw === 'w') {
+        $gender = $gender_raw;
+    } else {
+        $gender = null;
+    }
+
+    // Optional entry date: empty => NULL
+    $entry_date_raw = isset($_POST['entry_date']) ? trim($_POST['entry_date']) : '';
+    $entry_date = $entry_date_raw !== '' ? htmlspecialchars($entry_date_raw, ENT_QUOTES, 'UTF-8') : null;
+
     if ($name && $forename && $birth_date && $class_id) {
-        $stmt = $conn->prepare("
-            INSERT INTO STUDENT_TAB 
-                (name, forename, long_name, birth_date, class_id, additional_payments_status, left_to_pay)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+        $duplicateFound = false;
+
+        $stmtCheck = $conn->prepare("
+            SELECT id FROM STUDENT_TAB
+            WHERE name = ? 
+              AND forename = ? 
+              AND birth_date = ?
         ");
-        if ($stmt) {
-            $stmt->bind_param("ssssssd", $name, $forename, $long_name, $birth_date, $class_id, $additional, $left_to_pay);
-            if ($stmt->execute()) {
-                // Generate reference_id after insert
-                $studentId = $conn->insert_id;
+        if ($stmtCheck) {
+            $stmtCheck->bind_param("sss", $name, $forename, $birth_date);
+            $stmtCheck->execute();
+            $dupRes = $stmtCheck->get_result();
+
+            if ($dupRes && $dupRes->num_rows > 0) {
+                $duplicateFound = true;
+                $error_message = "This student already exists in the database.";
+                echo "<script>alert('This student already exists in the database.');</script>";
+            }
+
+            $stmtCheck->close();
+        }
+
+        if (!$duplicateFound) {
+            // Start transaction to ensure atomicity of INSERT + UPDATE
+            $conn->begin_transaction();
+            
+            $stmt = $conn->prepare("
+                INSERT INTO STUDENT_TAB 
+                    (name, forename, birth_date, class_id, additional_payments_status, left_to_pay, gender, entry_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+
+            if ($stmt) {
+                // name, forename, birth_date, class_id, additional_payments_status, left_to_pay, gender, entry_date
+                $stmt->bind_param(
+                    "sssssdss",
+                    $name,
+                    $forename,
+                    $birth_date,
+                    $class_id,
+                    $additional,
+                    $left_to_pay,
+                    $gender,
+                    $entry_date
+                );
                 
-                // Only update if reference_id doesn't already exist
-                $checkRef = $conn->prepare("SELECT reference_id FROM STUDENT_TAB WHERE id = ?");
-                $checkRef->bind_param("i", $studentId);
-                $checkRef->execute();
-                $resultRef = $checkRef->get_result();
-                $rowRef = $resultRef->fetch_assoc();
-                $checkRef->close();
-                
-                if (empty($rowRef['reference_id'])) {
+                // Execute INSERT first, then get the generated student ID
+                if ($stmt->execute()) {
+                    $studentId = $conn->insert_id;
+                    $stmt->close();
+                    
+                    // Generate reference_id using the newly inserted student ID
                     $referenceId = generateReferenceID($studentId, $name, $forename);
+                    
+                    // Update the student record with the generated reference_id
                     $update = $conn->prepare("
                         UPDATE STUDENT_TAB
                         SET reference_id = ?
                         WHERE id = ?
                     ");
-                    $update->bind_param("si", $referenceId, $studentId);
-                    $update->execute();
-                    $update->close();
+                    
+                    if ($update) {
+                        $update->bind_param("si", $referenceId, $studentId);
+                        
+                        // Execute UPDATE - if this fails, rollback the entire transaction
+                        if ($update->execute()) {
+                            $conn->commit();
+                            $success_message = "Student successfully added.";
+                        } else {
+                            $conn->rollback();
+                            $error_message = "Error while updating reference_id: " . $update->error;
+                        }
+                        $update->close();
+                    } else {
+                        $conn->rollback();
+                        $error_message = "Error preparing UPDATE statement: " . $conn->error;
+                    }
+                } else {
+                    $conn->rollback();
+                    $error_message = "Error while saving: " . $stmt->error;
+                    $stmt->close();
                 }
-                
-                $success_message = "Student successfully added.";
             } else {
-                $error_message = "Error while saving: " . $stmt->error;
+                $conn->rollback();
+                $error_message = "Error preparing INSERT statement: " . $conn->error;
             }
-            $stmt->close();
-        } else {
-            $error_message = "Statement error: " . $conn->error;
         }
     } else {
         $error_message = "Please fill in all required fields (Name, Forename, Birth Date, Class).";
@@ -217,11 +276,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
                         <input type="text" id="forename" name="forename" required>
                     </div>
                 </div>
-                <div class="full-width">
-                    <label for="long_name">Long Name</label>
+                <div>
+                    <label for="gender">Gender</label>
                     <div class="input-group">
-                        <span class="material-icons-outlined">assignment</span>
-                        <input type="text" id="long_name" name="long_name">
+                        <span class="material-icons-outlined">person</span>
+                        <select id="gender" name="gender">
+                            <option value="">-- Select Gender --</option>
+                            <option value="m">Male</option>
+                            <option value="w">Female</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label for="entry_date">Entry Date</label>
+                    <div class="input-group">
+                        <span class="material-icons-outlined">event</span>
+                        <input type="date" id="entry_date" name="entry_date">
                     </div>
                 </div>
                 <div>

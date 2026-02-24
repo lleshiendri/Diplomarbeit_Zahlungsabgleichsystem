@@ -15,6 +15,8 @@ if (!is_dir($ARCHIVE_DIR) || !is_writable($ARCHIVE_DIR)) {
     exit("pdfArchive missing or not writable: " . $ARCHIVE_DIR);
 }
 
+$ui = isset($_GET['ui']) && $_GET['ui'] === '1';
+
 function safe_filename($s): string {
     $s = preg_replace('/[^a-zA-Z0-9\-_\.]/', '_', (string)$s);
     return trim($s, '_');
@@ -30,25 +32,39 @@ function fmt_date_or_dash($d): string {
 }
 
 /* ============================================================
-   INPUT: ids=1,2,3  (recommended)
-   or generate from filters by copying your filter logic later.
+   INPUT: EITHER student_id=123 (single) OR ids=1,2,3 (list)
    ============================================================ */
-$idsParam = trim($_GET['ids'] ?? '');
-if ($idsParam === '') {
-    http_response_code(400);
-    exit("Missing ids. Example: ?ids=12,15,99");
+$studentIds = [];
+
+$singleId = isset($_GET['student_id']) ? (int)$_GET['student_id'] : 0;
+if ($singleId > 0) {
+    $studentIds[] = $singleId;
+} else {
+    $idsParam = trim($_GET['ids'] ?? '');
+    if ($idsParam === '') {
+        if ($ui) {
+            header('Location: student_state.php?pdf_ok=0&pdf_error=' . rawurlencode('Invalid student ID.'));
+            exit;
+        }
+        http_response_code(400);
+        exit("Invalid student ID.");
+    }
+
+    foreach (explode(',', $idsParam) as $p) {
+        $id = (int)trim($p);
+        if ($id > 0) $studentIds[] = $id;
+    }
 }
 
-$studentIds = [];
-foreach (explode(',', $idsParam) as $p) {
-    $id = (int)trim($p);
-    if ($id > 0) $studentIds[] = $id;
-}
 $studentIds = array_values(array_unique($studentIds));
 
 if (count($studentIds) === 0) {
+    if ($ui) {
+        header('Location: student_state.php?pdf_ok=0&pdf_error=' . rawurlencode('Invalid student ID.'));
+        exit;
+    }
     http_response_code(400);
-    exit("No valid ids provided.");
+    exit("Invalid student ID.");
 }
 
 /* ============================================================
@@ -185,6 +201,30 @@ foreach ($rows as $row) {
             'student_id' => $row['student_id'] ?? null,
             'error' => $e->getMessage()
         ];
+    }
+}
+
+// If called from UI, redirect back with banner info instead of JSON
+if ($ui) {
+    $ok = count($failed) === 0 && count($generated) > 0;
+    $firstId = $studentIds[0] ?? 0;
+    if ($ok) {
+        // Build a web path assuming /pdfArchive is web-served relative to this script
+        $firstFs = $generated[0];
+        $fileName = basename($firstFs);
+        $webPath = 'pdfArchive/' . $fileName;
+        $location = 'student_state.php?pdf_ok=1'
+            . '&pdf_student_id=' . urlencode((string)$firstId)
+            . '&pdf_file=' . rawurlencode($webPath);
+        header('Location: ' . $location);
+        exit;
+    } else {
+        $errMsg = $failed[0]['error'] ?? 'PDF generation failed.';
+        $location = 'student_state.php?pdf_ok=0'
+            . '&pdf_student_id=' . urlencode((string)$firstId)
+            . '&pdf_error=' . rawurlencode($errMsg);
+        header('Location: ' . $location);
+        exit;
     }
 }
 
