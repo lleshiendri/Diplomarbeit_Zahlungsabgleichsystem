@@ -3,6 +3,9 @@ require_once 'auth_check.php';
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+// Buffer all output so AJAX JSON responses can discard any HTML (e.g. from navigator.php)
+ob_start();
+
 require 'navigator.php';
 require 'db_connect.php';
 require_once 'matching_functions.php';
@@ -112,25 +115,82 @@ function buildFilteredWhere(array &$params, string &$types, mysqli $conn): strin
     return "WHERE " . implode(" AND ", $clauses);
 }
 
+/**
+ * Local copy of splitAmountNoCentsLost from matching_engine.php.
+ * Ensures manual multi-student confirmation uses the same rounding behavior (no lost cents).
+ */
+function splitAmountNoCentsLostManual(float $totalAmount, int $n): array {
+    if ($n <= 0) return [];
+    $cents = (int)round($totalAmount * 100);
+    $perShare = (int)floor($cents / $n);
+    $remainder = $cents - $perShare * $n;
+    $shares = [];
+    for ($i = 0; $i < $n; $i++) {
+        $c = $perShare + ($i < $remainder ? 1 : 0);
+        $shares[] = $c / 100.0;
+    }
+    return $shares;
+}
+
 /* ===============================================================
-   HANDLE ADMIN CONFIRMATION (manual assign based on mh_id)
+   HANDLE ADMIN CONFIRMATION (manual assign, supports multi-student split)
    =============================================================== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_invoice'])) {
 
-    $mh_id     = isset($_POST['mh_id']) ? (int)$_POST['mh_id'] : 0;
-    $student_id= isset($_POST['student_id']) ? (int)$_POST['student_id'] : 0;
+    $isAjax = (
+        (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+        || (isset($_POST['ajax']) && $_POST['ajax'] === '1')
+    );
+    $debugId = uniqid('manual_confirm_', true);
 
-    if ($mh_id > 0 && $student_id > 0) {
+    $mh_id      = isset($_POST['mh_id']) ? (int)$_POST['mh_id'] : 0;
+    $invoice_id = isset($_POST['invoice_id']) ? (int)$_POST['invoice_id'] : 0;
 
-        $conn->begin_transaction();
+    // Allow legacy single-student field; normalize to student_ids[]
+    $rawStudentIds = $_POST['student_ids'] ?? null;
+    if ($rawStudentIds === null && isset($_POST['student_id'])) {
+        $rawStudentIds = [$_POST['student_id']];
+    }
 
-        try {
-            // 1) Load mh row (guard unconfirmed) + invoice meta
+    $studentIds = [];
+    if (is_array($rawStudentIds)) {
+        foreach ($rawStudentIds as $sid) {
+            if ($sid === '' || $sid === null) continue;
+            $sidInt = (int)$sid;
+            if ($sidInt > 0) {
+                $studentIds[] = $sidInt;
+            }
+        }
+    } elseif ($rawStudentIds !== null && $rawStudentIds !== '') {
+        $sidInt = (int)$rawStudentIds;
+        if ($sidInt > 0) {
+            $studentIds[] = $sidInt;
+        }
+    }
+
+    // Deduplicate student IDs to avoid double-counting in split logic
+    $studentIds = array_values(array_unique($studentIds));
+
+    error_log("MANUAL_CONFIRM[$debugId] incoming mh_id={$mh_id}, invoice_id={$invoice_id}, student_ids=" . json_encode($studentIds));
+
+    $response = [
+        'ok' => false,
+        'invoice_id' => $invoice_id,
+        'confirmed_students' => [],
+        'shares' => [],
+        'removed_suggestions' => 0,
+        'debug_id' => $debugId,
+    ];
+
+    try {
+        if ($invoice_id <= 0 && $mh_id > 0) {
+            // Derive invoice_id from the unconfirmed suggestion row if not explicitly posted
             $sql = "
                 SELECT
                     mh.invoice_id,
                     t.reference_number,
-                    t.processing_date
+                    t.processing_date,
+                    t.amount_total
                 FROM MATCHING_HISTORY_TAB mh
                 JOIN INVOICE_TAB t ON t.id = mh.invoice_id
                 WHERE mh.id = ?
@@ -138,72 +198,256 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_invoice'])) {
                 LIMIT 1
             ";
             $stmt = $conn->prepare($sql);
-            if (!$stmt) throw new Exception("Statement error: " . $conn->error);
-
+            if (!$stmt) {
+                throw new Exception("Statement error (load from mh_id): " . $conn->error);
+            }
             $stmt->bind_param("i", $mh_id);
-            if (!$stmt->execute()) throw new Exception("Execute error: " . $stmt->error);
-
+            if (!$stmt->execute()) {
+                throw new Exception("Execute error (load from mh_id): " . $stmt->error);
+            }
             $res = $stmt->get_result();
             $row = $res ? $res->fetch_assoc() : null;
             $stmt->close();
-
             if (!$row) {
                 throw new Exception("Invalid or already confirmed suggestion.");
             }
-
             $invoice_id = (int)$row['invoice_id'];
-
-            // 2) Update invoice final assignment
-            $stmt = $conn->prepare("UPDATE INVOICE_TAB SET student_id = ? WHERE id = ?");
-            if (!$stmt) throw new Exception("Statement error: " . $conn->error);
-            $stmt->bind_param("ii", $student_id, $invoice_id);
-            if (!$stmt->execute()) throw new Exception("Error updating invoice: " . $stmt->error);
-            $stmt->close();
-
-            // 3) Mark THIS mh suggestion as confirmed
-          // 3) Confirm THIS mh row AND store the FINAL chosen student_id
-$stmt = $conn->prepare("
-  UPDATE MATCHING_HISTORY_TAB
-  SET student_id = ?, is_confirmed = 1
-  WHERE id = ? AND is_confirmed = 0
-");
-if (!$stmt) throw new Exception("Statement error: " . $conn->error);
-$stmt->bind_param("ii", $student_id, $mh_id);
-if (!$stmt->execute()) throw new Exception("Error updating matching history: " . $stmt->error);
-$stmt->close();
-
-            // 4) Optional: notifications (fail-safe)
-            $processing_date = $row['processing_date'] ?: date('Y-m-d H:i:s');
-            $invoice_reference = $row['reference_number'];
-            if ($invoice_reference === null || trim((string)$invoice_reference) === '') {
-                $invoice_reference = "INV-" . (int)$invoice_id;
-            }
-
-            if (function_exists('createNotificationOnce')) {
-                @createNotificationOnce(
-                    $conn,
-                    "info",
-                    $student_id,
-                    $invoice_reference,
-                    date('Y-m-d', strtotime((string)$processing_date)),
-                    "Confirmed manually: $invoice_reference assigned to Student #$student_id"
-                );
-            }
-
-            if (function_exists('maybeCreateLateFeeUrgent')) {
-                @maybeCreateLateFeeUrgent($conn, $student_id, $invoice_reference, (string)$processing_date);
-            }
-
-            $conn->commit();
-            $success_message = "Suggestion confirmed and assigned to student.";
-
-        } catch (Exception $e) {
-            $conn->rollback();
-            $error_message = $e->getMessage();
         }
 
-    } else {
-        $error_message = "Invalid matching history or student ID.";
+        if ($invoice_id <= 0) {
+            throw new Exception("Invalid invoice ID.");
+        }
+        if (empty($studentIds)) {
+            throw new Exception("No valid student selected.");
+        }
+
+        // Validate invoice exists and get amount + metadata
+        $stmt = $conn->prepare("
+            SELECT id, amount_total, reference_number, processing_date
+            FROM INVOICE_TAB
+            WHERE id = ?
+            LIMIT 1
+        ");
+        if (!$stmt) {
+            throw new Exception("Statement error (load invoice): " . $conn->error);
+        }
+        $stmt->bind_param("i", $invoice_id);
+        if (!$stmt->execute()) {
+            throw new Exception("Execute error (load invoice): " . $stmt->error);
+        }
+        $res = $stmt->get_result();
+        $invoiceRow = $res ? $res->fetch_assoc() : null;
+        $stmt->close();
+
+        if (!$invoiceRow) {
+            throw new Exception("Invoice not found.");
+        }
+
+        $amountTotal       = (float)($invoiceRow['amount_total'] ?? 0.0);
+        $processing_date   = $invoiceRow['processing_date'] ?: date('Y-m-d H:i:s');
+        $invoice_reference = $invoiceRow['reference_number'];
+        if ($invoice_reference === null || trim((string)$invoice_reference) === '') {
+            $invoice_reference = "INV-" . (int)$invoice_id;
+        }
+
+        // Validate that each student exists
+        foreach ($studentIds as $sid) {
+            $check = $conn->prepare("SELECT id FROM STUDENT_TAB WHERE id = ? LIMIT 1");
+            if (!$check) {
+                throw new Exception("Statement error (check student): " . $conn->error);
+            }
+            $check->bind_param("i", $sid);
+            if (!$check->execute()) {
+                throw new Exception("Execute error (check student): " . $check->error);
+            }
+            $r = $check->get_result();
+            $exists = $r && $r->fetch_assoc();
+            $check->close();
+            if (!$exists) {
+                throw new Exception("Student not found: ID " . (int)$sid);
+            }
+        }
+
+        $conn->begin_transaction();
+
+        // Count existing unconfirmed suggestions for logging
+        $beforeCount = 0;
+        $stmt = $conn->prepare("SELECT COUNT(*) AS c FROM MATCHING_HISTORY_TAB WHERE invoice_id = ? AND is_confirmed = 0");
+        if ($stmt) {
+            $stmt->bind_param("i", $invoice_id);
+            if ($stmt->execute()) {
+                $rs = $stmt->get_result();
+                $rowCount = $rs ? $rs->fetch_assoc() : null;
+                $beforeCount = $rowCount ? (int)$rowCount['c'] : 0;
+            }
+            $stmt->close();
+        }
+        error_log("MANUAL_CONFIRM[$debugId] suggestion_rows_before=" . $beforeCount);
+
+        // Delete all unconfirmed suggestions for this invoice so they cannot shadow the manual choice
+        $stmt = $conn->prepare("DELETE FROM MATCHING_HISTORY_TAB WHERE invoice_id = ? AND is_confirmed = 0");
+        if (!$stmt) {
+            throw new Exception("Statement error (delete suggestions): " . $conn->error);
+        }
+        $stmt->bind_param("i", $invoice_id);
+        if (!$stmt->execute()) {
+            throw new Exception("Execute error (delete suggestions): " . $stmt->error);
+        }
+        $deleted = $stmt->affected_rows;
+        $stmt->close();
+        error_log("MANUAL_CONFIRM[$debugId] suggestion_rows_deleted=" . $deleted);
+
+        // Compute per-student shares with cent-safe rounding mirrored from matching_engine.php
+        $n = count($studentIds);
+        $shares = splitAmountNoCentsLostManual($amountTotal, $n);
+
+        // Insert confirmed history rows for each student_id (matched_by='manual', is_confirmed=1)
+        $inserted = 0;
+        $sharePairs = [];
+
+        // Try to persist share into an optional amount column if present; otherwise rely on STUDENT_TAB + logs only.
+        $shareColumn = null;
+        $colRes = $conn->query("SHOW COLUMNS FROM MATCHING_HISTORY_TAB LIKE 'matched_amount'");
+        if ($colRes && $colRes->num_rows > 0) {
+            $shareColumn = 'matched_amount';
+        } else {
+            $colRes = $conn->query("SHOW COLUMNS FROM MATCHING_HISTORY_TAB LIKE 'amount_share'");
+            if ($colRes && $colRes->num_rows > 0) {
+                $shareColumn = 'amount_share';
+            } else {
+                $colRes = $conn->query("SHOW COLUMNS FROM MATCHING_HISTORY_TAB LIKE 'amount'");
+                if ($colRes && $colRes->num_rows > 0) {
+                    $shareColumn = 'amount';
+                }
+            }
+        }
+        if ($colRes instanceof mysqli_result) {
+            $colRes->free();
+        }
+
+        $baseSql = "INSERT INTO MATCHING_HISTORY_TAB (invoice_id, student_id, confidence_score, matched_by, is_confirmed, created_at";
+        if ($shareColumn !== null) {
+            $baseSql .= ", {$shareColumn}";
+        }
+        $baseSql .= ") VALUES (?, ?, ?, ?, 1, NOW()";
+        if ($shareColumn !== null) {
+            $baseSql .= ", ?";
+        }
+        $baseSql .= ")";
+
+        $histStmt = $conn->prepare($baseSql);
+        if (!$histStmt) {
+            throw new Exception("Statement error (insert history): " . $conn->error);
+        }
+
+        foreach ($studentIds as $idx => $sid) {
+            $share = $shares[$idx] ?? 0.0;
+            $confidence = 100.0;
+            $matchedBy = 'manual';
+
+            if ($shareColumn !== null) {
+                $histStmt->bind_param("iidsd", $invoice_id, $sid, $confidence, $matchedBy, $share);
+            } else {
+                $histStmt->bind_param("iids", $invoice_id, $sid, $confidence, $matchedBy);
+            }
+
+            if (!$histStmt->execute()) {
+                throw new Exception("Error inserting matching history: " . $histStmt->error);
+            }
+            $inserted++;
+            $sharePairs[] = ['student_id' => $sid, 'amount' => $share];
+        }
+        $histStmt->close();
+
+        error_log("MANUAL_CONFIRM[$debugId] rows_inserted_confirmed=" . $inserted . " shares=" . json_encode($sharePairs));
+
+        // Update INVOICE_TAB: assign primary student (first in the list)
+        $primaryStudent = $studentIds[0];
+        $stmt = $conn->prepare("UPDATE INVOICE_TAB SET student_id = ? WHERE id = ?");
+        if (!$stmt) {
+            throw new Exception("Statement error (update invoice): " . $conn->error);
+        }
+        $stmt->bind_param("ii", $primaryStudent, $invoice_id);
+        if (!$stmt->execute()) {
+            throw new Exception("Error updating invoice: " . $stmt->error);
+        }
+        $stmt->close();
+
+        // Update STUDENT_TAB balances: left_to_pay -= share, amount_paid += share
+        $upd = $conn->prepare("
+            UPDATE STUDENT_TAB
+            SET left_to_pay = GREATEST(0, COALESCE(left_to_pay, 0) - ?),
+                amount_paid = COALESCE(amount_paid, 0) + ?
+            WHERE id = ?
+        ");
+        if (!$upd) {
+            throw new Exception("Statement error (update student): " . $conn->error);
+        }
+
+        foreach ($studentIds as $idx => $sid) {
+            $share = $shares[$idx] ?? 0.0;
+            $upd->bind_param("ddi", $share, $share, $sid);
+            if (!$upd->execute()) {
+                throw new Exception("Error updating student balances: " . $upd->error);
+            }
+            error_log("MANUAL_CONFIRM[$debugId] student_update sid={$sid} share=" . number_format($share, 2, '.', ''));
+        }
+        $upd->close();
+
+        // Optional notifications – kept for parity with original flow (uses primary student)
+        if (function_exists('createNotificationOnce')) {
+            @createNotificationOnce(
+                $conn,
+                "info",
+                $primaryStudent,
+                $invoice_reference,
+                date('Y-m-d', strtotime((string)$processing_date)),
+                "Confirmed manually: $invoice_reference assigned to student(s): " . implode(',', $studentIds)
+            );
+        }
+        if (function_exists('maybeCreateLateFeeUrgent')) {
+            @maybeCreateLateFeeUrgent($conn, $primaryStudent, $invoice_reference, (string)$processing_date);
+        }
+
+        $conn->commit();
+
+        $response['ok'] = true;
+        $response['invoice_id'] = $invoice_id;
+        $response['confirmed_students'] = $studentIds;
+        $response['shares'] = $sharePairs;
+        $response['removed_suggestions'] = $deleted;
+
+        if ($isAjax) {
+            if (ob_get_length() !== false) {
+                // For AJAX, discard any buffered HTML (e.g. <style> from navigator.php) so body is pure JSON
+                ob_clean();
+            }
+            header('Content-Type: application/json');
+            echo json_encode($response);
+            exit;
+        }
+
+        $success_message = "Invoice manually confirmed for selected student(s).";
+
+    } catch (Exception $e) {
+        // Always best-effort rollback; safe even if no transaction is open
+        @$conn->rollback();
+        $response['ok'] = false;
+        $response['error'] = $e->getMessage();
+        error_log("MANUAL_CONFIRM[$debugId] ERROR: " . $e->getMessage());
+
+        if ($isAjax) {
+            if (ob_get_length() !== false) {
+                // Ensure error JSON isn't prefixed by buffered HTML
+                ob_clean();
+            }
+            header('Content-Type: application/json');
+            http_response_code(500);
+            echo json_encode($response);
+            exit;
+        }
+
+        $error_message = $e->getMessage();
     }
 }
 
@@ -877,24 +1121,31 @@ if (!empty($suggestion_row)) {
               </div>
             </div>
 
-            <form method="post" action="">
+            <form id="manualConfirmForm" method="post" action="">
               <input type="hidden" name="mh_id" value="<?= (int)$suggestion_mh_id ?>">
+              <input type="hidden" name="invoice_id" value="<?= (int)$suggestion_invoice_id ?>">
 
-              <select name="student_id" class="side-input" required>
-                <option value="">-- Select Student --</option>
-                <?php
-                $students_sql = "SELECT id, long_name FROM STUDENT_TAB ORDER BY long_name ASC";
-                $students_res = $conn->query($students_sql);
-                if ($students_res) {
-                    while ($s = $students_res->fetch_assoc()) {
-                        $sid = (int)$s['id'];
-                        $selected = ($suggestion_student_id > 0 && $sid === (int)$suggestion_student_id) ? 'selected' : '';
-                        $label = (string)$s['long_name'];
-                        echo '<option value="' . $sid . '" ' . $selected . '>' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</option>';
+              <div id="studentSelectionContainer">
+                <div class="student-row" style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                  <select name="student_ids[]" class="side-input" required data-primary-student-select>
+                    <option value="">-- Select Student --</option>
+                    <?php
+                    $students_sql = "SELECT id, long_name FROM STUDENT_TAB ORDER BY long_name ASC";
+                    $students_res = $conn->query($students_sql);
+                    if ($students_res) {
+                        while ($s = $students_res->fetch_assoc()) {
+                            $sid = (int)$s['id'];
+                            $selected = ($suggestion_student_id > 0 && $sid === (int)$suggestion_student_id) ? 'selected' : '';
+                            $label = (string)$s['long_name'];
+                            echo '<option value="' . $sid . '" ' . $selected . '>' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</option>';
+                        }
                     }
-                }
-                ?>
-              </select>
+                    ?>
+                  </select>
+                  <button type="button" class="btn btn-ghost" data-remove-student style="display:none;">Remove</button>
+                </div>
+              </div>
+              <button type="button" id="addStudentBtn" class="btn btn-ghost" style="margin-bottom:10px;">Add student</button>
             <div id="studentSearchWrap" class="student-search-wrap" style="display:none;">
   <div class="student-search-head">
     <span class="student-search-label">Search</span>
@@ -935,7 +1186,7 @@ if (!empty($suggestion_row)) {
     </div>
   </main>
 
-  <?php include 'filters.php'; ?>
+<?php include 'filters.php'; ?>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -950,7 +1201,7 @@ document.addEventListener('DOMContentLoaded', () => {
     navLeft.appendChild(filterIcon);
   }
   // --- Student live search when '-- Select Student --' is selected ---
-const studentSelect = document.querySelector('select[name="student_id"]');
+const studentSelect = document.querySelector('select[data-primary-student-select]');
 const wrap = document.getElementById('studentSearchWrap');
 const input = document.getElementById('studentSearchInput');
 const resultsBox = document.getElementById('studentSearchResults');
@@ -1026,6 +1277,37 @@ renderResults(filtered);
   updateVisibility();
 }
 
+  // Multi-student selection: add/remove extra student select rows
+  const container = document.getElementById('studentSelectionContainer');
+  const addBtn = document.getElementById('addStudentBtn');
+  if (container && addBtn) {
+    addBtn.addEventListener('click', () => {
+      const rows = container.querySelectorAll('.student-row');
+      if (!rows.length) return;
+      const firstRow = rows[0];
+      const clone = firstRow.cloneNode(true);
+      const select = clone.querySelector('select[name="student_ids[]"]');
+      const removeBtn = clone.querySelector('[data-remove-student]');
+      if (select) {
+        select.value = "";
+      }
+      if (removeBtn) {
+        removeBtn.style.display = 'inline-flex';
+      }
+      container.appendChild(clone);
+    });
+
+    container.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-remove-student]');
+      if (!btn) return;
+      const row = btn.closest('.student-row');
+      const rows = container.querySelectorAll('.student-row');
+      if (row && rows.length > 1) {
+        row.remove();
+      }
+    });
+  }
+
   // Row click -> reload with selected mh_id (keep query params)
   document.querySelectorAll('tbody tr[data-mh-id]').forEach(tr => {
     tr.addEventListener('click', () => {
@@ -1053,6 +1335,40 @@ if (closeBtn) {
     studentSelect.focus();
   });
 }
+
+  // AJAX submit for manual confirmation – expects JSON response from server
+  const manualForm = document.getElementById('manualConfirmForm');
+  if (manualForm) {
+    manualForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(manualForm);
+      formData.append('confirm_invoice', '1');
+      formData.append('ajax', '1');
+
+      fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData
+      })
+        .then(resp => resp.json())
+        .then(data => {
+          if (data && data.ok) {
+            alert('Invoice confirmed for student(s): ' + data.confirmed_students.join(', '));
+            // Reload so the confirmed invoice disappears from the unconfirmed list
+            window.location.reload();
+          } else {
+            const msg = data && data.error ? data.error : 'Manual confirmation failed.';
+            alert(msg + (data && data.debug_id ? ' (Debug ID: ' + data.debug_id + ')' : ''));
+          }
+        })
+        .catch(err => {
+          alert('Unexpected error during manual confirmation: ' + err);
+        });
+    });
+  }
 });
 </script>
 </body>
