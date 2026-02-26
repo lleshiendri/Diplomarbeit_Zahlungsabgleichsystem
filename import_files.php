@@ -242,50 +242,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                 $id = $conn->insert_id;
 
                 if ($fileType === 'Students') {
-                $filePath = $destination;
+                    $filePath = $destination;
 
-                    if (($handle = fopen($filePath, "r")) !== FALSE) {
+                    if (($handle = fopen($filePath, "r")) !== false) {
                         // Use same delimiter as validateCSVStructure for Students
                         $delimiter = $validation['delimiter'] ?? "\t";
 
-                        // Read header row
+                        // Read header row (already validated)
                         $header = fgetcsv($handle, 1000, $delimiter);
 
-                        // Import summary for per-row actions (returned in JSON response)
                         $studentImportSummary = [
                             'inserted_count' => 0,
                             'skipped_duplicate_count' => 0,
-                            'updated_missing_fields_count' => 0,
                             'failed_count' => 0,
                             'details' => []
                         ];
 
-                        // Prepared statements (reused for all rows)
                         $stmtFindStudent = $conn->prepare("
-                            SELECT id, class_id, additional_payments_status, left_to_pay, reference_id
+                            SELECT id
                             FROM STUDENT_TAB
-                            WHERE name = ? AND forename = ? AND birth_date = ?
+                            WHERE name = ? 
+                              AND forename = ? 
+                              AND birth_date = ?
                             LIMIT 1
                         ");
                         $stmtInsertStudent = $conn->prepare("
-                            INSERT INTO STUDENT_TAB (forename, name, birth_date, left_to_pay, additional_payments_status, gender, entry_date, exit_date, description, second_ID, extern_key, email)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO STUDENT_TAB (forename, name, birth_date, gender, entry_date, exit_date, description, second_ID, extern_key, email)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ");
                         $stmtUpdateRef = $conn->prepare("
                             UPDATE STUDENT_TAB
                             SET reference_id = ?
                             WHERE id = ?
                         ");
-                        $stmtUpdateMissing = $conn->prepare("
-                            UPDATE STUDENT_TAB
-                            SET
-                                class_id  = IF(class_id IS NULL OR class_id=0, ?, class_id),
-                                additional_payments_status = IF(additional_payments_status IS NULL OR additional_payments_status='', ?, additional_payments_status),
-                                left_to_pay = IF(left_to_pay IS NULL OR left_to_pay=0, ?, left_to_pay)
-                            WHERE id = ?
-                        ");
 
-                        if (!$stmtFindStudent || !$stmtInsertStudent || !$stmtUpdateRef || !$stmtUpdateMissing) {
+                        if (!$stmtFindStudent || !$stmtInsertStudent || !$stmtUpdateRef) {
                             echo json_encode([
                                 'success' => false,
                                 'message' => 'Student import prepare failed: ' . $conn->error
@@ -294,15 +285,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                         }
 
                         $rowNumber = 1; // header row is 1
-                        while (($data = fgetcsv($handle, 1000, $delimiter)) !== FALSE) {
+                        while (($data = fgetcsv($handle, 1000, $delimiter)) !== false) {
                             $rowNumber++;
 
-                            // Normalize inputs BEFORE duplicate check (trim + collapse whitespace; keep casing)
-                            $name = normalizeStudentField($data[0] ?? '');
-                            $forename = normalizeStudentField($data[2] ?? '');
-                            $gender = $data[3] ?? null;
+                            // Minimal normalization – mirror add_students.php (trim only)
+                            $name = trim((string)($data[1] ?? ''));
+                            $forename = trim((string)($data[2] ?? ''));
+                            $gender = isset($data[3]) ? trim((string)$data[3]) : null;
 
-                            // Birth date must be normalized to YYYY-MM-DD (fail row if invalid)
                             $birth_date = normalizeDate($data[4] ?? null);
                             if (!$birth_date) {
                                 $studentImportSummary['failed_count']++;
@@ -337,7 +327,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 continue;
                             }
 
-                            // Duplicate check (case-insensitive via DB collation; whitespace normalized in PHP)
+                            // Deterministic hash for logging (duplicate rule still uses DB SELECT)
+                            $studentHash = hash(
+                                'sha256',
+                                mb_strtolower(trim($forename), 'UTF-8') . '|' .
+                                mb_strtolower(trim($name), 'UTF-8') . '|' .
+                                $birth_date
+                            );
+
+                            // Duplicate check: same rule as add_students.php
+                            // (name, forename, birth_date) with trimmed values
                             $stmtFindStudent->bind_param("sss", $name, $forename, $birth_date);
                             if (!$stmtFindStudent->execute()) {
                                 $studentImportSummary['failed_count']++;
@@ -354,92 +353,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             $existing = $existingRes ? $existingRes->fetch_assoc() : null;
 
                             if ($existing && isset($existing['id'])) {
-                                $existingId = (int)$existing['id'];
-
-                                // Optional: fill missing DB fields using incoming non-empty values (never overwrite non-empty DB fields)
-                                $incomingClassId = 0; // not provided by this CSV mapping
-                                $incomingAdditional = ''; // not provided by this CSV mapping
-                                $incomingLeftToPay = 0.0; // not provided by this CSV mapping
-
-                                $shouldUpdateMissing =
-                                    ($incomingClassId > 0) ||
-                                    ($incomingAdditional !== '') ||
-                                    ($incomingLeftToPay > 0);
-
-                                if ($shouldUpdateMissing) {
-                                    // Use incoming value if provided, otherwise keep existing (prevents "filling" with empty defaults)
-                                    $fillClassId = ($incomingClassId > 0) ? $incomingClassId : (int)($existing['class_id'] ?? 0);
-                                    $fillAdditional = ($incomingAdditional !== '') ? $incomingAdditional : (string)($existing['additional_payments_status'] ?? '');
-                                    $fillLeftToPay = ($incomingLeftToPay > 0) ? (float)$incomingLeftToPay : (float)($existing['left_to_pay'] ?? 0);
-
-                                    $stmtUpdateMissing->bind_param("isdi", $fillClassId, $fillAdditional, $fillLeftToPay, $existingId);
-                                    if (!$stmtUpdateMissing->execute()) {
-                                        $studentImportSummary['failed_count']++;
-                                        $studentImportSummary['details'][] = [
-                                            'row_number' => $rowNumber,
-                                            'action' => 'failed',
-                                            'student_id' => $existingId,
-                                            'reason' => 'update_missing_fields_failed: ' . $stmtUpdateMissing->error
-                                        ];
-                                    } elseif ($stmtUpdateMissing->affected_rows > 0) {
-                                        $studentImportSummary['updated_missing_fields_count']++;
-                                        $studentImportSummary['details'][] = [
-                                            'row_number' => $rowNumber,
-                                            'action' => 'updated_missing',
-                                            'student_id' => $existingId,
-                                            'reason' => 'duplicate_found_filled_missing_fields'
-                                        ];
-                                    } else {
-                                        $studentImportSummary['skipped_duplicate_count']++;
-                                        $studentImportSummary['details'][] = [
-                                            'row_number' => $rowNumber,
-                                            'action' => 'skipped_duplicate',
-                                            'student_id' => $existingId,
-                                            'reason' => 'duplicate_found'
-                                        ];
-                                    }
-                                } else {
-                                    $studentImportSummary['skipped_duplicate_count']++;
-                                    $studentImportSummary['details'][] = [
-                                        'row_number' => $rowNumber,
-                                        'action' => 'skipped_duplicate',
-                                        'student_id' => $existingId,
-                                        'reason' => 'duplicate_found'
-                                    ];
-                                }
-
-                                // IMPORTANT: do not insert, do not generate reference_id for duplicates
-                                continue;
-                            }
-
-                            // Not found: INSERT + reference_id UPDATE must be atomic per row
-                            $left_to_pay = 0.0;
-                            $additional_payments_status = 0.0;
-                            $entry_date = normalizeDate($data[6] ?? null);
-                            $exit_date = normalizeDate($data[7] ?? null);
-                            $description = $data[8] ?? null;
-                            $second_id = $data[9] ?? null;
-                            $extern_key = $data[10] ?? null;
-                            $email = $data[14] ?? null;
-
-                            if (!$conn->begin_transaction()) {
-                                $studentImportSummary['failed_count']++;
+                                $studentImportSummary['skipped_duplicate_count']++;
                                 $studentImportSummary['details'][] = [
                                     'row_number' => $rowNumber,
-                                    'action' => 'failed',
-                                    'student_id' => null,
-                                    'reason' => 'transaction_begin_failed: ' . $conn->error
+                                    'action' => 'skipped_duplicate',
+                                    'student_id' => (int)$existing['id'],
+                                    'reason' => 'duplicate_found_by_name_forename_birth_date',
+                                    'student_hash' => $studentHash
                                 ];
                                 continue;
                             }
 
+                            $entry_date = normalizeDate($data[6] ?? null);
+                            $exit_date = normalizeDate($data[7] ?? null);
+                            $description = isset($data[8]) ? trim((string)$data[8]) : null;
+                            $second_id = isset($data[9]) ? trim((string)$data[9]) : null;
+                            $extern_key = isset($data[10]) ? trim((string)$data[10]) : null;
+                            $email = isset($data[14]) ? trim((string)$data[14]) : null;
+                            $email = $email !== '' ? mb_strtolower($email, 'UTF-8') : null;
+
                             $stmtInsertStudent->bind_param(
-                                "sssddssssdds",
+                                "ssssssssss",
                                 $forename,
                                 $name,
                                 $birth_date,
-                                $left_to_pay,
-                                $additional_payments_status,
                                 $gender,
                                 $entry_date,
                                 $exit_date,
@@ -450,51 +387,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             );
 
                             if (!$stmtInsertStudent->execute()) {
-                                $conn->rollback();
                                 $studentImportSummary['failed_count']++;
                                 $studentImportSummary['details'][] = [
                                     'row_number' => $rowNumber,
                                     'action' => 'failed',
                                     'student_id' => null,
-                                    'reason' => 'insert_failed: ' . $stmtInsertStudent->error
+                                    'reason' => 'insert_failed: ' . $stmtInsertStudent->error,
+                                    'student_hash' => $studentHash
                                 ];
                                 continue;
                             }
 
                             $studentId = (int)$conn->insert_id;
 
-                            // Generate + persist reference_id only for newly inserted rows
+                            // Optionally generate reference_id for newly inserted students
                             $referenceId = generateReferenceID($studentId, $name, $forename);
                             $stmtUpdateRef->bind_param("si", $referenceId, $studentId);
+                            $detailReason = 'inserted_with_reference_id';
                             if (!$stmtUpdateRef->execute() || $stmtUpdateRef->affected_rows !== 1) {
-                                $conn->rollback();
-                                $studentImportSummary['failed_count']++;
-                                $studentImportSummary['details'][] = [
-                                    'row_number' => $rowNumber,
-                                    'action' => 'failed',
-                                    'student_id' => $studentId,
-                                    'reason' => 'reference_id_update_failed: ' . $stmtUpdateRef->error
-                                ];
-                                continue;
+                                $detailReason = 'inserted_reference_id_update_failed: ' . $stmtUpdateRef->error;
                             }
 
-                            if (!$conn->commit()) {
-                                $conn->rollback();
-                                $studentImportSummary['failed_count']++;
-                                $studentImportSummary['details'][] = [
-                                    'row_number' => $rowNumber,
-                                    'action' => 'failed',
-                                    'student_id' => $studentId,
-                                    'reason' => 'transaction_commit_failed: ' . $conn->error
-                                ];
-                                continue;
-                            }
                             $studentImportSummary['inserted_count']++;
                             $studentImportSummary['details'][] = [
                                 'row_number' => $rowNumber,
                                 'action' => 'inserted',
                                 'student_id' => $studentId,
-                                'reason' => 'inserted_with_reference_id'
+                                'reason' => $detailReason,
+                                'student_hash' => $studentHash
                             ];
                         }
 
@@ -502,9 +422,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                         $stmtFindStudent->close();
                         $stmtInsertStudent->close();
                         $stmtUpdateRef->close();
-                        $stmtUpdateMissing->close();
 
-                        // Return the student import summary in the AJAX response
                         $response['import_summary'] = $studentImportSummary;
                     }
                 }
@@ -644,9 +562,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                         while (($data = fgetcsv($handle, 1000, "\t")) !== FALSE) {
                             $first_name = $data[2] ?? null;
                             $last_name  = $data[1] ?? null;
-                            $phone      = $data[7] ?? null;
                             $mobile     = $data[8] ?? null;
-                            $email      = $data[6] ?? null;
+                            $phone = isset($data[7]) ? trim($data[7]) : null;
+                            $phone = $phone !== null && $phone !== '' ? preg_replace('/\s+/', '', $phone) : null;
+                            $email = isset($data[6]) ? trim($data[6]) : null;
+                            $email = $email !== null && $email !== '' ? mb_strtolower($email, 'UTF-8') : null;
                             $external_key = $data[10] ?? null;
 
                             $stmtGuardian->bind_param(
