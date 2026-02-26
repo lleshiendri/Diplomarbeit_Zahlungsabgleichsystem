@@ -531,7 +531,8 @@ body{
 #helpPage #student_state .media,
 #helpPage #import_files .media,
 #helpPage #unconfirmed .media,
-#helpPage #transactions .media{
+#helpPage #transactions .media,
+#helpPage #matching_history .media{
   grid-template-columns: 1fr !important;   /* remove 2-column grid */
 }
 
@@ -540,7 +541,8 @@ body{
 #helpPage #student_state .legend,
 #helpPage #import_files .legend,
 #helpPage #unconfirmed .legend,
-#helpPage #transactions .legend{
+#helpPage #transactions .legend,
+#helpPage #matching_history .legend{
   margin-top: 10px; /* space under the image */
 }
 
@@ -636,4 +638,8 @@ body{
   list-style: none;
   padding: 0;
   margin: 0;
+}
+
+#helpPage #matching_history #matching_history_edit{
+  margin-bottom: 10px;
 }

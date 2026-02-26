@@ -73,9 +73,9 @@ if (isset($_GET['delete_id']) && $_GET['delete_id'] !== '') {
             die("Delete failed: " . htmlspecialchars($error ?: $conn->error));
         }
 
-        $alert = "<div class='alert alert-success'>✅ Student successfully deleted.</div>";
+        $alert = "<div class='alert alert-success'> Student successfully deleted.</div>";
     } else {
-        $alert = "<div class='alert alert-error'>❌ Delete failed.</div>";
+        $alert = "<div class='alert alert-error'> Delete failed.</div>";
     }
 }
 
@@ -86,14 +86,14 @@ if (isset($_GET['email_ok'])) {
     $emailOk = (int)($_GET['email_ok'] ?? 0) === 1;
     if ($emailOk) {
         $sentCount = isset($_GET['email_sent']) ? (int)$_GET['email_sent'] : 0;
-        $text = "✅ Email sent successfully.";
+        $text = " Email sent successfully.";
         if ($sentCount > 0) {
             $text .= " Recipients: " . $sentCount;
         }
         $msg = "<div class='alert alert-success'>{$text}</div>";
     } else {
         $errorMsg = isset($_GET['email_error']) ? htmlspecialchars($_GET['email_error'], ENT_QUOTES, 'UTF-8') : 'Email sending failed.';
-        $msg = "<div class='alert alert-error'>❌ Email failed: {$errorMsg}</div>";
+        $msg = "<div class='alert alert-error'> Email failed: {$errorMsg}</div>";
     }
     if ($alert !== "") {
         $alert .= "<br>" . $msg;

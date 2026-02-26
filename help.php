@@ -33,6 +33,7 @@
             <a class="help-link" href="#schoolyear">Top Navigation & School Year</a>
             <a class="help-link" href="#dashboard">Dashboard</a>
             <a class="help-link" href="#notifications">Notifications</a>
+            <a class="help-link" href="#matching_history">Matching History</a>
             <a class="help-link" href="#add_transactions">Add Transactions</a>
             <a class="help-link" href="#transactions">Transactions</a>
             <a class="help-link" href="#add_students">Add Students</a>
@@ -518,6 +519,107 @@
 
           </article>
 
+
+          <!-- Matching History -->
+          <article id="matching_history" class="help-section card" data-title="matching_history">
+            <header class="help-section__header">
+              <h2>Matching History</h2>
+              <p class="muted">
+                Audit log of how transactions were matched to students (automatic and manual), used for traceability and corrections.
+              </p>
+            </header>
+
+            <div class="media">
+              <figure class="shot">
+                <img src="/help_page_images/matching_history.png" alt="Matching History overview screenshot" />
+              </figure>
+
+              <div class="legend">
+                <h3>Table columns</h3>
+
+                <ul class="legend__list">
+                  <li>
+                    <span class="dot">1</span>
+                    <strong>Id:</strong>
+                    Unique record id for this matching event.
+                  </li>
+
+                  <li>
+                    <span class="dot">2</span>
+                    <strong>Invoice Ref:</strong>
+                    Reference or identifier coming from the invoice or transaction.
+                  </li>
+
+                  <li>
+                    <span class="dot">3</span>
+                    <strong>Amount:</strong>
+                    Amount of the payment assigned to this student in this matching record.
+                  </li>
+
+                  <li>
+                    <span class="dot">4</span>
+                    <strong>Processing Date:</strong>
+                    Date when the payment was processed in the bank.
+                  </li>
+
+                  <li>
+                    <span class="dot">5</span>
+                    <strong>Student:</strong>
+                    Student linked to the invoice for this matching record.
+                  </li>
+
+                  <li>
+                    <span class="dot">6</span>
+                    <strong>Matched By:</strong>
+                    Method used to find this matching record (manual, reference-based, name-based, history-based, etc.).
+                  </li>
+
+                  <li>
+                    <span class="dot">7</span>
+                    <strong>Confidence:</strong>
+                    Confidence score or percentage indicating how strong the match is.
+                  </li>
+
+                  <li>
+                    <span class="dot">8</span>
+                    <strong>Confirmed:</strong>
+                    Shows whether this match is verified and considered final.
+                  </li>
+
+                  <li>
+                    <span class="dot">9</span>
+                    <strong>Created:</strong>
+                    Timestamp when this matching record was created.
+                  </li>
+
+                  <li>
+                    <span class="dot">10</span>
+                    <strong>Actions:</strong>
+                    <strong>Pen</strong> = edit the matching record details. 
+                    <strong>Trash bin</strong> = delete the matching record.
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="media">
+              <div class="legend">
+                <h3>Editing a matching record</h3>
+                <figure class="shot" id="matching_history_edit">
+                  <img src="/help_page_images/edit_matching_history.png" alt="Matching history edit screenshot" />
+                </figure>
+                <ul class="legend__list">
+                  <li><span class="dot">1</span> <strong>Assign to student:</strong> Choose the correct student from the dropdown.</li>
+                  <li><span class="dot">2</span> <strong>Save:</strong> Applies the change and updates the matching record.</li>
+                  <li><span class="dot">3</span> <strong>Cancel:</strong> Discards changes and exits edit mode.</li>
+                </ul>
+                <div class="callout callout--warning">
+                  Editing a match affects balances and reconciliation. Only edit when you are certain.
+                </div>
+              </div>
+            </div>
+
+          </article>
 
 
           <!-- Add Students -->

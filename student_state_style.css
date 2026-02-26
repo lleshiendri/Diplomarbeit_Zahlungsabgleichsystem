@@ -215,6 +215,12 @@
     background-color: var(--red-light);
     transition: 0.2s;
   }
+
+  /* Action icons: prevent underline on hover for links inside the table */
+  .content .student-table td a:hover,
+  .content .student-table a:hover {
+    text-decoration: none !important;
+  }
   
   /* =========================
      9) Inline Edit Row
