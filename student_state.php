@@ -11,11 +11,68 @@ $alert = "";
 if (isset($_GET['delete_id']) && $_GET['delete_id'] !== '') {
     $delete_id = $_GET['delete_id'];
 
+    // #region agent log
+    $logPath = __DIR__ . '/.cursor/debug.log';
+    $logEntry = [
+        'id'           => 'log_' . uniqid(),
+        'timestamp'    => round(microtime(true) * 1000),
+        'location'     => 'student_state.php:delete_enter',
+        'message'      => 'Delete request received',
+        'runId'        => 'pre-fix',
+        'hypothesisId' => 'H1',
+        'data'         => [
+            'raw_get'   => $_GET,
+            'delete_id' => $delete_id,
+        ],
+    ];
+    @file_put_contents($logPath, json_encode($logEntry) . PHP_EOL, FILE_APPEND);
+    // #endregion
+
+    // Lookup target row by extern_key (for debugging)
+    $rowInfo = null;
+    if ($stmtCheck = $conn->prepare("SELECT id, extern_key FROM STUDENT_TAB WHERE extern_key = ? LIMIT 1")) {
+        $stmtCheck->bind_param("s", $delete_id);
+        $stmtCheck->execute();
+        $resCheck = $stmtCheck->get_result();
+        $rowInfo = $resCheck ? $resCheck->fetch_assoc() : null;
+        $stmtCheck->close();
+    }
+
     $stmt = $conn->prepare("DELETE FROM STUDENT_TAB WHERE extern_key = ?");
     if ($stmt) {
         $stmt->bind_param("s", $delete_id);
-        $stmt->execute();
+        $ok       = $stmt->execute();
+        $affected = $stmt->affected_rows;
+        $error    = $stmt->error;
+        $errno    = $stmt->errno;
         $stmt->close();
+
+        // #region agent log
+        $logEntry = [
+            'id'           => 'log_' . uniqid(),
+            'timestamp'    => round(microtime(true) * 1000),
+            'location'     => 'student_state.php:delete_execute',
+            'message'      => 'Delete executed',
+            'runId'        => 'pre-fix',
+            'hypothesisId' => 'H2',
+            'data'         => [
+                'delete_id'  => $delete_id,
+                'rowInfo'    => $rowInfo,
+                'ok'         => $ok,
+                'affected'   => $affected,
+                'errno'      => $errno,
+                'error'      => $error,
+                'conn_error' => $conn->error,
+            ],
+        ];
+        @file_put_contents($logPath, json_encode($logEntry) . PHP_EOL, FILE_APPEND);
+        // #endregion
+
+        // Temporary strict error handling during debugging
+        if (!$ok) {
+            die("Delete failed: " . htmlspecialchars($error ?: $conn->error));
+        }
+
         $alert = "<div class='alert alert-success'>✅ Student successfully deleted.</div>";
     } else {
         $alert = "<div class='alert alert-error'>❌ Delete failed.</div>";
