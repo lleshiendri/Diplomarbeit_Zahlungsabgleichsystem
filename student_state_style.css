@@ -220,10 +220,15 @@
      9) Inline Edit Row
      ========================= */
   .material-icons-outlined {
-    font-size: 24px;
-    vertical-align: middle;
-    cursor: pointer;
-  }
+  font-size: 24px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.actions-cell {display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
   
   .edit-row td {
     background: var(--off-white);
@@ -322,6 +327,55 @@
   /* Slight distinction if you want delete stronger */
   .action-icon.delete {
     color: var(--red-dark);
+  }
+
+  /* Align all action buttons in one row */
+  .actions-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  /* Make all action buttons same size (icons + chips) */
+  .actions-cell .action-icon,
+  .actions-cell .action-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+  }
+
+  .actions-cell .material-icons-outlined {
+    font-size: 20px;
+  }
+
+  /* Round chips for email actions */
+  .action-chip {
+    border: 1px solid var(--red-light);
+    background: #fff;
+    color: var(--red-main);
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .action-chip-email {
+    background: #fff7f3;
+  }
+
+  .action-chip-id {
+    background: #f3f7ff;
+  }
+
+  .action-chip:hover {
+    border-color: var(--red-main);
+    color: var(--red-dark);
+  }
+
+  .chip-label {
+    line-height: 1;
   }
 
 
