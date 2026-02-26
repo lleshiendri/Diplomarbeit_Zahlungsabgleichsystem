@@ -11,11 +11,68 @@ $alert = "";
 if (isset($_GET['delete_id']) && $_GET['delete_id'] !== '') {
     $delete_id = $_GET['delete_id'];
 
+    // #region agent log
+    $logPath = __DIR__ . '/.cursor/debug.log';
+    $logEntry = [
+        'id'           => 'log_' . uniqid(),
+        'timestamp'    => round(microtime(true) * 1000),
+        'location'     => 'student_state.php:delete_enter',
+        'message'      => 'Delete request received',
+        'runId'        => 'pre-fix',
+        'hypothesisId' => 'H1',
+        'data'         => [
+            'raw_get'   => $_GET,
+            'delete_id' => $delete_id,
+        ],
+    ];
+    @file_put_contents($logPath, json_encode($logEntry) . PHP_EOL, FILE_APPEND);
+    // #endregion
+
+    // Lookup target row by extern_key (for debugging)
+    $rowInfo = null;
+    if ($stmtCheck = $conn->prepare("SELECT id, extern_key FROM STUDENT_TAB WHERE extern_key = ? LIMIT 1")) {
+        $stmtCheck->bind_param("s", $delete_id);
+        $stmtCheck->execute();
+        $resCheck = $stmtCheck->get_result();
+        $rowInfo = $resCheck ? $resCheck->fetch_assoc() : null;
+        $stmtCheck->close();
+    }
+
     $stmt = $conn->prepare("DELETE FROM STUDENT_TAB WHERE extern_key = ?");
     if ($stmt) {
         $stmt->bind_param("s", $delete_id);
-        $stmt->execute();
+        $ok       = $stmt->execute();
+        $affected = $stmt->affected_rows;
+        $error    = $stmt->error;
+        $errno    = $stmt->errno;
         $stmt->close();
+
+        // #region agent log
+        $logEntry = [
+            'id'           => 'log_' . uniqid(),
+            'timestamp'    => round(microtime(true) * 1000),
+            'location'     => 'student_state.php:delete_execute',
+            'message'      => 'Delete executed',
+            'runId'        => 'pre-fix',
+            'hypothesisId' => 'H2',
+            'data'         => [
+                'delete_id'  => $delete_id,
+                'rowInfo'    => $rowInfo,
+                'ok'         => $ok,
+                'affected'   => $affected,
+                'errno'      => $errno,
+                'error'      => $error,
+                'conn_error' => $conn->error,
+            ],
+        ];
+        @file_put_contents($logPath, json_encode($logEntry) . PHP_EOL, FILE_APPEND);
+        // #endregion
+
+        // Temporary strict error handling during debugging
+        if (!$ok) {
+            die("Delete failed: " . htmlspecialchars($error ?: $conn->error));
+        }
+
         $alert = "<div class='alert alert-success'>✅ Student successfully deleted.</div>";
     } else {
         $alert = "<div class='alert alert-error'>❌ Delete failed.</div>";
@@ -297,23 +354,41 @@ $result = $conn->query($selectSql);
                     if ($isAdmin) {
                     // Actions
                     echo '<td>
-                            <span class="material-icons-outlined"
-                                  onclick="toggleEdit(\''.$studentId.'\')">edit</span>
-                            &nbsp;
-                            <a href="?'.htmlspecialchars(http_build_query(array_merge($paginationBase, ['delete_id' => $externKey]))).'"
-                               onclick="return confirm(\'Are you sure you want to delete this student?\');">
-                                <span class="material-icons-outlined">delete</span>
-                            </a>
-                            &nbsp;
-                            <a href="pdf_creator.php?student_id='.htmlspecialchars($studentId).'&ui=1" title="Create PDF">
-                                <span class="material-icons-outlined">picture_as_pdf</span>
-                            </a>
-                            &nbsp;
-                            <a href="send_student_pdf_email.php?student_id='.htmlspecialchars($studentId).'&return='.htmlspecialchars($returnParam, ENT_QUOTES, 'UTF-8').'" title="Send PDF report via email">
-                                <span class="material-icons-outlined">email</span>
-                            </a>
-                            &nbsp;
-                            <span class="material-icons-outlined js-send-ref-email" data-student-id="'.(int)$studentId.'" title="Send Reference ID via Email" role="button" style="cursor:pointer;">email</span>
+                            <div class="actions-cell">
+                                <span class="material-icons-outlined action-icon"
+                                      onclick="toggleEdit(\''.$studentId.'\')"
+                                      title="Edit student">
+                                    edit
+                                </span>
+
+                                <a class="action-icon delete"
+                                   href="?'.htmlspecialchars(http_build_query(array_merge($paginationBase, ['delete_id' => $externKey]))).'"
+                                   onclick="return confirm(\'Are you sure you want to delete this student?\');"
+                                   title="Delete student">
+                                    <span class="material-icons-outlined">delete</span>
+                                </a>
+
+                                <a class="action-icon"
+                                   href="pdf_creator.php?student_id='.htmlspecialchars($studentId).'&ui=1"
+                                   title="Open PDF report">
+                                    <span class="material-icons-outlined">picture_as_pdf</span>
+                                </a>
+
+                                <!-- Send full PDF report via email -->
+                                <a class="action-chip action-chip-email"
+                                   href="send_student_pdf_email.php?student_id='.htmlspecialchars($studentId).'&return='.htmlspecialchars($returnParam, ENT_QUOTES, 'UTF-8').'"
+                                   title="Send PDF report via email">
+                                    <span class="material-icons-outlined">attach_email</span>
+                                </a>
+
+                                <!-- Send only reference ID via email -->
+                                <span class="action-chip action-chip-id js-send-ref-email"
+                                      data-student-id="'.(int)$studentId.'"
+                                      title="Send Reference ID via email"
+                                      role="button">
+                                    <span class="material-icons-outlined">contact_mail</span>
+                                </span>
+                            </div>
                           </td>';
                     echo '</tr>';
 

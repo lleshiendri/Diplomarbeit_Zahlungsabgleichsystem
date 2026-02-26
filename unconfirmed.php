@@ -59,8 +59,9 @@ function stmt_bind_params(mysqli_stmt $stmt, string $types, array $params): void
 
 function buildFilteredWhere(array &$params, string &$types, mysqli $conn): string {
     $clauses = [];
-    // Base: unconfirmed suggestions ONLY
-    $clauses[] = "mh.is_confirmed = 0";
+    // Base: unconfirmed suggestions OR invoices without any history row
+    // This ensures the list also shows invoices that have no MATCHING_HISTORY_TAB entry at all.
+    $clauses[] = "(mh.is_confirmed = 0 OR mh.id IS NULL)";
 
     if ($GLOBALS['filterBeneficiary'] !== '') {
         $clauses[] = "t.beneficiary LIKE ?";
@@ -501,7 +502,7 @@ $bestPickJoin = "
 $count_sql = "
   SELECT COUNT(*) AS total
   FROM MATCHING_HISTORY_TAB mh
-  JOIN INVOICE_TAB t ON t.id = mh.invoice_id
+  RIGHT JOIN INVOICE_TAB t ON t.id = mh.invoice_id
   {$whereSql}
 ";
 $count_stmt = $conn->prepare($count_sql);
@@ -527,7 +528,7 @@ $offset = ($page - 1) * $limit;
 $transactions_sql = "
   SELECT
     mh.id AS mh_id,
-    mh.invoice_id,
+    t.id AS invoice_id,
     mh.student_id AS suggested_student_id,
     mh.confidence_score,
     mh.matched_by,
@@ -541,9 +542,9 @@ $transactions_sql = "
     t.amount_total,
     t.processing_date
   FROM MATCHING_HISTORY_TAB mh
-  JOIN INVOICE_TAB t ON t.id = mh.invoice_id
+  RIGHT JOIN INVOICE_TAB t ON t.id = mh.invoice_id
   {$whereSql}
-  ORDER BY mh.created_at DESC
+  ORDER BY t.processing_date DESC, t.id DESC
   LIMIT ? OFFSET ?
 ";
 
@@ -572,7 +573,7 @@ $pending = 0;
 $pending_sql = "
   SELECT COUNT(*) AS c
   FROM MATCHING_HISTORY_TAB mh
-  JOIN INVOICE_TAB t ON t.id = mh.invoice_id
+  RIGHT JOIN INVOICE_TAB t ON t.id = mh.invoice_id
   {$whereSql}
 ";
 $pending_stmt = $conn->prepare($pending_sql);
@@ -620,10 +621,12 @@ $suggestion_matched_by = "";
 $suggestion_created_at = "";
 $reason_text = "";
 
-// Selected suggestion via GET
+// Selected suggestion or invoice via GET
 $active_mh_id = isset($_GET['mh_id']) ? (int)$_GET['mh_id'] : 0;
+$active_invoice_id = isset($_GET['invoice_id']) ? (int)$_GET['invoice_id'] : 0;
 
-// Pick selected if exists and still unconfirmed, else pick newest in current filtered set
+// Pick selected suggestion if exists and still unconfirmed
+$suggestion_row = null;
 if ($active_mh_id > 0) {
     $suggestion_sql = "
         SELECT
@@ -659,45 +662,6 @@ if ($active_mh_id > 0) {
     } else {
         $suggestion_row = null;
     }
-} else {
-    // newest best suggestion from current filtered list
-    $suggestion_sql = "
-        SELECT
-            mh.id AS mh_id,
-            mh.invoice_id,
-            mh.student_id AS suggested_student_id,
-            mh.confidence_score,
-            mh.matched_by,
-            mh.created_at,
-
-            t.reference_number,
-            t.beneficiary,
-            t.reference,
-            t.description,
-            t.processing_date,
-            t.amount_total,
-
-            s.long_name AS suggested_student_name
-        FROM MATCHING_HISTORY_TAB mh
-        JOIN INVOICE_TAB t ON t.id = mh.invoice_id
-        LEFT JOIN STUDENT_TAB s ON s.id = mh.student_id
-        {$bestPickJoin}
-        {$whereSql}
-        ORDER BY mh.created_at DESC
-        LIMIT 1
-    ";
-    $suggestion_stmt = $conn->prepare($suggestion_sql);
-    if ($suggestion_stmt) {
-        $s_params = $params;
-        $s_types  = $types;
-        stmt_bind_params($suggestion_stmt, $s_types, $s_params);
-        $suggestion_stmt->execute();
-        $suggestion_res = $suggestion_stmt->get_result();
-        $suggestion_row = $suggestion_res ? $suggestion_res->fetch_assoc() : null;
-        $suggestion_stmt->close();
-    } else {
-        $suggestion_row = null;
-    }
 }
 
 if (!empty($suggestion_row)) {
@@ -725,6 +689,32 @@ if (!empty($suggestion_row)) {
     }
     if ($suggestion_created_at !== '') {
         $reason_text .= " • Created: " . date("d/m/Y H:i", strtotime($suggestion_created_at));
+    }
+} elseif ($active_invoice_id > 0) {
+    // No existing suggestion row – load invoice directly so user can create a first manual match
+    $stmt = $conn->prepare("
+        SELECT id, reference_number, beneficiary, reference, description, processing_date, amount_total
+        FROM INVOICE_TAB
+        WHERE id = ?
+        LIMIT 1
+    ");
+    if ($stmt) {
+        $stmt->bind_param("i", $active_invoice_id);
+        if ($stmt->execute()) {
+            $res = $stmt->get_result();
+            $inv = $res ? $res->fetch_assoc() : null;
+        }
+        $stmt->close();
+        if (!empty($inv)) {
+            $suggestion_invoice_id = (int)$inv['id'];
+            $suggestion_invoice_ref = (string)($inv['reference_number'] ?? '');
+            $suggestion_invoice_beneficiary = (string)($inv['beneficiary'] ?? '');
+            $suggestion_invoice_reference = (string)($inv['reference'] ?? '');
+            $suggestion_invoice_desc = (string)($inv['description'] ?? '');
+            $suggestion_processing_date = (string)($inv['processing_date'] ?? '');
+            $suggestion_amount = (float)($inv['amount_total'] ?? 0);
+            $reason_text = "No suggestion available. Please assign manually.";
+        }
     }
 }
 ?>
@@ -1021,8 +1011,21 @@ if (!empty($suggestion_row)) {
             <tbody>
               <?php if ($transactions_result && $transactions_result->num_rows > 0): ?>
                 <?php while($row = $transactions_result->fetch_assoc()): ?>
-                  <?php $row_mh_id = (int)$row['mh_id']; ?>
-                  <tr data-mh-id="<?= $row_mh_id ?>" class="<?= ($active_mh_id === $row_mh_id) ? 'active-row' : '' ?>">
+                  <?php
+                    $row_mh_id      = (int)($row['mh_id'] ?? 0);
+                    $row_invoice_id = (int)($row['invoice_id'] ?? 0);
+                    // Only mark a single row as active:
+                    // - If a specific mh_id is selected, match by mh_id
+                    // - Else if a specific invoice_id is selected, match by invoice_id
+                    // - Otherwise (no selection), no row is active to avoid "everything highlighted"
+                    $isActiveRow = false;
+                    if ($active_mh_id > 0 && $row_mh_id === $active_mh_id) {
+                        $isActiveRow = true;
+                    } elseif ($active_mh_id === 0 && $active_invoice_id > 0 && $row_invoice_id === $active_invoice_id) {
+                        $isActiveRow = true;
+                    }
+                  ?>
+                  <tr data-mh-id="<?= $row_mh_id ?>" data-invoice-id="<?= $row_invoice_id ?>" class="<?= $isActiveRow ? 'active-row' : '' ?>">
                     <td><?= htmlspecialchars((string)($row['reference_number'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                     <td><?= htmlspecialchars((string)($row['beneficiary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                     <td><?= htmlspecialchars((string)($row['reference'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
@@ -1095,7 +1098,7 @@ if (!empty($suggestion_row)) {
             <div class="stat"><div class="num"><?= (int)$confirmed ?></div><div class="label">Confirmed</div></div>
           </div>
 
-          <?php if ($suggestion_mh_id): ?>
+          <?php if ($suggestion_invoice_id): ?>
           <div class="card">
             <div class="side-title">Manual confirmation</div>
 
@@ -1308,14 +1311,23 @@ renderResults(filtered);
     });
   }
 
-  // Row click -> reload with selected mh_id (keep query params)
+  // Row click -> reload with selected mh_id OR invoice_id (keep query params)
   document.querySelectorAll('tbody tr[data-mh-id]').forEach(tr => {
     tr.addEventListener('click', () => {
-      const id = tr.getAttribute('data-mh-id');
-      if (!id) return;
-
+      const mhId = tr.getAttribute('data-mh-id');
+      const invoiceId = tr.getAttribute('data-invoice-id');
       const url = new URL(window.location.href);
-      url.searchParams.set('mh_id', id);
+
+      if (mhId && mhId !== '0') {
+        url.searchParams.set('mh_id', mhId);
+        url.searchParams.delete('invoice_id');
+      } else if (invoiceId) {
+        url.searchParams.set('invoice_id', invoiceId);
+        url.searchParams.delete('mh_id');
+      } else {
+        return;
+      }
+
       window.location.href = url.toString();
     });
   });
