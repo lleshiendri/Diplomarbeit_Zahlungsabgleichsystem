@@ -7,7 +7,7 @@ declare(strict_types=1);
  * - Only Stage 6 (persistPipelineResult) writes to the database.
  * - All other stages are pure transformations and log their inputs/outputs when DEBUG is true.
  * - Stages: 0) loadContext → 1) fetchWork → 2) extractSignals → 3) generateCandidates
- *           → 4) applyBusinessRules → 5) historyAssistGate → 6) persistPipelineResult.
+ *           → 4) applyBusinessRules → 5) historyAssistGate → 5b) historyMemoryFallbackStage → 6) persistPipelineResult.
  *
  * DB schema: table/column names must match buchhaltung_16_1_2026 (see includes/schema_buchhaltung_16_1_2026.php).
  */
@@ -65,6 +65,34 @@ function normalizeText(string $text): string
     $text = preg_replace('/[^\p{L}\p{N}\s-]/u', ' ', $text);
     $text = preg_replace('/\s+/', ' ', $text);
     return trim($text);
+}
+
+/**
+ * Normalize a string for memory-fallback key comparison (deterministic, strict).
+ * Trims, lowercases, collapses spaces, removes common punctuation.
+ */
+function normalizeMemoryKey(string $s): string
+{
+    $s = trim($s);
+    if ($s === '') return '';
+    $s = mb_strtolower($s, 'UTF-8');
+    $s = preg_replace('/[\.,;:\/\\\\\-_\(\)\[\]\{\}\'"]/u', ' ', $s);
+    $s = preg_replace('/\s+/', ' ', $s);
+    return trim($s);
+}
+
+/**
+ * Return true if normalized beneficiary is too generic for memory fallback (avoid false positives).
+ */
+function isGenericBeneficiary(string $norm): bool
+{
+    if (mb_strlen($norm) < 6) return true;
+    $generic = ['bank', 'payment', 'transfer', 'school', 'htl', 'institution', 'office', 'accounting', 'finance'];
+    $normLower = $norm;
+    foreach ($generic as $g) {
+        if (strpos($normLower, $g) !== false) return true;
+    }
+    return false;
 }
 
 function stripPrefix(string $ref, string $prefix = 'HTL-'): string
@@ -152,6 +180,7 @@ function matchedByToEnum(string $internal): string
         'name_exact'      => 'name_suggest',
         'name_fuzzy'      => 'name_suggest',
         'history_assist'  => 'fallback',
+        'history_memory'  => 'fallback',
         'manual'          => 'manual',
         'reference'       => 'reference',
         'reference_fuzzy' => 'reference_fuzzy',
@@ -543,6 +572,174 @@ function historyAssistGate(mysqli $conn, array $txn, array $signals, array $deci
 }
 
 /**
+ * Last-resort memory fallback: suggest student from most recent CONFIRMED history
+ * where the prior invoice shared the same reference, reference_number, or beneficiary.
+ * Only runs when there are ZERO candidates from all prior stages (true last resort). No schema changes; read-only queries.
+ */
+function historyMemoryFallbackStage(mysqli $conn, array $txn, array $signals, array $decision, array $ctx): array
+{
+    $invoiceId = (int)($txn['id'] ?? 0);
+    if (!$invoiceId || !$ctx['has_history']) {
+        debugLog('Stage5b', 'skip', ['reason' => 'no_invoice_id_or_no_history']);
+        return $decision;
+    }
+
+    // Completely last resort: only run when NO candidate was produced by any prior stage (3, 4, 5)
+    if (!empty($decision['matches'])) {
+        debugLog('Stage5b', 'skip', ['reason' => 'candidates_already_exist', 'count' => count($decision['matches'])]);
+        return $decision;
+    }
+
+    $hasRef = columnExists($conn, 'INVOICE_TAB', 'reference');
+    $hasRefNum = columnExists($conn, 'INVOICE_TAB', 'reference_number');
+    $hasBen = columnExists($conn, 'INVOICE_TAB', 'beneficiary');
+    if (!$hasRef && !$hasRefNum && !$hasBen) {
+        debugLog('Stage5b', 'skip', ['reason' => 'no_key_columns']);
+        return $decision;
+    }
+
+    // Load current invoice keys for comparison (reference_number may not be in $txn)
+    $currentRef = $hasRef ? trim((string)($txn['reference'] ?? '')) : '';
+    $currentRefNum = '';
+    if ($hasRefNum) {
+        $sel = $conn->prepare("SELECT reference_number FROM INVOICE_TAB WHERE id = ? LIMIT 1");
+        if ($sel) {
+            $sel->bind_param("i", $invoiceId);
+            $sel->execute();
+            $row = $sel->get_result()->fetch_assoc();
+            $currentRefNum = $row ? trim((string)($row['reference_number'] ?? '')) : '';
+            $sel->close();
+        }
+    }
+    $currentBen = $hasBen ? trim((string)($txn['beneficiary'] ?? '')) : '';
+
+    $normRef = normalizeMemoryKey($currentRef);
+    $normRefNum = normalizeMemoryKey($currentRefNum);
+    $normBen = normalizeMemoryKey($currentBen);
+
+    // Fetch recent confirmed history with linked invoice keys (read-only)
+    $hasCreatedAt = columnExists($conn, 'MATCHING_HISTORY_TAB', 'created_at');
+    $orderBy = $hasCreatedAt ? 'h.created_at DESC, h.id DESC' : 'h.id DESC';
+    $selCols = ['h.invoice_id', 'h.student_id', 'h.id AS history_id'];
+    if ($hasRef) $selCols[] = 'i.reference';
+    if ($hasRefNum) $selCols[] = 'i.reference_number';
+    if ($hasBen) $selCols[] = 'i.beneficiary';
+    $sql = "SELECT " . implode(', ', $selCols) . "
+            FROM MATCHING_HISTORY_TAB h
+            INNER JOIN INVOICE_TAB i ON i.id = h.invoice_id
+            WHERE h.is_confirmed = 1
+            ORDER BY {$orderBy}
+            LIMIT 50";
+    $res = $conn->query($sql);
+    if (!$res) {
+        debugLog('Stage5b', 'skip', ['reason' => 'query_failed']);
+        return $decision;
+    }
+    $historyRows = [];
+    while ($row = $res->fetch_assoc()) {
+        $historyRows[] = $row;
+    }
+    $res->free();
+
+    debugLog('Stage5b', 'history_loaded', ['count' => count($historyRows)]);
+
+    $existingStudentIds = array_map(fn($m) => (int)$m['student_id'], $decision['matches']);
+    $maxExistingConf = !empty($decision['matches']) ? max(array_map(fn($m) => (float)($m['confidence'] ?? 0), $decision['matches'])) : 0;
+
+    // Try key types in priority order: reference (highest), reference_number, beneficiary (lowest)
+    $keyTypes = [
+        ['key' => 'reference', 'norm' => $normRef, 'cap' => 0.75, 'minLen' => 6],
+        ['key' => 'reference_number', 'norm' => $normRefNum, 'cap' => 0.70, 'minLen' => 6],
+        ['key' => 'beneficiary', 'norm' => $normBen, 'cap' => 0.60, 'minLen' => 6],
+    ];
+
+    foreach ($keyTypes as $keySpec) {
+        $keyName = $keySpec['key'];
+        $normCurrent = $keySpec['norm'];
+        $cap = $keySpec['cap'];
+        $minLen = $keySpec['minLen'];
+
+        if ($normCurrent === '') continue;
+        if (mb_strlen($normCurrent) < $minLen) continue;
+        if ($keyName === 'beneficiary' && isGenericBeneficiary($normCurrent)) continue;
+
+        $matchingRows = [];
+        foreach ($historyRows as $hr) {
+            $col = $keyName === 'reference' ? 'reference' : ($keyName === 'reference_number' ? 'reference_number' : 'beneficiary');
+            if (!isset($hr[$col])) continue;
+            $normHist = normalizeMemoryKey(trim((string)$hr[$col]));
+            if ($normHist === $normCurrent) {
+                $matchingRows[] = $hr;
+            }
+        }
+
+        if (count($matchingRows) === 0) continue;
+
+        $first = $matchingRows[0];
+        $suggestedStudentId = (int)$first['student_id'];
+        $historyInvoiceId = (int)$first['invoice_id'];
+        $historyId = (int)($first['history_id'] ?? 0);
+
+        // Ambiguity: do we have multiple different student_ids in recent matches for this key?
+        $recentStudentIds = array_slice(array_unique(array_map(fn($r) => (int)$r['student_id'], $matchingRows)), 0, 5);
+        $ambiguous = (count($recentStudentIds) > 1);
+        $lastThreeConsistent = false;
+        if (count($matchingRows) >= 3) {
+            $three = array_slice($matchingRows, 0, 3);
+            $lastThreeConsistent = (count(array_unique(array_map(fn($r) => (int)$r['student_id'], $three))) === 1);
+        }
+
+        $confidence = $cap;
+        if ($lastThreeConsistent && $confidence < 0.85) $confidence = min(0.85, $confidence + 0.05);
+
+        $isConfirmed = false;
+        if ($keyName === 'reference' && count($matchingRows) >= 3 && !$ambiguous && $lastThreeConsistent) {
+            $isConfirmed = true;
+        }
+
+        // Do not add if we already have this student_id
+        if (in_array($suggestedStudentId, $existingStudentIds, true)) continue;
+        // Do not add if existing suggestion has higher confidence
+        if ($maxExistingConf >= $confidence) continue;
+
+        $evidence = "Memory fallback: based on last confirmed match by {$keyName} (history invoice_id={$historyInvoiceId}, student_id={$suggestedStudentId})";
+
+        $decision['matches'][] = [
+            'student_id' => $suggestedStudentId,
+            'share_amount' => (float)($txn['amount_total'] ?? 0),
+            'confidence' => $confidence,
+            'matched_by' => 'history_memory',
+            'evidence' => $evidence,
+            'is_confirmed' => $isConfirmed,
+        ];
+
+        debugLog('Stage5b', 'added', [
+            'key_type' => $keyName,
+            'history_invoice_id' => $historyInvoiceId,
+            'student_id' => $suggestedStudentId,
+            'confidence' => $confidence,
+            'is_confirmed' => $isConfirmed,
+            'ambiguous' => $ambiguous,
+            'rows_scanned' => count($historyRows),
+        ]);
+
+        return $decision;
+    }
+
+    debugLog('Stage5b', 'no_match', ['norm_ref_len' => mb_strlen($normRef), 'norm_refnum_len' => mb_strlen($normRefNum), 'norm_ben_len' => mb_strlen($normBen)]);
+    return $decision;
+}
+
+/*
+ * MANUAL TEST PLAN (memory fallback stage):
+ * - Perfect reference-id match exists -> fallback must NOT run (Stage 3/4 add candidate; we skip when matches not empty).
+ * - No candidates -> fallback suggests based on last confirmed history (same reference/reference_number/beneficiary).
+ * - Beneficiary repeats for different students -> fallback must not auto-confirm (suggest only or skip; ambiguity check).
+ * - Existing suggestion with higher confidence -> N/A (we only run when there are zero candidates).
+ * - Invoice already confirmed -> fallback does nothing (persist skips; fetchWork may not return assigned invoices).
+ */
+
+/**
  * Split amount in cents into N shares so sum equals total (no lost cents).
  * Returns array of N amounts in original units (e.g. euros).
  */
@@ -725,6 +922,7 @@ function runMatchingPipeline(?int $transactionId = null, bool $dryRun = false): 
         $candidates = generateCandidates($txn, $signals, $ctx);
         $decision = applyBusinessRules($txn, $signals, $candidates, $ctx);
         $decision = historyAssistGate($conn, $txn, $signals, $decision, $ctx);
+        $decision = historyMemoryFallbackStage($conn, $txn, $signals, $decision, $ctx);
         if (!$dryRun) {
             persistPipelineResult($conn, $txn, $signals, $decision, $ctx);
         } else {
