@@ -640,20 +640,30 @@
                 <h3>How to fill this form</h3>
 
                 <ul class="legend__list">
-                  <li><span class="dot">1</span> Enter the student’s Name </li>
-                  <li><span class="dot">2</span> Use Long Name for full legal or descriptive naming</li>
-                  <li><span class="dot">3</span> Assign the correct class</li>
-                  <li><span class="dot">4</span> Set the remaining amount of payments for this student</li>
+                  <li>
+                    <span class="dot">1</span>
+                    <strong>First Name & Last Name:</strong>
+                    Enter the student’s official first and last name exactly as it should appear in records.
+                  </li>
+
+                  <li>
+                    <span class="dot">2</span>
+                    <strong>Gender & Birth Date:</strong>
+                    Select the correct gender and provide the student’s birth date for proper identification.
+                  </li>
+
+                  <li>
+                    <span class="dot">3</span>
+                    <strong>Entry Date & Class:</strong>
+                    Set the enrollment date and assign the correct class to ensure accurate grouping and reporting.
+                  </li>
+
+                  <li>
+                    <span class="dot">4</span>
+                    <strong>Additional Payments & Left to Pay:</strong>
+                    Define any additional payment conditions and set the remaining balance (in Lek) for this student.
+                  </li>
                 </ul>
-
-                <div class="callout callout--info">
-                  Student records are the anchor point for transactions, balances, late fees, and notifications.
-                </div>
-
-                <div class="callout callout--warning">
-                  Incorrect names or classes may cause <strong>failed or inaccurate payment matching</strong>.
-                  Always double-check before submitting.
-                </div>
               </div>
             </div>
           </article>
