@@ -224,6 +224,7 @@ $result = $conn->query($selectSql);
 <div class="content">
     <h1 class="page-title">STUDENT STATE</h1>
     <?= $alert ?>
+    <div id="reference-email-result" class="alert" style="display:none;"></div>
 
     <?php require __DIR__ . '/filters.php'; ?>
 
@@ -281,6 +282,8 @@ $result = $conn->query($selectSql);
                             <a href="pdf_creator.php?student_id='.htmlspecialchars($studentId).'&ui=1" title="Create PDF">
                                 <span class="material-icons-outlined">picture_as_pdf</span>
                             </a>
+                            &nbsp;
+                            <span class="material-icons-outlined js-send-ref-email" data-student-id="'.(int)$studentId.'" title="Send Reference ID via Email" role="button" style="cursor:pointer;">email</span>
                           </td>';
                     echo '</tr>';
 
@@ -383,6 +386,75 @@ function toggleEdit(id) {
 
   row.classList.toggle("is-open");
 }
+
+function sendReferenceEmail(studentId) {
+  var sid = parseInt(studentId, 10);
+  if (!sid || sid <= 0) {
+    alert("Invalid student.");
+    return;
+  }
+
+  var resultEl = document.getElementById("reference-email-result");
+  if (!resultEl) return;
+
+  var buttons = document.querySelectorAll(".js-send-ref-email[data-student-id=\"" + sid + "\"]");
+  buttons.forEach(function(btn) {
+    btn.style.pointerEvents = "none";
+    btn.style.opacity = "0.5";
+  });
+
+  resultEl.style.display = "none";
+  resultEl.className = "alert";
+
+  var formData = new FormData();
+  formData.append("student_id", sid);
+
+  fetch("send_email_reference.php", {
+    method: "POST",
+    body: formData
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    var sent = data.sent_to || [];
+    var errs = data.errors || [];
+    var success = data.success === true;
+
+    if (success && sent.length > 0) {
+      resultEl.className = "alert alert-success";
+      resultEl.innerHTML = "Reference ID email sent to: " + sent.join(", ");
+    } else if (sent.length > 0 && errs.length > 0) {
+      resultEl.className = "alert alert-error";
+      resultEl.innerHTML = "Partially sent to: " + sent.join(", ") + ". Failures: " + errs.join("; ");
+    } else if (errs.length > 0) {
+      resultEl.className = "alert alert-error";
+      resultEl.innerHTML = errs.join("<br>");
+    } else {
+      resultEl.className = "alert alert-error";
+      resultEl.innerHTML = "No valid email address found for this student or their legal guardians.";
+    }
+    resultEl.style.display = "block";
+  })
+  .catch(function() {
+    resultEl.className = "alert alert-error";
+    resultEl.innerHTML = "Request failed. Please try again.";
+    resultEl.style.display = "block";
+  })
+  .finally(function() {
+    buttons.forEach(function(btn) {
+      btn.style.pointerEvents = "";
+      btn.style.opacity = "";
+    });
+  });
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  document.querySelectorAll(".js-send-ref-email").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      var sid = this.getAttribute("data-student-id");
+      sendReferenceEmail(sid);
+    });
+  });
+});
 </script>
 
 <script>
