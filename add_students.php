@@ -263,17 +263,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
         <form method="post" action="">
             <div class="form-grid">
                 <div>
-                    <label for="name">Name</label>
+                    <label for="forename">First Name</label>
                     <div class="input-group">
                         <span class="material-icons-outlined">badge</span>
-                        <input type="text" id="name" name="name" required>
+                        <input type="text" id="forename" name="forename" required>
                     </div>
                 </div>
                 <div>
-                    <label for="forename">Forename</label>
+                    <label for="name">Last Name</label>
                     <div class="input-group">
                         <span class="material-icons-outlined">person</span>
-                        <input type="text" id="forename" name="forename" required>
+                        <input type="text" id="name" name="name" required>
                     </div>
                 </div>
                 <div>

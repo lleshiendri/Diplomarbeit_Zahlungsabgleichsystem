@@ -180,13 +180,6 @@ foreach ($rows as $row) {
 
         $pdf->Ln(10);
 
-        $pdf->SetFont('Arial', '', 9);
-        $pdf->MultiCell(0, 5,
-            "Note: This PDF mirrors the Student State table values.\n" .
-            "If you also want the detailed transaction rows per student, you must add a second query (TRANSACTION_TAB) and render another table.",
-            0, 'L'
-        );
-
         // Save file
         $fileBase = safe_filename("student_{$studentId}_" . ($row['student_name'] ?? ''));
         if ($fileBase === '') $fileBase = "student_" . $studentId;
