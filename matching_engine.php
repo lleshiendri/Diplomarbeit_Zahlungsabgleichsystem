@@ -629,7 +629,7 @@ function historyMemoryFallbackStage(mysqli $conn, array $txn, array $signals, ar
             INNER JOIN INVOICE_TAB i ON i.id = h.invoice_id
             WHERE h.is_confirmed = 1
             ORDER BY {$orderBy}
-            LIMIT 50";
+            LIMIT 500";
     $res = $conn->query($sql);
     if (!$res) {
         debugLog('Stage5b', 'skip', ['reason' => 'query_failed']);
