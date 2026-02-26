@@ -229,6 +229,39 @@ $result = $conn->query($selectSql);
     }
 
     /* ================= TABLE ================= */
+    .transactions-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+
+    /* Override global nowrap from student_state_style.css for this table only */
+    .student-table.transactions-table td {
+        white-space: normal;
+    }
+
+    /* Keep processing date readable (column 5) */
+    .student-table.transactions-table th:nth-child(5),
+    .student-table.transactions-table td:nth-child(5) {
+        width: 14ch;
+        max-width: 14ch;
+        white-space: nowrap;
+    }
+
+    /* Description column (column 4): header + cells aligned */
+    .student-table.transactions-table th:nth-child(4),
+    .student-table.transactions-table td:nth-child(4) {
+        width: 35ch;
+        max-width: 35ch;
+        text-align: center;
+    }
+
+    /* Ensure wrapping stays active for Description cells (column 4) */
+    .student-table.transactions-table td:nth-child(4) {
+        white-space: normal !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
     .student-table th {
         font-family: 'Montserrat', sans-serif;
         font-weight: 600;
@@ -241,6 +274,15 @@ $result = $conn->query($selectSql);
         font-family: 'Roboto', sans-serif;
         color: #222;
         vertical-align: middle;
+        text-align: center;
+    }
+
+    .student-table.transactions-table td.td-description {
+        width: 35ch;
+        max-width: 35ch;
+        white-space: normal !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
         text-align: center;
     }
 
@@ -346,7 +388,7 @@ $result = $conn->query($selectSql);
 
     <div class="table-wrapper">
 
-        <table class="student-table" style="width:100%; border-collapse:collapse;">
+        <table class="student-table transactions-table">
             <thead>
                 <tr>
                     <th>Beneficiary</th>
@@ -366,14 +408,14 @@ $result = $conn->query($selectSql);
                 $rowIndex = 0;
     while ($t = $result->fetch_assoc()) {
         $rowIndex++;
-$rowClass = ($rowIndex % 2 === 1) ? 'row-odd' : 'row-even';
+        $rowClass = ($rowIndex % 2 === 1) ? 'row-odd' : 'row-even';
         $txId = (int)$t['id'];
 
         echo "<tr id='row-{$txId}' class='{$rowClass}'>";
         echo "<td>".htmlspecialchars($t['beneficiary'])."</td>";
         echo "<td>".htmlspecialchars($t['reference'])."</td>";
         echo "<td>".htmlspecialchars($t['reference_number'])."</td>";
-        echo "<td>".htmlspecialchars($t['description'])."</td>";
+        echo "<td class='td-description'>".htmlspecialchars($t['description'])."</td>";
         echo "<td>".htmlspecialchars($t['processing_date'])."</td>";
 
         // Falls amount NULL ist, fallback auf amount_total.
