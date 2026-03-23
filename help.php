@@ -33,9 +33,9 @@
             <a class="help-link" href="#schoolyear">Top Navigation & School Year</a>
             <a class="help-link" href="#dashboard">Dashboard</a>
             <a class="help-link" href="#notifications">Notifications</a>
-            <a class="help-link" href="#matching_history">Matching History</a>
             <a class="help-link" href="#add_transactions">Add Transactions</a>
             <a class="help-link" href="#transactions">Transactions</a>
+            <a class="help-link" href="#matching_history">Matching History</a>
             <a class="help-link" href="#add_students">Add Students</a>
             <a class="help-link" href="#import_files">Import Files</a>
             <a class="help-link" href="#unconfirmed">Unconfirmed</a>
