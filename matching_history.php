@@ -61,7 +61,51 @@ $filterRef       = trim($_GET['reference_number'] ?? '');
 $filterFrom      = trim($_GET['from'] ?? '');
 $filterTo        = trim($_GET['to'] ?? '');
 
+/* ========= SEARCH + SORT + EXTRA FILTERS (header controls) ========= */
+$searchQ   = trim($_GET['q'] ?? '');
+$matchedBy = trim($_GET['matched_by'] ?? '');
+$confMin   = isset($_GET['confidence_min']) && is_numeric($_GET['confidence_min']) ? (float)$_GET['confidence_min'] : '';
+$confMax   = isset($_GET['confidence_max']) && is_numeric($_GET['confidence_max']) ? (float)$_GET['confidence_max'] : '';
+
+$sortKey = trim($_GET['sort'] ?? 'created_at');
+$sortDir = strtolower(trim($_GET['dir'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
+
+$allowedSort = [
+    'created_at'        => 'h.created_at',
+    'processing_date'  => 'i.processing_date',
+    'confidence_score' => 'h.confidence_score',
+    'amount_total'     => 'i.amount_total',
+    'student_name'     => 'st.long_name',
+    'matched_by'       => 'h.matched_by',
+    'invoice_ref'      => 'i.reference_number',
+    'history_id'       => 'h.id',
+];
+$orderByCol = $allowedSort[$sortKey] ?? 'h.created_at';
+$orderBySql = $orderByCol . ' ' . strtoupper($sortDir);
+
+// Human-readable direction labels that match the selected sort key.
+$effectiveSortKey = ($sortKey === '') ? 'created_at' : $sortKey;
+$dirDescLabel = 'Descending';
+$dirAscLabel  = 'Ascending';
+if (in_array($effectiveSortKey, ['created_at', 'processing_date'], true)) {
+    $dirDescLabel = 'Newest first';
+    $dirAscLabel  = 'Oldest first';
+} elseif (in_array($effectiveSortKey, ['confidence_score'], true)) {
+    $dirDescLabel = 'Highest confidence';
+    $dirAscLabel  = 'Lowest confidence';
+} elseif (in_array($effectiveSortKey, ['amount_total'], true)) {
+    $dirDescLabel = 'Highest amount';
+    $dirAscLabel  = 'Lowest amount';
+} elseif (in_array($effectiveSortKey, ['student_name', 'matched_by', 'invoice_ref'], true)) {
+    $dirDescLabel = 'Z to A';
+    $dirAscLabel  = 'A to Z';
+} elseif (in_array($effectiveSortKey, ['history_id'], true)) {
+    $dirDescLabel = 'Highest ID';
+    $dirAscLabel  = 'Lowest ID';
+}
+
 $clauses = [];
+// matching_history page is confirmed-only by design
 $clauses[] = "h.is_confirmed = 1";
 if ($filterStudent !== '') {
     $like = '%' . $conn->real_escape_string($filterStudent) . '%';
@@ -76,6 +120,33 @@ if ($filterFrom !== '') {
 }
 if ($filterTo !== '') {
     $clauses[] = "DATE(h.created_at) <= '" . $conn->real_escape_string($filterTo) . "'";
+}
+
+/* ========= HEADER SEARCH (q) ========= */
+if ($searchQ !== '') {
+    $like = '%' . $conn->real_escape_string($searchQ) . '%';
+    $qId = ctype_digit($searchQ) ? (int)$searchQ : 0;
+    $idClause = $qId > 0 ? " OR h.id = {$qId}" : "";
+
+    $clauses[] = "(i.reference_number LIKE '{$like}'
+                   OR i.beneficiary LIKE '{$like}'
+                   OR i.reference_number LIKE '{$like}'
+                   OR st.long_name LIKE '{$like}'
+                   OR h.matched_by LIKE '{$like}'
+                   {$idClause})";
+}
+
+/* ========= HEADER FILTER: matched_by ========= */
+if ($matchedBy !== '') {
+    $clauses[] = "h.matched_by = '" . $conn->real_escape_string($matchedBy) . "'";
+}
+
+/* ========= HEADER FILTER: confidence range ========= */
+if ($confMin !== '') {
+    $clauses[] = "h.confidence_score >= " . (float)$confMin;
+}
+if ($confMax !== '') {
+    $clauses[] = "h.confidence_score <= " . (float)$confMax;
 }
 
 $whereSql = empty($clauses) ? '' : 'WHERE ' . implode(' AND ', $clauses);
@@ -130,7 +201,7 @@ $selectSql = "
     JOIN INVOICE_TAB i ON i.id = h.invoice_id
     LEFT JOIN STUDENT_TAB st ON st.id = h.student_id
     $whereSql
-    ORDER BY h.created_at DESC
+    ORDER BY {$orderBySql}
     LIMIT $limit OFFSET $offset
 ";
 $result = $conn->query($selectSql);

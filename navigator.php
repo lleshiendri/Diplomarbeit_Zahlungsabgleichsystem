@@ -183,8 +183,17 @@ if ($syRes && $syRes->num_rows === 1) {
   .overlay.show { display:block; }
 
   /* Content shift when sidebar open */
-  #content { transition: margin-left 0.3s ease; }
+  #content { transition: margin-left 0.3s ease, margin-right 0.3s ease; }
   #content.shifted { margin-left: 260px; }
+
+  /* Keep space for filter panel on larger screens */
+  @media (min-width: 1100px) {
+    #content.filter-shifted { margin-right: 340px; }
+  }
+
+  @media (max-width: 1099px) {
+    #content.filter-shifted { margin-right: 0; }
+  }
 
   /* SCHOOL YEAR POPUP */
   .schoolyear-modal {
@@ -444,6 +453,19 @@ if (in_array($currentPage, $filtersPages, true)) {
     overlay.classList.add("show");
     const content = document.getElementById("content");
     if (content) content.classList.add("shifted");
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/bbe56b8b-fc81-4093-9d45-46a59d4eaed3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5e69b8'},body:JSON.stringify({sessionId:'5e69b8',runId:'pre-fix',hypothesisId:'H1',location:'navigator.php:openSidebar',message:'Navigator openSidebar executed',data:{hasContent:!!content,contentId:content?content.id:null,contentClasses:content?content.className:null,overlayCount:document.querySelectorAll('#overlay').length,currentPath:window.location.pathname},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    if (content) {
+      const cs = window.getComputedStyle(content);
+      const tableWrap = document.querySelector('.table-wrapper');
+      const titleEl = document.querySelector('.page-title');
+      const tableRect = tableWrap ? tableWrap.getBoundingClientRect() : null;
+      const titleRect = titleEl ? titleEl.getBoundingClientRect() : null;
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/bbe56b8b-fc81-4093-9d45-46a59d4eaed3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5e69b8'},body:JSON.stringify({sessionId:'5e69b8',runId:'pre-fix-2',hypothesisId:'H6',location:'navigator.php:openSidebar:computed',message:'Content computed style after sidebar open',data:{transition:cs.transition,marginLeft:cs.marginLeft,marginRight:cs.marginRight,width:cs.width,classes:content.className,tableLeft:tableRect?tableRect.left:null,tableRight:tableRect?tableRect.right:null,titleTop:titleRect?titleRect.top:null,currentPath:window.location.pathname},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    }
   }
   function closeSidebar(){
     sidebar.classList.remove("open");
@@ -459,32 +481,55 @@ if (in_array($currentPage, $filtersPages, true)) {
   }
 
   // FILTER Panel
-  function closeFilter(){
-    if (filterPanel) filterPanel.classList.remove('open');
-    if (filterOverlay) filterOverlay.classList.remove('show');
-
-    if (!sidebar.classList.contains('open')) {
-      overlay.classList.remove('show');
-    }
+  function syncFilterLayout(isOpen) {
+    const content = document.getElementById("content");
+    document.body.classList.toggle("filter-open", isOpen);
+    document.body.classList.toggle("modal-open", isOpen);
+    if (content) content.classList.toggle("filter-shifted", isOpen);
   }
+
+  function setFilterOpen(isOpen) {
+    if (!filterPanel) return;
+
+    filterPanel.classList.toggle('open', isOpen);
+    if (filterOverlay) filterOverlay.classList.toggle('show', isOpen);
+    syncFilterLayout(isOpen);
+    const content = document.getElementById("content");
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/bbe56b8b-fc81-4093-9d45-46a59d4eaed3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5e69b8'},body:JSON.stringify({sessionId:'5e69b8',runId:'pre-fix',hypothesisId:'H2',location:'navigator.php:setFilterOpen',message:'Filter open state changed',data:{isOpen:isOpen,hasContent:!!content,contentId:content?content.id:null,hasFilterShifted:content?content.classList.contains('filter-shifted'):false,bodyClasses:document.body.className,overlayCount:document.querySelectorAll('#overlay').length,currentPath:window.location.pathname},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    if (content) {
+      const cs = window.getComputedStyle(content);
+      const tableWrap = document.querySelector('.table-wrapper');
+      const tableRect = tableWrap ? tableWrap.getBoundingClientRect() : null;
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/bbe56b8b-fc81-4093-9d45-46a59d4eaed3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5e69b8'},body:JSON.stringify({sessionId:'5e69b8',runId:'pre-fix-2',hypothesisId:'H7',location:'navigator.php:setFilterOpen:computed',message:'Content computed style after filter toggle',data:{isOpen:isOpen,transition:cs.transition,marginLeft:cs.marginLeft,marginRight:cs.marginRight,width:cs.width,classes:content.className,tableLeft:tableRect?tableRect.left:null,tableRight:tableRect?tableRect.right:null,currentPath:window.location.pathname},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+    }
+
+    // Global overlay should remain if either sidebar or filter is open.
+    const keepOverlay = isOpen || sidebar.classList.contains('open');
+    overlay.classList.toggle('show', keepOverlay);
+  }
+
+  function closeFilter(){
+    setFilterOpen(false);
+  }
+  window.closeFilter = closeFilter;
 
   if (filterToggle && filterPanel) {
-    filterToggle.addEventListener('click', () => {
+    filterToggle.addEventListener('click', (e) => {
+      e.preventDefault();
       const willOpen = !filterPanel.classList.contains('open');
-
-      if (willOpen) {
-        filterPanel.classList.add('open');
-        if (filterOverlay) filterOverlay.classList.add('show');
-        overlay.classList.add('show');
-      } else {
-        filterPanel.classList.remove('open');
-        if (filterOverlay) filterOverlay.classList.remove('show');
-        if (!sidebar.classList.contains('open')) {
-          overlay.classList.remove('show');
-        }
-      }
+      setFilterOpen(willOpen);
     });
   }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && filterPanel && filterPanel.classList.contains('open')) {
+      closeFilter();
+    }
+  });
 
   // SCHOOL YEAR POPUP
   function openSchoolYearModal() {
