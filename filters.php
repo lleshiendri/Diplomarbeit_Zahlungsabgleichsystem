@@ -1,4 +1,9 @@
 <?php
+if (defined('APP_FILTERS_RENDERED')) {
+    return;
+}
+define('APP_FILTERS_RENDERED', true);
+
 if (!isset($conn) || !($conn instanceof mysqli)) {
     require_once __DIR__ . "/db_connect.php";
 }
@@ -16,6 +21,9 @@ $g_from    = trim($_GET['from']    ?? '');
 $g_to      = trim($_GET['to']      ?? '');
 $g_min     = trim($_GET['amount_min'] ?? '');
 $g_max     = trim($_GET['amount_max'] ?? '');
+$g_q       = trim($_GET['q'] ?? '');
+$g_sort    = trim($_GET['sort'] ?? '');
+$g_dir     = trim($_GET['dir'] ?? '');
 
 /* =========================
    UNCONFIRMED FILTER KEYS
@@ -35,6 +43,12 @@ $mh_student = trim($_GET['student'] ?? '');
 $mh_ref     = trim($_GET['reference_number'] ?? '');
 $mh_from    = trim($_GET['from'] ?? '');
 $mh_to      = trim($_GET['to'] ?? '');
+$mh_q       = trim($_GET['q'] ?? '');
+$mh_sort    = trim($_GET['sort'] ?? '');
+$mh_dir     = trim($_GET['dir'] ?? '');
+$mh_conf_min = trim($_GET['confidence_min'] ?? '');
+$mh_conf_max = trim($_GET['confidence_max'] ?? '');
+$mh_matched_by = trim($_GET['matched_by'] ?? '');
 
 $filter_used = isset($_GET['applied']);
 ?>
@@ -153,6 +167,35 @@ $filter_used = isset($_GET['applied']);
 
       <!-- MATCHING HISTORY FILTERS -->
       <div class="filter-group">
+        <label>Search</label>
+        <input type="text" name="q" class="filter-input"
+               placeholder="Invoice ref, beneficiary, student, matched_by..."
+               value="<?= htmlspecialchars($mh_q, ENT_QUOTES, 'UTF-8'); ?>">
+      </div>
+
+      <div class="filter-group">
+        <label>Sort By</label>
+        <select name="sort" class="filter-select">
+          <option value="created_at" <?= ($mh_sort === 'created_at' || $mh_sort === '') ? 'selected' : '' ?>>Created</option>
+          <option value="processing_date" <?= $mh_sort === 'processing_date' ? 'selected' : '' ?>>Processing Date</option>
+          <option value="confidence_score" <?= $mh_sort === 'confidence_score' ? 'selected' : '' ?>>Confidence</option>
+          <option value="amount_total" <?= $mh_sort === 'amount_total' ? 'selected' : '' ?>>Amount</option>
+          <option value="student_name" <?= $mh_sort === 'student_name' ? 'selected' : '' ?>>Student</option>
+          <option value="matched_by" <?= $mh_sort === 'matched_by' ? 'selected' : '' ?>>Matched By</option>
+          <option value="invoice_ref" <?= $mh_sort === 'invoice_ref' ? 'selected' : '' ?>>Invoice Ref</option>
+          <option value="history_id" <?= $mh_sort === 'history_id' ? 'selected' : '' ?>>History ID</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Order</label>
+        <select name="dir" class="filter-select">
+          <option value="desc" <?= ($mh_dir === 'desc' || $mh_dir === '') ? 'selected' : '' ?>>Descending</option>
+          <option value="asc" <?= $mh_dir === 'asc' ? 'selected' : '' ?>>Ascending</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
         <label>Student</label>
         <input type="text" name="student" class="filter-input"
                value="<?= htmlspecialchars($mh_student, ENT_QUOTES, 'UTF-8'); ?>">
@@ -168,6 +211,23 @@ $filter_used = isset($_GET['applied']);
           <input type="date" name="from" class="filter-input" value="<?= htmlspecialchars($mh_from, ENT_QUOTES, 'UTF-8'); ?>">
           <input type="date" name="to"   class="filter-input" value="<?= htmlspecialchars($mh_to, ENT_QUOTES, 'UTF-8'); ?>">
         </div>
+      </div>
+
+      <div class="filter-group">
+        <label>Confidence Range (%)</label>
+        <div class="amount-flex">
+          <input type="number" name="confidence_min" step="0.01" class="filter-input" placeholder="Min"
+                 value="<?= htmlspecialchars($mh_conf_min, ENT_QUOTES, 'UTF-8'); ?>">
+          <input type="number" name="confidence_max" step="0.01" class="filter-input" placeholder="Max"
+                 value="<?= htmlspecialchars($mh_conf_max, ENT_QUOTES, 'UTF-8'); ?>">
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>Matched By Method</label>
+        <input type="text" name="matched_by" class="filter-input"
+               placeholder="e.g. reference, manual, fallback"
+               value="<?= htmlspecialchars($mh_matched_by, ENT_QUOTES, 'UTF-8'); ?>">
       </div>
 
     <?php elseif ($currentPage === 'unconfirmed.php'): ?>
@@ -213,6 +273,43 @@ $filter_used = isset($_GET['applied']);
     <?php else: ?>
 
       <!-- TRANSACTIONS FILTERS (UNCHANGED) -->
+      <div class="filter-group">
+        <label>Search</label>
+        <input type="text" name="q" class="filter-input"
+               placeholder="Student, reference, description, ID..."
+               value="<?= htmlspecialchars($g_q, ENT_QUOTES, 'UTF-8'); ?>">
+      </div>
+
+      <div class="filter-group">
+        <label>Sort By</label>
+        <?php if ($currentPage === 'student_state.php'): ?>
+          <select name="sort" class="filter-select">
+            <option value="id" <?= ($g_sort === 'id' || $g_sort === '') ? 'selected' : '' ?>>Student ID</option>
+            <option value="student_name" <?= $g_sort === 'student_name' ? 'selected' : '' ?>>Student Name</option>
+            <option value="last_transaction_date" <?= $g_sort === 'last_transaction_date' ? 'selected' : '' ?>>Last Transaction</option>
+            <option value="left_to_pay" <?= $g_sort === 'left_to_pay' ? 'selected' : '' ?>>Left to Pay</option>
+            <option value="amount_paid" <?= $g_sort === 'amount_paid' ? 'selected' : '' ?>>Amount Paid</option>
+            <option value="additional_payments_status" <?= $g_sort === 'additional_payments_status' ? 'selected' : '' ?>>Additional Status</option>
+          </select>
+        <?php else: ?>
+          <select name="sort" class="filter-select">
+            <option value="processing_date" <?= ($g_sort === 'processing_date' || $g_sort === '') ? 'selected' : '' ?>>Processing Date</option>
+            <option value="amount_total" <?= $g_sort === 'amount_total' ? 'selected' : '' ?>>Amount</option>
+            <option value="reference_number" <?= $g_sort === 'reference_number' ? 'selected' : '' ?>>Reference Nr</option>
+            <option value="beneficiary" <?= $g_sort === 'beneficiary' ? 'selected' : '' ?>>Beneficiary</option>
+            <option value="id" <?= $g_sort === 'id' ? 'selected' : '' ?>>ID</option>
+          </select>
+        <?php endif; ?>
+      </div>
+
+      <div class="filter-group">
+        <label>Order</label>
+        <select name="dir" class="filter-select">
+          <option value="desc" <?= ($g_dir === 'desc' || $g_dir === '') ? 'selected' : '' ?>>Descending</option>
+          <option value="asc" <?= $g_dir === 'asc' ? 'selected' : '' ?>>Ascending</option>
+        </select>
+      </div>
+
       <div class="filter-group">
         <label>Student</label>
         <input type="text" name="student" class="filter-input"
@@ -268,6 +365,9 @@ $filter_used = isset($_GET['applied']);
 
     <?php endif; ?>
 
+    <!-- Preserve sort/search state from page-level controls -->
+    <input type="hidden" name="page" value="1">
+
     <button type="submit" class="filter-button">Apply</button>
   </form>
 </div>
@@ -278,30 +378,31 @@ $filter_used = isset($_GET['applied']);
 document.addEventListener("DOMContentLoaded", () => {
   const panel = document.getElementById("filterPanel");
   const overlay = document.getElementById("filterOverlay");
+  if (!panel || !overlay) return;
 
-  const togglePanel = (e) => {
-    if (e) e.preventDefault();
-    panel.classList.toggle("open");
-    overlay.classList.toggle("show");
+  const localClose = () => {
+    panel.classList.remove("open");
+    overlay.classList.remove("show");
+    document.body.classList.remove("filter-open", "modal-open");
   };
 
-  /* UNIVERSAL CLICK TRIGGER */
-  document.addEventListener("click", (e) => {
-    const t = e.target;
-    if (
-      t.closest("#filterToggle") ||
-      t.closest("[data-filter-toggle]") ||
-      t.closest(".js-filter-toggle") ||
-      (t.tagName === "I" && t.textContent.trim() === "tune")
-    ) {
-      togglePanel(e);
+  const closeFilterSafely = () => {
+    if (typeof window.closeFilter === "function") {
+      window.closeFilter();
+      return;
     }
-  });
+    localClose();
+  };
 
   /* click outside closes panel */
   overlay.addEventListener("click", () => {
-    panel.classList.remove("open");
-    overlay.classList.remove("show");
+    closeFilterSafely();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && panel.classList.contains("open")) {
+      closeFilterSafely();
+    }
   });
 });
 </script>

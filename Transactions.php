@@ -69,6 +69,41 @@ $filterTo      = trim($_GET['to']      ?? '');
 $filterMin     = trim($_GET['amount_min'] ?? '');
 $filterMax     = trim($_GET['amount_max'] ?? '');
 
+/* ========= SEARCH + SORT (compact header controls) ========= */
+$searchQ = trim($_GET['q'] ?? '');
+$sortKey = trim($_GET['sort'] ?? '');
+$sortDir = strtolower(trim($_GET['dir'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
+
+$allowedSort = [
+    'processing_date'   => 't.processing_date',
+    'amount_total'     => 't.amount_total',
+    'amount'           => 't.amount',
+    'reference'        => 't.reference',
+    'reference_number' => 't.reference_number',
+    'beneficiary'      => 't.beneficiary',
+    'id'               => 't.id',
+];
+$orderByCol = $allowedSort[$sortKey] ?? 't.processing_date';
+$orderBySql = $orderByCol . ' ' . strtoupper($sortDir);
+
+// Human-readable direction labels that match the selected sort key.
+$effectiveSortKey = ($sortKey === '') ? 'processing_date' : $sortKey;
+$dirDescLabel = 'Descending';
+$dirAscLabel  = 'Ascending';
+if (in_array($effectiveSortKey, ['processing_date'], true)) {
+    $dirDescLabel = 'Newest first';
+    $dirAscLabel  = 'Oldest first';
+} elseif (in_array($effectiveSortKey, ['amount_total', 'amount'], true)) {
+    $dirDescLabel = 'Highest first';
+    $dirAscLabel  = 'Lowest first';
+} elseif (in_array($effectiveSortKey, ['reference', 'reference_number', 'beneficiary'], true)) {
+    $dirDescLabel = 'Z to A';
+    $dirAscLabel  = 'A to Z';
+} elseif (in_array($effectiveSortKey, ['id'], true)) {
+    $dirDescLabel = 'Highest ID first';
+    $dirAscLabel  = 'Lowest ID first';
+}
+
 $clauses = [];
 $joinSql = "";
 $needsStudentJoin = false;
@@ -120,6 +155,23 @@ if ($filterMax !== '' && is_numeric($filterMax)) {
     $clauses[] = "t.amount_total <= " . (float)$filterMax;
 }
 
+/* ========= TEXT SEARCH (q) ========= */
+if ($searchQ !== '') {
+    $needsStudentJoin = true; // because we search student name fields too
+    $like = "%" . $conn->real_escape_string($searchQ) . "%";
+    $qId  = ctype_digit($searchQ) ? (int)$searchQ : 0;
+    $idClause = $qId > 0 ? " OR t.id = {$qId}" : "";
+
+    $clauses[] = "(t.beneficiary LIKE '{$like}'
+                   OR t.reference LIKE '{$like}'
+                   OR t.reference_number LIKE '{$like}'
+                   OR t.description LIKE '{$like}'
+                   OR st.name LIKE '{$like}'
+                   OR st.long_name LIKE '{$like}'
+                   OR st.forename LIKE '{$like}'
+                   {$idClause})";
+}
+
 /* ========= JOINS AKTIVIEREN, FALLS SCHÜLERFILTER GENUTZT ========= */
 if ($needsStudentJoin) {
     $joinSql = "
@@ -168,7 +220,7 @@ $selectSql = "
     FROM INVOICE_TAB t
     {$joinSql}
     {$whereSql}
-    ORDER BY t.processing_date DESC
+    ORDER BY {$orderBySql}
     LIMIT {$limit} OFFSET {$offset}
 ";
 
