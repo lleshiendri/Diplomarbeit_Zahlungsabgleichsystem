@@ -318,63 +318,124 @@
             </div>
           </article>
 
-         <!-- Notifications -->
-          <article id="notifications" class="help-section card" data-title="notifications">
-            <header class="help-section__header">
-              <h2>Notifications</h2>
-              <p class="muted">
-                Your notifications center: new matches, late-fee events, and data issues information.
+        <!-- Notifications -->
+        <article id="notifications" class="help-section card" data-title="notifications">
+          <header class="help-section__header">
+            <h2>Notifications</h2>
+            <p class="muted">
+              Overview of system events such as matches, manual confirmations, and late payment alerts.
+            </p>
+          </header>
+
+          <div class="media">
+            <figure class="shot">
+              <img src="/help_page_images/notifications.png" alt="Notifications page screenshot" />
+            </figure>
+
+            <div class="legend">
+              <h3>What you see in this page</h3>
+
+              <p>
+                This page shows all events related to invoices and students.
+                Critical items (e.g. late payments) are highlighted and require attention.
+                You can search, review, and mark notifications as read.
               </p>
-            </header>
 
-            <div class="media">
-              <figure class="shot">
-                <img src="/help_page_images/notifications.png" alt="Notifications page screenshot" />
-              </figure>
+              <h3>Table columns</h3>
+              <ul class="legend__list">
 
-              <div class="legend">
-                <h3>How to use this page</h3>
+                <li>
+                  <span class="dot">1</span>
+                  <strong>Description:</strong>
+                  Explains what happened (e.g. late fee, automatic match, manual confirmation).
+                </li>
 
-                <ul class="legend__list">
+                <li>
+                  <span class="dot">2</span>
+                  <strong>Student ID:</strong>
+                  Internal system ID of the affected student.
+                </li>
 
-                  <li>
-                    <span class="dot">1</span>
-                    <strong>Notifications table:</strong>
-                    Each row shows what happened (Description), 
-                    who it affects (Student ID), 
-                    which transaction is involved (Invoice ID), 
-                    how serious it is (Urgency), 
-                    and when it occurred (Timestamp).
-                  </li>
+                <li>
+                  <span class="dot">3</span>
+                  <strong>Student Ref:</strong>
+                  Unique reference identifier of the student (used in matching logic).
+                </li>
 
-                  <li>
-                    <span class="dot">2</span>  
-                    <strong>Search bar:</strong>
-                    Use the search bar to narrow results by Student ID, Invoice ID,
-                    Urgency (<em>Critical / Warning / Info</em>), or keywords (e.g. <code>HTL-…</code>).
-                  </li>
+                <li>
+                  <span class="dot">4</span>
+                  <strong>Invoice Ref:</strong>
+                  Reference of the related transaction. May be empty if not applicable.
+                </li>
 
-                  <li>
-                      <span class="dot">3</span> 
-                      <strong>Mark as read (checkbox):</strong>
-                      Tick the box on a row to select that notification. Selecting does not change the notification.
-                  </li>
+                <li>
+                  <span class="dot">5</span>
+                  <strong>Urgency:</strong>
+                  Indicates importance:
+                  <em>Critical</em> (requires action), 
+                  <em>Warning</em> (needs review), 
+                  <em>Info</em> (informational).
+                </li>
 
-                  <li>
-                    <span class="dot">4</span>
-                    <strong>Mark all selected as read (button):</strong>
-                    Click <em>“Mark all selected as read”</em> to confirm you reviewed the selected notifications.
-                    This will hide them from the default “unread” view.
-                  </li>
-          
-                </ul>
+                <li>
+                  <span class="dot">6</span>
+                  <strong>Timestamp:</strong>
+                  Date when the event occurred.
+                </li>
 
-                <div class="callout callout--danger">
-                  <strong>Mark as read ≠ fixed.</strong> “Mark as read only acknowledges the message. Fixing the invoice/match must be done in the relevant page.”
-                </div>
+                <li>
+                  <span class="dot">7</span>
+                  <strong>Actions:</strong>
+                  Checkbox to select notifications and email icon to notify legal guardians (only for critical cases).
+                </li>
+
+              </ul>
+            </div>
+
+            <div class="legend">
+              <h3>Actions & usage</h3>
+              <ul class="legend__list">
+
+                <li>
+                  <span class="dot">1</span>
+                  <strong>Search:</strong>
+                  Filter by Student ID, Student Ref, Invoice Ref, urgency, or keywords.
+                </li>
+
+                <li>
+                  <span class="dot">2</span>
+                  <strong>Select notifications:</strong>
+                  Use checkboxes to select one or multiple rows.
+                </li>
+
+                <li>
+                  <span class="dot">3</span>
+                  <strong>Mark as read:</strong>
+                  Click <em>“Mark all selected as read”</em> to remove them from the active view.
+                </li>
+
+                <li>
+                  <span class="dot">4</span>
+                  <strong>Email notification:</strong>
+                  Use the mail icon to send a message to the student’s legal guardian (only available for urgent cases).
+                </li>
+
+                <li>
+                  <span class="dot">5</span>
+                  <strong>Pagination:</strong>
+                  Navigate through multiple pages of notifications using the controls below the table.
+                </li>
+
+              </ul>
+
+              <div class="callout callout--danger">
+                <strong>Important:</strong>
+                Marking a notification as read does not solve the issue.
+                You must fix the underlying problem in the relevant page (e.g. Transactions or Unconfirmed).
               </div>
             </div>
-          </article>
+          </div>
+        </article>
 
           <!-- Add transactions -->
           <article id="add_transactions" class="help-section card" data-title="add transactions">
@@ -661,7 +722,7 @@
                   <li>
                     <span class="dot">4</span>
                     <strong>Additional Payments & Left to Pay:</strong>
-                    Define any additional payment conditions and set the remaining balance (in Lek) for this student.
+                    Define any additional payment conditions and set the remaining amount to pay (in Lek) for this student.
                   </li>
                 </ul>
               </div>

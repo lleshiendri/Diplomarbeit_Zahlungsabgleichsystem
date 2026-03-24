@@ -727,6 +727,8 @@ if (!empty($suggestion_row)) {
 
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Roboto:wght@400;500&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/tom-select/dist/js/tom-select.complete.min.js"></script>
 
   <style>
     :root{
@@ -976,6 +978,18 @@ if (!empty($suggestion_row)) {
   font-size: 13px;
   color:#777;
 }
+
+/* Tom Select dropdown styling */
+.ts-dropdown {
+  background: #fff !important;
+  border: 1px solid var(--gray-light) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: var(--shadow) !important;
+  z-index: 1000 !important;
+}
+.ts-dropdown-content {
+  background: #fff !important;
+}
   </style>
 </head>
 <body>
@@ -1001,8 +1015,9 @@ if (!empty($suggestion_row)) {
           <table>
             <thead>
               <tr>
-                <th>Reference Number</th>
                 <th>Ordering Name</th>
+                <th>Reference Number</th>
+                <th>Reference</th>
                 <th>Description</th>
                 <th>Transaction Date</th>
                 <th class="amount">Amount Paid</th>
@@ -1026,15 +1041,16 @@ if (!empty($suggestion_row)) {
                     }
                   ?>
                   <tr data-mh-id="<?= $row_mh_id ?>" data-invoice-id="<?= $row_invoice_id ?>" class="<?= $isActiveRow ? 'active-row' : '' ?>">
-                    <td><?= htmlspecialchars((string)($row['reference_number'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                     <td><?= htmlspecialchars((string)($row['beneficiary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars((string)($row['reference_number'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                     <td><?= htmlspecialchars((string)($row['reference'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars((string)($row['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                     <td><?= !empty($row['processing_date']) ? date("d/m/Y", strtotime($row['processing_date'])) : '-' ?></td>
                     <td class="amount"><?= number_format((float)($row['amount_total'] ?? 0), 2, ',', '.') ?> <?= CURRENCY ?></td>
                   </tr>
                 <?php endwhile; ?>
               <?php else: ?>
-                <tr><td colspan="5">No unconfirmed transactions found.</td></tr>
+                <tr><td colspan="6">No unconfirmed transactions found.</td></tr>
               <?php endif; ?>
             </tbody>
           </table>
@@ -1149,23 +1165,6 @@ if (!empty($suggestion_row)) {
                 </div>
               </div>
               <button type="button" id="addStudentBtn" class="btn btn-ghost" style="margin-bottom:10px;">Add student</button>
-            <div id="studentSearchWrap" class="student-search-wrap" style="display:none;">
-  <div class="student-search-head">
-    <span class="student-search-label">Search</span>
-    <button type="button" id="studentSearchClose" class="student-search-close" aria-label="Close">×</button>
-  </div>
-
-  <input
-    type="text"
-    id="studentSearchInput"
-    class="side-input student-search-input"
-    placeholder="Search student…"
-    autocomplete="off"
-  />
-
-  <div id="studentSearchResults" class="student-search-results" style="display:none;"></div>
-</div>
-
               <div class="card" style="margin-top:12px; padding:10px; background:#f9f9f9;">
                 <div class="side-title">Connection Reason</div>
                 <p class="reason-text"><?= htmlspecialchars($reason_text ?: 'No metadata available.', ENT_QUOTES, 'UTF-8') ?></p>
@@ -1203,108 +1202,57 @@ document.addEventListener('DOMContentLoaded', () => {
     filterIcon.style.cursor = 'pointer';
     navLeft.appendChild(filterIcon);
   }
-  // --- Student live search when '-- Select Student --' is selected ---
-const studentSelect = document.querySelector('select[data-primary-student-select]');
-const wrap = document.getElementById('studentSearchWrap');
-const input = document.getElementById('studentSearchInput');
-const resultsBox = document.getElementById('studentSearchResults');
-
-if (studentSelect && wrap && input && resultsBox) {
-
-  // Cache all real options (exclude placeholder value="")
-  const allStudents = Array.from(studentSelect.options)
-    .filter(o => o.value !== "")
-    .map(o => ({ value: o.value, text: o.text }));
-
- function renderResults(list) {
-  resultsBox.innerHTML = "";
-
-  if (!list.length) {
-    resultsBox.style.display = "block";
-    resultsBox.innerHTML = '<div class="student-search-empty">No results.</div>';
-    return;
-  }
-
-  resultsBox.style.display = "block";
-
-  list.slice(0, 30).forEach(item => {
-    const row = document.createElement('div');
-    row.className = 'student-search-item';
-    row.textContent = item.text;
-
-    row.addEventListener('click', () => {
-      studentSelect.value = item.value;
-      wrap.style.display = "none";
-      input.value = "";
-      resultsBox.innerHTML = "";
-      resultsBox.style.display = "none";
-    });
-
-    resultsBox.appendChild(row);
-  });
-}
-
-  function updateVisibility() {
-    if (studentSelect.value === "") {
-  wrap.style.display = "block";
-  input.focus();
-  resultsBox.innerHTML = ""; // show nothing until typing
-} else {
-      wrap.style.display = "none";
-    }
-  }
-
-  // When placeholder selected -> show search
-  studentSelect.addEventListener('change', updateVisibility);
-
-  // Live filter while typing
-  input.addEventListener('input', () => {
-    const q = input.value.toLowerCase().trim();
-    if (q === "") {
-  resultsBox.innerHTML = ""; // nothing until typing
-  return;
-}
-const filtered = allStudents.filter(s => s.text.toLowerCase().includes(q));
-renderResults(filtered);
-  });
-
-  // Also show search if user clicks the placeholder again
-  studentSelect.addEventListener('mousedown', () => {
-    // If currently placeholder, show search instantly
-  if (studentSelect.value === "") {
-  studentSelect.selectedIndex = 0;
-}
-  });
-
-  // Init state on load (in case value is placeholder)
-  updateVisibility();
-}
-
-  // Multi-student selection: add/remove extra student select rows
-  const container = document.getElementById('studentSelectionContainer');
+  // --- Searchable student select using Tom Select on student_ids[] ---
+  const studentSelectionContainer = document.getElementById('studentSelectionContainer');
   const addBtn = document.getElementById('addStudentBtn');
-  if (container && addBtn) {
-    addBtn.addEventListener('click', () => {
-      const rows = container.querySelectorAll('.student-row');
-      if (!rows.length) return;
-      const firstRow = rows[0];
-      const clone = firstRow.cloneNode(true);
-      const select = clone.querySelector('select[name="student_ids[]"]');
-      const removeBtn = clone.querySelector('[data-remove-student]');
-      if (select) {
-        select.value = "";
-      }
-      if (removeBtn) {
-        removeBtn.style.display = 'inline-flex';
-      }
-      container.appendChild(clone);
+
+  const studentTemplateSelect = document.querySelector('select[name="student_ids[]"]');
+  const studentOptionsHTML = studentTemplateSelect ? studentTemplateSelect.innerHTML : '';
+
+  function initTomSelectForStudent(select) {
+    if (!select || !(select instanceof HTMLSelectElement)) return;
+    if (select.dataset.tomSelectInit === '1') return;
+
+    new TomSelect(select, {
+      maxItems: 1,
+      create: false,
+      sortField: [{ field: 'text', direction: 'asc' }],
+      dropdownParent: 'body',
+      onBlur: function() {
+        this.close();
+      },
     });
 
-    container.addEventListener('click', (e) => {
+    select.dataset.tomSelectInit = '1';
+  }
+
+  if (studentTemplateSelect) {
+    initTomSelectForStudent(studentTemplateSelect);
+  }
+
+  if (studentSelectionContainer && addBtn && studentOptionsHTML) {
+    addBtn.addEventListener('click', () => {
+      const row = document.createElement('div');
+      row.className = 'student-row';
+      row.style.cssText = 'display:flex; gap:8px; align-items:center; margin-bottom:8px;';
+      row.innerHTML = `
+        <select name="student_ids[]" class="side-input" required>
+          <option value="">-- Select Student --</option>
+          ${studentOptionsHTML}
+        </select>
+        <button type="button" class="btn btn-ghost" data-remove-student style="display:inline-flex;">Remove</button>
+      `;
+
+      studentSelectionContainer.appendChild(row);
+      const newSelect = row.querySelector('select[name="student_ids[]"]');
+      initTomSelectForStudent(newSelect);
+    });
+
+    studentSelectionContainer.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-remove-student]');
       if (!btn) return;
       const row = btn.closest('.student-row');
-      const rows = container.querySelectorAll('.student-row');
+      const rows = studentSelectionContainer.querySelectorAll('.student-row');
       if (row && rows.length > 1) {
         row.remove();
       }
@@ -1331,23 +1279,6 @@ renderResults(filtered);
       window.location.href = url.toString();
     });
   });
-  const closeBtn = document.getElementById('studentSearchClose');
-
-if (closeBtn) {
-  closeBtn.addEventListener('click', () => {
-
-    // Search UI schließen
-    wrap.style.display = 'none';
-
-    // Input & Results resetten
-    input.value = '';
-    resultsBox.innerHTML = '';
-    resultsBox.style.display = 'none';
-
-    studentSelect.focus();
-  });
-}
-
   // AJAX submit for manual confirmation – expects JSON response from server
   const manualForm = document.getElementById('manualConfirmForm');
   if (manualForm) {
