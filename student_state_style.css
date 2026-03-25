@@ -67,35 +67,17 @@
   
   /* =========================
      4) Page Layout / Container
+     (same behavior as transactions.php)
      ========================= */
-  /* This is the key fix: true centering on huge screens */
-  .content {
-    width: min(var(--page-max), calc(100% - (var(--gutter) * 2)));
-    margin-inline: auto;
-    padding: var(--content-top) 0 var(--content-bottom);
-    transition: margin-left 0.3s ease;
-  
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+  #content {
+    transition: margin-left 0.3s ease, margin-right 0.3s ease;
+    margin-left: 0;
+    padding: 100px 30px 60px;
     text-align: center;
   }
-  
-  /* Desktop behavior when sidebar pushes content */
-  .content.shifted {
+
+  #content.shifted {
     margin-left: var(--sidebar-width);
-    width: min(
-      var(--page-max),
-      calc(100% - var(--sidebar-width) - (var(--gutter) * 2))
-    );
-  }
-  
-  /* On smaller screens: do NOT push content; sidebar should overlay */
-  @media (max-width: 992px) {
-    .content.shifted {
-      margin-left: 0;
-      width: min(var(--page-max), calc(100% - (var(--gutter) * 2)));
-    }
   }
   
   /* =========================
@@ -150,6 +132,7 @@
      ========================= */
   .table-wrapper {
     width: 100%;
+    max-width: 1300px;
     margin: 25px auto 0;
     padding: 10px;
   
@@ -217,6 +200,8 @@
   }
 
   /* Action icons: prevent underline on hover for links inside the table */
+  #content .student-table td a:hover,
+  #content .student-table a:hover,
   .content .student-table td a:hover,
   .content .student-table a:hover {
     text-decoration: none !important;

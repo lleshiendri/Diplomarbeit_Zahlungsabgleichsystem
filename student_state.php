@@ -183,6 +183,37 @@ $filterMin     = trim($_GET['amount_min'] ?? '');
 $filterMax     = trim($_GET['amount_max'] ?? '');
 $filterApplied = isset($_GET['applied']);
 
+/* ========= SEARCH + SORT (compact header controls) ========= */
+$searchQ = trim($_GET['q'] ?? '');
+$sortKey = trim($_GET['sort'] ?? 'id');
+$sortDir = strtolower(trim($_GET['dir'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
+
+$allowedSort = [
+    'id'                       => 's.id',
+    'student_name'            => 's.long_name',
+    'amount_paid'            => 's.amount_paid',
+    'left_to_pay'            => 's.left_to_pay',
+    'additional_payments_status' => 's.additional_payments_status',
+    'last_transaction_date'   => 'last_transaction_date',
+];
+$orderByCol = $allowedSort[$sortKey] ?? 's.id';
+$orderBySql = $orderByCol . ' ' . strtoupper($sortDir);
+
+// Human-readable direction labels that match the selected sort key.
+$effectiveSortKey = ($sortKey === '') ? 'id' : $sortKey;
+$dirDescLabel = 'Descending';
+$dirAscLabel  = 'Ascending';
+if (in_array($effectiveSortKey, ['id', 'amount_paid', 'left_to_pay', 'additional_payments_status'], true)) {
+    $dirDescLabel = 'Highest first';
+    $dirAscLabel  = 'Lowest first';
+} elseif (in_array($effectiveSortKey, ['last_transaction_date'], true)) {
+    $dirDescLabel = 'Newest first';
+    $dirAscLabel  = 'Oldest first';
+} elseif (in_array($effectiveSortKey, ['student_name'], true)) {
+    $dirDescLabel = 'Z to A';
+    $dirAscLabel  = 'A to Z';
+}
+
 $clauses = [];
 $needsInvoiceJoin = false;
 
@@ -224,6 +255,22 @@ if ($filterMin !== '' && is_numeric($filterMin)) {
 if ($filterMax !== '' && is_numeric($filterMax)) {
     $needsInvoiceJoin = true;
     $clauses[] = "i.amount_total <= " . (float)$filterMax;
+}
+
+/* ========= TEXT SEARCH (q) =========
+ * Keep it on STUDENT_TAB columns to avoid changing existing invoice-join behavior.
+ */
+if ($searchQ !== '') {
+    $like = "%" . $conn->real_escape_string($searchQ) . "%";
+    $qId  = ctype_digit($searchQ) ? (int)$searchQ : 0;
+    $idClause = $qId > 0 ? " OR s.id = {$qId}" : "";
+
+    // reference_id is part of STUDENT_TAB schema (if present)
+    $clauses[] = "(s.extern_key LIKE '{$like}'
+                   OR s.name LIKE '{$like}'
+                   OR s.long_name LIKE '{$like}'
+                   OR s.reference_id LIKE '{$like}'
+                   {$idClause})";
 }
 
 /* Build JOIN only if needed */
@@ -277,7 +324,7 @@ $selectSql = "
     {$joinSql}
     {$whereSql}
     GROUP BY s.id, s.extern_key, s.long_name, s.name, s.left_to_pay, s.amount_paid, s.additional_payments_status
-    ORDER BY s.id ASC
+    ORDER BY {$orderBySql}
     LIMIT {$limit} OFFSET {$offset}
 ";
 
@@ -288,23 +335,44 @@ $result = $conn->query($selectSql);
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Student State</title>
 
     <link rel="stylesheet" href="student_state_style.css">
-
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Roboto:wght@400;500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
-
-    <!-- Bootstrap für Pagination -->
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
 
+    <style>
+    body {
+        font-family: 'Roboto', sans-serif;
+        margin: 0;
+    }
+
+    #sidebar a {
+        text-decoration: none;
+        color: #222;
+        transition: 0.2s;
+    }
+    #sidebar a:hover {
+        background-color: #FAE4D5;
+        color: #B31E32;
+    }
+
+    #content {
+        transition: margin-left 0.3s ease;
+        margin-left: 0;
+        padding: 100px 30px 60px;
+    }
+    #content.shifted {
+        margin-left: 260px;
+    }
+    </style>
 </head>
 <body>
 <?php require __DIR__ . '/navigator.php'; ?>
 
-<div id="overlay"></div>
-
-<div class="content">
+<div id="content">
     <h1 class="page-title">STUDENT STATE</h1>
     <?= $alert ?>
     <div id="reference-email-result" class="alert" style="display:none;"></div>
@@ -456,28 +524,6 @@ $result = $conn->query($selectSql);
 <!-- Bootstrap JS -->
 <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
-
-<script>
-    // Sidebar (falls du sie aus navigator.php nutzt)
-    const sidebar = document.getElementById("sidebar");
-    const content = document.querySelector(".content");
-    const overlay = document.getElementById("overlay");
-
-    function openSidebar() {
-        if (sidebar) sidebar.classList.add("open");
-        if (content) content.classList.add("shifted");
-        if (overlay) overlay.classList.add("show");
-    }
-    function closeSidebar() {
-        if (sidebar) sidebar.classList.remove("open");
-        if (content) content.classList.remove("shifted");
-        if (overlay) overlay.classList.remove("show");
-    }
-    function toggleSidebar() {
-        if (!sidebar) return;
-        sidebar.classList.contains("open") ? closeSidebar() : openSidebar();
-    }
-</script>
 
 <script>
 function toggleEdit(id) {
