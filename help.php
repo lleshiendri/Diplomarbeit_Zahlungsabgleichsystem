@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
 
-  <link rel="stylesheet" href="help.css"?v=<?= time() ?>/>
+  <link rel="stylesheet" href="help.css?v=<?= time() ?>" />
 </head>
 
 <body class="page-help">
@@ -218,6 +218,7 @@
                   <li><span class="icon material-icons-outlined">menu</span> Opens the main navigation.</li>
                   <li><span class="icon material-icons-outlined">notifications</span> Shows unread notifications and warnings.</li>
                   <li><span class="icon material-icons-outlined">priority_high</span> Displays critical system alerts.</li>
+                  <li><span class="icon material-icons-outlined">filter_list</span> Opens the filter menu on the pages that support it.</li>
                   <li><span class="icon material-icons-outlined">calendar_month</span> Opens the School Year settings.</li>
                 </ul>
 
@@ -420,13 +421,6 @@
                   <strong>Email notification:</strong>
                   Use the mail icon to send a message to the student’s legal guardian (only available for urgent cases).
                 </li>
-
-                <li>
-                  <span class="dot">5</span>
-                  <strong>Pagination:</strong>
-                  Navigate through multiple pages of notifications using the controls below the table.
-                </li>
-
               </ul>
 
               <div class="callout callout--danger">
@@ -608,57 +602,63 @@
 
                   <li>
                     <span class="dot">2</span>
+                    <strong>Invoice ID:</strong>
+                    Internal invoice identifier linked to the matching record.
+                  </li>
+
+                  <li>
+                    <span class="dot">3</span>
                     <strong>Invoice Ref:</strong>
                     Reference or identifier coming from the invoice or transaction.
                   </li>
 
                   <li>
-                    <span class="dot">3</span>
-                    <strong>Amount:</strong>
-                    Amount of the payment assigned to this student in this matching record.
-                  </li>
-
-                  <li>
                     <span class="dot">4</span>
-                    <strong>Processing Date:</strong>
-                    Date when the payment was processed in the bank.
-                  </li>
-
-                  <li>
-                    <span class="dot">5</span>
                     <strong>Student:</strong>
                     Student linked to the invoice for this matching record.
                   </li>
 
                   <li>
+                    <span class="dot">5</span>
+                    <strong>Student Reference ID:</strong>
+                    Unique student reference used to connect payments, history, and related records.
+                  </li>
+
+                  <li>
                     <span class="dot">6</span>
+                    <strong>Amount:</strong>
+                    Amount of the payment assigned to this student in this matching record.
+                  </li>
+
+                  <li>
+                    <span class="dot">7</span>
+                    <strong>Processing Date:</strong>
+                    Date when the payment was processed in the bank.
+                  </li>
+
+                  <li>
+                    <span class="dot">8</span>
                     <strong>Matched By:</strong>
                     Method used to find this matching record (manual, reference-based, name-based, history-based, etc.).
                   </li>
 
                   <li>
-                    <span class="dot">7</span>
+                    <span class="dot">9</span>
                     <strong>Confidence:</strong>
                     Confidence score or percentage indicating how strong the match is.
                   </li>
 
                   <li>
-                    <span class="dot">8</span>
-                    <strong>Confirmed:</strong>
-                    Shows whether this match is verified and considered final.
-                  </li>
-
-                  <li>
-                    <span class="dot">9</span>
+                    <span class="dot">10</span>
                     <strong>Created:</strong>
                     Timestamp when this matching record was created.
                   </li>
 
                   <li>
-                    <span class="dot">10</span>
+                    <span class="dot">11</span>
                     <strong>Actions:</strong>
-                    <strong>Pen</strong> = edit the matching record details. 
-                    <strong>Trash bin</strong> = delete the matching record.
+                    <strong>Pen</strong> = opens the row for correction. 
+                    <strong>Trash bin</strong> = removes the matching history entry.
                   </li>
                 </ul>
               </div>
@@ -671,9 +671,9 @@
                   <img src="/help_page_images/edit_matching_history.png" alt="Matching history edit screenshot" />
                 </figure>
                 <ul class="legend__list">
-                  <li><span class="dot">1</span> <strong>Assign to student:</strong> Choose the correct student from the dropdown.</li>
-                  <li><span class="dot">2</span> <strong>Save:</strong> Applies the change and updates the matching record.</li>
-                  <li><span class="dot">3</span> <strong>Cancel:</strong> Discards changes and exits edit mode.</li>
+                  <li><span class="dot">1</span> <strong>Assign to student:</strong> Select the correct student for this matching entry.</li>
+                  <li><span class="dot">2</span> <strong>Save:</strong> Stores the updated student assignment.</li>
+                  <li><span class="dot">3</span> <strong>Cancel:</strong> Closes edit mode without saving.</li>
                 </ul>
                 <div class="callout callout--warning">
                   Editing a match affects balances and reconciliation. Only edit when you are certain.
@@ -878,19 +878,24 @@
                 <h3>What each column means</h3>
 
                 <ul class="legend__list">
-                  <li><span class="dot">1</span> <strong>Student ID</strong> — Unique identifier used internally for linking payments and history.</li>
-                  <li><span class="dot">2</span> <strong>Student Name</strong> — The student record this balance belongs to.</li>
+                  <li><span class="dot">1</span> <strong>Student Name</strong> — The student record this balance belongs to.</li>
+                  <li><span class="dot">2</span> <strong>Reference ID</strong> — Unique identifier used internally for linking payments and history.</li>
                   <li><span class="dot">3</span> <strong>Amount Paid</strong> — Total confirmed payments assigned to this student.</li>
                   <li><span class="dot">4</span> <strong>Left to Pay</strong> — Remaining amount the student still owes (0 means fully paid).</li>
                   <li><span class="dot">5</span> <strong>Last Transaction</strong> — Date of the most recent confirmed payment (helps spot inactive cases).</li>
                   <li><span class="dot">6</span> <strong>Additional Payment Status</strong> — Extra/alternative payments tracked separately (depends on your school rules).</li>
                   <li><span class="dot">7</span> <strong>Actions</strong> — Manual tools for admins (edit / delete).</li>
                 </ul>
+              </div>
 
+              <div class="legend">
                 <h3 style="margin-top:14px;">Actions (Admin)</h3>
                 <ul class="legend__list">
-                  <li><span class="dot">✎</span> <strong>Edit</strong> — Correct values when a case was handled outside the normal flow (audit-required).</li>
-                  <li><span class="dot">🗑</span> <strong>Delete</strong> — Removes the student entry (use only if the record is wrong/duplicate).</li>
+                  <li><span class="dot"><span class="material-icons-outlined">edit</span></span> <strong>Edit</strong> — Correct values when a case was handled outside the normal flow (audit-required).</li>
+                  <li><span class="dot"><span class="material-icons-outlined">delete</span></span> <strong>Delete</strong> — Removes the student entry (use only if the record is wrong/duplicate).</li>
+                  <li><span class="dot"><span class="material-icons-outlined">picture_as_pdf</span></span> <strong>Generate PDF</strong> — Creates a payment overview PDF for the student.</li>
+                  <li><span class="dot"><span class="material-icons-outlined">attach_email</span></span> <strong>Send Email</strong> — Sends the PDF to the legal guardian. (The PDF must always be generated first, using the PDF creation button, for this feature to work)</li>
+                  <li><span class="dot"><span class="material-icons-outlined">contact_mail</span></span> <strong>Guardian Info</strong> — Opens the assigned legal guardian details.</li>
                 </ul>
 
                 <div class="callout callout--warning">
@@ -904,6 +909,7 @@
               </div>
             </div>
           </article>
+
 
 
 
