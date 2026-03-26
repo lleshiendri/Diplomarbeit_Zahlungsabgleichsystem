@@ -355,7 +355,9 @@ if ($syRes && $syRes->num_rows === 1) {
       <a href="student_state.php"><span class="material-icons-outlined">school</span> Student State</a>
       <a href="latencies.php"><span class="material-icons-outlined">schedule</span> Latencies</a>
       <a href="notifications.php"><span class="material-icons-outlined">notifications</span> Notifications</a>
-      <a href="help.php"><span class="material-icons-outlined">help_outline</span> Help & Tutorial</a>
+      <?php if ($isAdmin): ?>
+        <a href="help.php"><span class="material-icons-outlined">help_outline</span> Help & Tutorial</a>
+      <?php endif; ?>
     </nav>
     <div class="logout-wrap">
       <a class="logout-link" href="http://buchhaltung.htl-projekt.com/login/login.php">

@@ -1,3 +1,4 @@
+<?php require_once __DIR__ . '/auth_check.php'; ?>
 <!doctype html>
 <html lang="en">
 <head>
@@ -748,7 +749,7 @@
                 <h3>What you see here</h3>
 
                 <p>
-                  The screenshot shows the <strong>Transactions</strong> import tab. The <strong>Students</strong> and
+                  The screenshot shows the <strong>Transactions</strong> import tab. Here you can see all the previously imported files with their details and import a new file into the system. The <strong>Students</strong> and
                   <strong>Legal Guardians</strong> tabs work the exact same way. To switch, use the tabs above the table.
                 </p>
 
@@ -813,7 +814,7 @@
 
                 <p>
                   The Unconfirmed page contains transactions that the system
-                  could not match automatically to a student or invoice with sufficient confidence.
+                  could not match automatically to a student with sufficient confidence.
                   These cases require manual review by an administrator.
                 </p>
 
@@ -845,7 +846,8 @@
                 <li><span class="dot">2</span> Check the payer name, description, and amount</li>
                 <li><span class="dot">3</span> Review the connection reason in the right panel</li>
                 <li><span class="dot">4</span> Choose the correct student from the dropdown</li>
-                <li><span class="dot">5</span> Press Confirm to finalize the match</li>
+                <li><span class="dot">5</span> You can add more students to split the payment by pressing the Add Student button</li>
+                <li><span class="dot">6</span> Press Confirm to finalize the match</li>
               </ul>
 
                 <div class="callout callout--warning">
