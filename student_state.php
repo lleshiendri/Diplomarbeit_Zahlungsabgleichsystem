@@ -510,11 +510,30 @@ $result = $conn->query($selectSql);
             <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
                 <a class="page-link" href="<?= ($page <= 1) ? '#' : htmlspecialchars(buildPageLink($page - 1, $paginationBase)) ?>">Previous</a>
             </li>
-            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+            <?php
+            // Compact pagination: keep edges and current neighborhood, collapse the middle.
+            $window = 1; // show current page +/- 1
+            $lastRenderedPage = 0;
+            for ($i = 1; $i <= $totalPages; $i++):
+                $isEdgePage = ($i === 1 || $i === $totalPages);
+                $isNearCurrent = (abs($i - $page) <= $window);
+                if (!$isEdgePage && !$isNearCurrent) {
+                    continue;
+                }
+
+                if ($lastRenderedPage > 0 && $i > $lastRenderedPage + 1): ?>
+                    <li class="page-item disabled">
+                        <span class="page-link">…</span>
+                    </li>
+                <?php endif; ?>
+
                 <li class="page-item <?= ($i == $page) ? 'active' : '' ?>">
                     <a class="page-link" href="<?= htmlspecialchars(buildPageLink($i, $paginationBase)) ?>"><?= $i ?></a>
                 </li>
-            <?php endfor; ?>
+            <?php
+                $lastRenderedPage = $i;
+            endfor;
+            ?>
             <li class="page-item <?= ($page >= $totalPages) ? 'disabled' : '' ?>">
                 <a class="page-link" href="<?= ($page >= $totalPages) ? '#' : htmlspecialchars(buildPageLink($page + 1, $paginationBase)) ?>">Next</a>
             </li>
