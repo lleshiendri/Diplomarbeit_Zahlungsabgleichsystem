@@ -105,8 +105,6 @@ if (in_array($effectiveSortKey, ['created_at', 'processing_date'], true)) {
 }
 
 $clauses = [];
-// matching_history page is confirmed-only by design
-$clauses[] = "h.is_confirmed = 1";
 if ($filterStudent !== '') {
     $like = '%' . $conn->real_escape_string($filterStudent) . '%';
     $clauses[] = "(st.long_name LIKE '{$like}' OR st.name LIKE '{$like}' OR st.forename LIKE '{$like}')";
@@ -190,13 +188,13 @@ $selectSql = "
         h.student_id,
         h.confidence_score,
         h.matched_by,
-        h.is_confirmed,
         h.created_at,
         i.reference_number,
         i.amount_total,
         i.processing_date,
         i.beneficiary,
-        st.long_name AS student_name
+        st.long_name AS student_name,
+        st.reference_id AS student_reference_id
     FROM MATCHING_HISTORY_TAB h
     JOIN INVOICE_TAB i ON i.id = h.invoice_id
     LEFT JOIN STUDENT_TAB st ON st.id = h.student_id
@@ -315,9 +313,6 @@ $result = $conn->query($selectSql);
     .edit-row button:hover { background: #B31E32; }
     .edit-row button[type="button"] { background: #666; }
     .edit-row button[type="button"]:hover { background: #444; }
-
-    .badge-confirmed { background: #4CAF50; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-    .badge-unconfirmed { background: #FF9800; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
     </style>
 </head>
 <body>
@@ -335,13 +330,14 @@ $result = $conn->query($selectSql);
             <thead>
                 <tr>
                     <th>Id</th>
+                    <th>Invoice ID</th>
                     <th>Invoice Ref</th>
+                    <th>Student</th>
+                    <th>Student Reference ID</th>
                     <th>Amount</th>
                     <th>Processing Date</th>
-                    <th>Student</th>
                     <th>Matched By</th>
                     <th>Confidence</th>
-                    <th>Confirmed</th>
                     <th>Created</th>
                     <?php if ($isAdmin): ?>
                         <th>Actions</th>
@@ -357,19 +353,19 @@ $result = $conn->query($selectSql);
                     $rowClass = ($rowIndex % 2 === 1) ? 'row-odd' : 'row-even';
                     $hid = (int)$row['history_id'];
                     $studentName = $row['student_name'] !== null ? htmlspecialchars($row['student_name'], ENT_QUOTES, 'UTF-8') : '—';
-                    $confirmed = !empty($row['is_confirmed']);
                     $createdAt = $row['created_at'] ? date('Y-m-d H:i', strtotime($row['created_at'])) : '—';
                     $procDate = $row['processing_date'] ? date('Y-m-d', strtotime($row['processing_date'])) : '—';
 
                     echo "<tr id='row-{$hid}' class='{$rowClass}'>";
+                    echo '<td>' . (int)$row['invoice_id'] . '</td>';
                     echo '<td>' . (int)$row['history_id'] . '</td>';
                     echo '<td>' . htmlspecialchars($row['reference_number'] ?? '', ENT_QUOTES, 'UTF-8') . '</td>';
+                    echo '<td>' . $studentName . '</td>';
+                    echo '<td>' . htmlspecialchars($row['student_reference_id'] ?? '—', ENT_QUOTES, 'UTF-8') . '</td>';
                     echo '<td>' . number_format((float)($row['amount_total'] ?? 0), 2, ',', '.') . ' ' . CURRENCY . '</td>';
                     echo '<td>' . $procDate . '</td>';
-                    echo '<td>' . $studentName . '</td>';
                     echo '<td>' . htmlspecialchars($row['matched_by'] ?? '', ENT_QUOTES, 'UTF-8') . '</td>';
                     echo '<td>' . (isset($row['confidence_score']) ? round((float)$row['confidence_score'], 0) . '%' : '—') . '</td>';
-                    echo '<td><span class="' . ($confirmed ? 'badge-confirmed' : 'badge-unconfirmed') . '">' . ($confirmed ? 'Yes' : 'No') . '</span></td>';
                     echo '<td>' . $createdAt . '</td>';
 
                     if ($isAdmin) {
@@ -385,7 +381,7 @@ $result = $conn->query($selectSql);
                     if ($isAdmin) {
                         $currentStudentId = (int)($row['student_id'] ?? 0);
                         echo "<tr class='edit-row' id='edit-{$hid}'>";
-                        echo '<td colspan="10">';
+                        echo '<td colspan="11">';
                         echo '<form method="POST" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">';
                         echo '<input type="hidden" name="history_id" value="' . $hid . '">';
                         echo '<input type="hidden" name="update_matching" value="1">';
@@ -404,7 +400,7 @@ $result = $conn->query($selectSql);
                     }
                 }
             } else {
-                $colspan = $isAdmin ? 10 : 9;
+                $colspan = $isAdmin ? 11 : 10;
                 echo "<tr><td colspan='{$colspan}' style='text-align:center;color:#888;'>No matching history records found.</td></tr>";
             }
             ?>

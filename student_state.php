@@ -315,6 +315,7 @@ $selectSql = "
         s.extern_key AS extern_key,
         s.long_name AS student_name,
         s.name,
+        s.reference_id AS reference_id,
         s.amount_paid,
         s.left_to_pay,
         s.additional_payments_status,
@@ -323,7 +324,7 @@ $selectSql = "
     LEFT JOIN INVOICE_TAB i ON i.student_id = s.id 
     {$joinSql}
     {$whereSql}
-    GROUP BY s.id, s.extern_key, s.long_name, s.name, s.left_to_pay, s.amount_paid, s.additional_payments_status
+    GROUP BY s.id, s.extern_key, s.long_name, s.name, s.reference_id, s.left_to_pay, s.amount_paid, s.additional_payments_status
     ORDER BY {$orderBySql}
     LIMIT {$limit} OFFSET {$offset}
 ";
@@ -383,8 +384,8 @@ $result = $conn->query($selectSql);
         <table class="student-table">
             <thead>
                 <tr>
-                    <th>Student ID</th>
                     <th>Student Name</th>
+                    <th>Reference ID</th>
                     <th>Amount Paid</th>
                     <th>Left to Pay</th>
                     <th>Last Transaction</th>
@@ -409,8 +410,8 @@ $result = $conn->query($selectSql);
                     $studentName = $row['student_name'];
 
                     echo '<tr id="row-'.$studentId.'">';
-                    echo '<td>' . htmlspecialchars($studentId) . '</td>';
                     echo '<td>' . htmlspecialchars($studentName) . '</td>';
+                    echo '<td>' . htmlspecialchars($row['reference_id'] ?? '—') . '</td>';
                     echo '<td>' . number_format($amountPaid, 2, ',', '.') . ' Lek' . '</td>';
                     echo '<td>' . number_format($row['left_to_pay'], 2, ',', '.') . ' Lek' . '</td>';
                     echo '<td>' . htmlspecialchars($lastDate) . '</td>';
@@ -462,7 +463,7 @@ $result = $conn->query($selectSql);
 
                     // Inline-Edit-Zeile
                     echo '<tr class="edit-row" id="edit-'.$studentId.'">
-                            <td colspan="8">
+                            <td colspan="7">
                                 <form method="POST">
                                     <input type="hidden" name="extern_key" value="'.htmlspecialchars($externKey).'">
                                     <input type="hidden" name="student_id" value="'.htmlspecialchars($studentId).'">
@@ -488,7 +489,8 @@ $result = $conn->query($selectSql);
                     }
                 }
             } else {
-                echo '<tr><td colspan="8">No students found</td></tr>';
+                $colspan = $isAdmin ? 7 : 6;
+                echo '<tr><td colspan="'.$colspan.'">No students found</td></tr>';
             }
             ?>
             </tbody>
