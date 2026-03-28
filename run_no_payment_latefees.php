@@ -1,9 +1,11 @@
 <?php
-require "db_connect.php";
-require_once "matching_engine.php"; // uses createNotificationOnce + helpers above
+require __DIR__ . '/db_connect.php';
+require_once __DIR__ . '/matching_functions.php';
+
+// Monthly "no payment" fee: no invoice split — only additional_payments_status (invoice_id = 0 in helper).
+// createNotificationOnce / September / full-year-paid rules still apply.
 
 $CUTOFF_DAY = 10;
-$LATEFEE_AMOUNT = 500;
 
 $today = date('Y-m-d');
 $day   = (int)date('j');
@@ -13,7 +15,8 @@ if ($day <= $CUTOFF_DAY) {
 }
 
 $monthKey = date('Y-m');
-$desc = "Late fee $monthKey: +{$LATEFEE_AMOUNT} LEK (no payment for this month)";
+$feeAmt = (float)LATE_FEE_AMOUNT_LEK;
+$desc = "Late fee $monthKey: +{$feeAmt} LEK (no payment for this month)";
 
 $sql = "
     SELECT s.id AS student_id
@@ -31,33 +34,47 @@ $sql = "
 ";
 
 $res = $conn->query($sql);
-if (!$res) exit("DB_ERROR: " . $conn->error . "\n");
+if (!$res) {
+    exit("DB_ERROR: " . $conn->error . "\n");
+}
 
 $created = 0;
 
 while ($row = $res->fetch_assoc()) {
     $sid = (int)$row['student_id'];
 
-    // Dedupe: once per student+month+type
-    if (notificationExistsExact($conn, $sid, "urgent", $desc)) continue;
+    if (notificationExistsExact($conn, $sid, 'urgent', $desc)) {
+        continue;
+    }
+
+    if (isSeptemberDate($today)) {
+        continue;
+    }
+    if (hasPaidFullYearAmount($conn, $sid, $today)) {
+        continue;
+    }
 
     $ref = getStudentReferenceOrFallback($conn, $sid);
 
+    $conn->begin_transaction();
+    $feeOk = applyLateFeeToStudentBalances($conn, $sid, 0, $feeAmt);
+    if (!$feeOk) {
+        $conn->rollback();
+        continue;
+    }
     $ok = createNotificationOnce(
         $conn,
-        "urgent",
+        'urgent',
         $sid,
         $ref,
         $today,
         $desc
     );
-
     if ($ok) {
-        // Apply +500 once per month for "no payment"
-        $conn->query("UPDATE STUDENT_TAB
-                      SET additional_payments_status = COALESCE(additional_payments_status,0) + " . (int)$LATEFEE_AMOUNT . "
-                      WHERE id = " . (int)$sid);
+        $conn->commit();
         $created++;
+    } else {
+        $conn->rollback();
     }
 }
 

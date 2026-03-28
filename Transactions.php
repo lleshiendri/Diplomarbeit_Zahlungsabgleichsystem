@@ -8,14 +8,97 @@ $alert = "";
 /* ========= DELETE TRANSACTION ========= */
 if (isset($_GET['delete_id'])) {
     $delete_id = (int)$_GET['delete_id'];
-    $stmt = $conn->prepare("DELETE FROM INVOICE_TAB WHERE id = ?");
-    if ($stmt) {
-        $stmt->bind_param("i", $delete_id);
-        $stmt->execute();
-        $stmt->close();
+    $conn->begin_transaction();
+    $ok  = true;
+    $err = '';
+
+    if ($delete_id > 0) {
+        // 1) Read the invoice amount before anything is deleted
+        $invoiceTotal = null;
+        $stmtInv = $conn->prepare("SELECT amount_total FROM INVOICE_TAB WHERE id = ? LIMIT 1");
+        if ($stmtInv) {
+            $stmtInv->bind_param("i", $delete_id);
+            $stmtInv->execute();
+            $resInv = $stmtInv->get_result();
+            $rowInv = $resInv ? $resInv->fetch_assoc() : null;
+            if ($rowInv) {
+                $invoiceTotal = (float)$rowInv['amount_total'];
+            }
+            $stmtInv->close();
+        }
+
+        // 2) Collect confirmed student_ids linked to this invoice
+        $studentIds = [];
+        $stmtMH = $conn->prepare(
+            "SELECT DISTINCT student_id FROM MATCHING_HISTORY_TAB
+              WHERE invoice_id = ? AND student_id IS NOT NULL AND is_confirmed = 1"
+        );
+        if ($stmtMH) {
+            $stmtMH->bind_param("i", $delete_id);
+            $stmtMH->execute();
+            $resMH = $stmtMH->get_result();
+            while ($resMH && $r = $resMH->fetch_assoc()) {
+                $studentIds[] = (int)$r['student_id'];
+            }
+            $stmtMH->close();
+        }
+
+        // 3) Revert each student's balance (split = total / count)
+        if ($invoiceTotal !== null && count($studentIds) > 0) {
+            $split = round($invoiceTotal / count($studentIds), 2);
+            $stmtRevert = $conn->prepare(
+                "UPDATE STUDENT_TAB
+                    SET left_to_pay = COALESCE(left_to_pay, 0) + ?,
+                        amount_paid = COALESCE(amount_paid, 0) - ?
+                  WHERE id = ?"
+            );
+            if ($stmtRevert) {
+                foreach ($studentIds as $sid) {
+                    $stmtRevert->bind_param("ddi", $split, $split, $sid);
+                    if (!$stmtRevert->execute()) {
+                        $ok  = false;
+                        $err = $stmtRevert->error;
+                        break;
+                    }
+                }
+                $stmtRevert->close();
+            }
+        }
+
+        // 4) Delete matching history rows
+        if ($ok) {
+            $stmtH = $conn->prepare("DELETE FROM MATCHING_HISTORY_TAB WHERE invoice_id = ?");
+            if ($stmtH) {
+                $stmtH->bind_param("i", $delete_id);
+                $ok  = $stmtH->execute();
+                $err = $stmtH->error;
+                $stmtH->close();
+            }
+        }
+
+        // 5) Delete the invoice itself
+        if ($ok) {
+            $stmt = $conn->prepare("DELETE FROM INVOICE_TAB WHERE id = ?");
+            if ($stmt) {
+                $stmt->bind_param("i", $delete_id);
+                $ok  = $stmt->execute();
+                $err = $stmt->error;
+                $stmt->close();
+            }
+        }
+
+        // 6) Clean up split cache (if trigger didn't already)
+        if ($ok) {
+            $conn->query("DELETE FROM INVOICE_SPLIT_CACHE WHERE invoice_id = " . (int)$delete_id);
+        }
+    }
+
+    if ($ok) {
+        $conn->commit();
         $alert = "<div class='alert alert-success'>Transaction deleted.</div>";
     } else {
-        $alert = "<div class='alert alert-error'>Delete failed.</div>";
+        $conn->rollback();
+        $alert = "<div class='alert alert-error'>Delete failed: " . htmlspecialchars($err ?: $conn->error) . "</div>";
     }
 }
 

@@ -267,8 +267,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             LIMIT 1
                         ");
                         $stmtInsertStudent = $conn->prepare("
-                            INSERT INTO STUDENT_TAB (forename, name, birth_date, gender, entry_date, exit_date, description, second_ID, extern_key, email)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO STUDENT_TAB (
+                                forename, name, birth_date, gender, entry_date, exit_date,
+                                description, second_ID, extern_key, email, class_id, schoolyear_id
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ");
                         $stmtUpdateRef = $conn->prepare("
                             UPDATE STUDENT_TAB
@@ -282,6 +285,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 'message' => 'Student import prepare failed: ' . $conn->error
                             ]);
                             exit;
+                        }
+
+                        // Current school year id (same calendar rule as navigator.php) — used so
+                        // before_insert_student_left_to_pay can resolve total_amount; trigger also
+                        // has a SQL fallback if this is NULL.
+                        $importSchoolYearId = null;
+                        $monthSY = (int)date('n');
+                        $yearSY = (int)date('Y');
+                        $schoolYearStart = $monthSY < 9 ? $yearSY - 1 : $yearSY;
+                        $syPat = $schoolYearStart . '%';
+                        if ($stmtSy = $conn->prepare(
+                            'SELECT id FROM SCHOOLYEAR_TAB WHERE schoolyear LIKE ? LIMIT 1'
+                        )) {
+                            $stmtSy->bind_param('s', $syPat);
+                            if ($stmtSy->execute()) {
+                                $syRes = $stmtSy->get_result();
+                                $syRow = $syRes ? $syRes->fetch_assoc() : null;
+                                if ($syRow && isset($syRow['id'])) {
+                                    $importSchoolYearId = (int)$syRow['id'];
+                                }
+                            }
+                            $stmtSy->close();
+                        }
+
+                        $classByName = [];
+                        $classMapRes = $conn->query('SELECT id, name FROM CLASS_TAB');
+                        if ($classMapRes) {
+                            while ($cr = $classMapRes->fetch_assoc()) {
+                                $key = mb_strtolower(trim((string)$cr['name']), 'UTF-8');
+                                if ($key !== '') {
+                                    $classByName[$key] = (int)$cr['id'];
+                                }
+                            }
                         }
 
                         $rowNumber = 1; // header row is 1
@@ -372,8 +408,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             $email = isset($data[14]) ? trim((string)$data[14]) : null;
                             $email = $email !== '' ? mb_strtolower($email, 'UTF-8') : null;
 
+                            // Header index 5 = 'klasse.name' (see validateCSVStructure)
+                            $klasseName = isset($data[5]) ? trim((string)$data[5]) : '';
+                            $classIdResolved = null;
+                            if ($klasseName !== '') {
+                                $lk = mb_strtolower($klasseName, 'UTF-8');
+                                if (isset($classByName[$lk])) {
+                                    $classIdResolved = $classByName[$lk];
+                                }
+                            }
+
+                            $classBind = $classIdResolved !== null ? (string)(int)$classIdResolved : null;
+                            $syBind = $importSchoolYearId !== null ? (string)(int)$importSchoolYearId : null;
+
                             $stmtInsertStudent->bind_param(
-                                "ssssssssss",
+                                "ssssssssssss",
                                 $forename,
                                 $name,
                                 $birth_date,
@@ -383,7 +432,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 $description,
                                 $second_id,
                                 $extern_key,
-                                $email
+                                $email,
+                                $classBind,
+                                $syBind
                             );
 
                             if (!$stmtInsertStudent->execute()) {

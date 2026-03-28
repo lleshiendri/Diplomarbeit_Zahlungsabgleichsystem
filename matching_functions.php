@@ -1,7 +1,7 @@
 <?php
 /**
  * Matching + Notifications (schema-safe)
- * Late-fee urgent notifications: created in PHP when payment date is after the 10th of its month (see maybeCreateLateFeeUrgent).
+ * Late-fee urgent notifications: after the 10th only if invoice split >= school year total/10 (see maybeCreateLateFeeUrgent).
  *
  * NOTE: Matching decisions (student_id selection, history) are now delegated
  * to the pipeline in matching_engine.php. This file focuses on schema-safe
@@ -12,6 +12,9 @@
 
 define('ENV_DEBUG', false);
 define('CONFIRM_THRESHOLD', 70.0);
+if (!defined('LATE_FEE_AMOUNT_LEK')) {
+    define('LATE_FEE_AMOUNT_LEK', 500.0);
+}
 
 function dbg_log($msg) {
     if (ENV_DEBUG) error_log("[MATCH/NOTIF] " . $msg);
@@ -168,8 +171,8 @@ function hasPaidFullYearAmount($conn, $student_id, $dt) {
    NOTIFICATIONS (SCHEMA-SAFE INSERT)
    =============================================================== */
 function createNotificationOnce($conn, $urgency, $student_id, $invoice_reference, $time_from, $description) {
-    if (isSeptemberDate($processing_date)) return true;
-    if (hasPaidFullYearAmount($conn, $student_id, $processing_date)) return true;
+    if (isSeptemberDate($time_from)) return true;
+    if (hasPaidFullYearAmount($conn, $student_id, $time_from)) return true;
     
     $cols = getTableColumnsCached($conn, "NOTIFICATION_TAB");
 
@@ -283,38 +286,295 @@ function createNotificationOnce($conn, $urgency, $student_id, $invoice_reference
     return $ok;
 }
 
+/**
+ * Whether a notification row already exists for this reference + urgency (dedupe).
+ */
+function notificationUrgencyExists(mysqli $conn, string $urgency, string $invoice_reference): bool {
+    $invoice_reference = trim($invoice_reference);
+    if ($invoice_reference === '') {
+        return false;
+    }
+    $cols = getTableColumnsCached($conn, 'NOTIFICATION_TAB');
+    if (!in_array('invoice_reference', $cols, true) || !in_array('urgency', $cols, true)) {
+        return false;
+    }
+    $stmt = $conn->prepare(
+        'SELECT 1 FROM NOTIFICATION_TAB WHERE invoice_reference = ? AND urgency = ? LIMIT 1'
+    );
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('ss', $invoice_reference, $urgency);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        return false;
+    }
+    $res = $stmt->get_result();
+    $exists = $res && $res->fetch_assoc();
+    $stmt->close();
+    return (bool)$exists;
+}
+
+/**
+ * Dedupe for cron-style notifications (same student + urgency + description).
+ */
+function notificationExistsExact(mysqli $conn, int $student_id, string $urgency, string $description): bool {
+    $cols = getTableColumnsCached($conn, 'NOTIFICATION_TAB');
+    foreach (['student_id', 'urgency', 'description'] as $c) {
+        if (!in_array($c, $cols, true)) {
+            return false;
+        }
+    }
+    $stmt = $conn->prepare(
+        'SELECT 1 FROM NOTIFICATION_TAB WHERE student_id = ? AND urgency = ? AND description = ? LIMIT 1'
+    );
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('iss', $student_id, $urgency, $description);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        return false;
+    }
+    $res = $stmt->get_result();
+    $exists = $res && $res->fetch_assoc();
+    $stmt->close();
+    return (bool)$exists;
+}
+
+/**
+ * Reference id for NOTIFICATION_TAB.invoice_reference when processing a student row.
+ */
+function getStudentReferenceOrFallback(mysqli $conn, int $student_id): string {
+    if ($student_id <= 0) {
+        return 'N/A';
+    }
+    $stmt = $conn->prepare('SELECT reference_id FROM STUDENT_TAB WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return 'STU-' . $student_id;
+    }
+    $stmt->bind_param('i', $student_id);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        return 'STU-' . $student_id;
+    }
+    $res = $stmt->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+    $stmt->close();
+    $ref = isset($row['reference_id']) ? trim((string)$row['reference_id']) : '';
+    return $ref !== '' ? $ref : ('STU-' . $student_id);
+}
+
+/**
+ * Apply a late fee: always add to additional_payments_status; add to left_to_pay only when
+ * the invoice share is a school-sized payment (split >= school year total / 10).
+ * Pass invoice_id = 0 when there is no invoice (e.g. monthly no-payment job): only additional_payments_status is updated.
+ *
+ * @return bool false if UPDATE failed
+ */
+function applyLateFeeToStudentBalances(mysqli $conn, int $student_id, int $invoice_id, float $late_fee_amount): bool {
+    if ($student_id <= 0 || $late_fee_amount <= 0) {
+        return false;
+    }
+    $qualifies_left = false;
+    if ($invoice_id > 0) {
+        $qualifies_left = studentInvoiceShareQualifiesForSchoolLateFee($conn, $student_id, $invoice_id);
+    }
+    $flag = $qualifies_left ? 1 : 0;
+    $fee = $late_fee_amount;
+    $stmt = $conn->prepare('
+        UPDATE STUDENT_TAB
+           SET left_to_pay = CASE WHEN ? = 1 THEN COALESCE(left_to_pay, 0) + ? ELSE left_to_pay END,
+               additional_payments_status = COALESCE(additional_payments_status, 0) + ?
+         WHERE id = ?
+    ');
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('iddi', $flag, $fee, $fee, $student_id);
+    $ok = $stmt->execute();
+    $stmt->close();
+    return $ok;
+}
+
 /* ===============================================================
    LATE FEE NOTIFICATION (Rule: payment after 10th of month = late)
+   School-sized splits also increase left_to_pay; all late fees hit additional_payments_status.
    =============================================================== */
+
 /**
- * If the payment date is after the 10th of its month, create an "urgent" notification (late fee).
- * Deduplicated by createNotificationOnce (invoice_reference + urgency).
+ * School-year base fee threshold for late-fee eligibility: total_amount / 10.
+ *
+ * @return float|null threshold, or null if student has no school year or total_amount missing
+ */
+function computeSchoolBaseLateFeeThreshold(mysqli $conn, int $student_id): ?float {
+    if ($student_id <= 0) {
+        return null;
+    }
+    $stmt = $conn->prepare("
+        SELECT sy.total_amount
+          FROM SCHOOLYEAR_TAB sy
+          INNER JOIN STUDENT_TAB st ON st.schoolyear_id = sy.id
+         WHERE st.id = ?
+         LIMIT 1
+    ");
+    if (!$stmt) {
+        return null;
+    }
+    $stmt->bind_param('i', $student_id);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        return null;
+    }
+    $res = $stmt->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+    $stmt->close();
+    if (!$row || !isset($row['total_amount'])) {
+        return null;
+    }
+    $total = (float)$row['total_amount'];
+    if ($total <= 0) {
+        return null;
+    }
+    return $total / 10.0;
+}
+
+/**
+ * Per-student share for an invoice (aligned with INVOICE_SPLIT_CACHE / confirmed MATCHING_HISTORY split).
+ *
+ * @return float|null split amount, or null if invoice cannot be resolved
+ */
+function invoiceSplitAmountForLateFee(mysqli $conn, int $invoice_id): ?float {
+    if ($invoice_id <= 0) {
+        return null;
+    }
+    $esc = (int)$invoice_id;
+    $r = @$conn->query("SELECT split_amount FROM INVOICE_SPLIT_CACHE WHERE invoice_id = {$esc} LIMIT 1");
+    if ($r && ($row = $r->fetch_assoc()) && isset($row['split_amount']) && $row['split_amount'] !== null) {
+        return round((float)$row['split_amount'], 2);
+    }
+    $stmt = $conn->prepare("
+        SELECT i.amount_total AS atot,
+               (SELECT COUNT(DISTINCT mh.student_id)
+                  FROM MATCHING_HISTORY_TAB mh
+                 WHERE mh.invoice_id = i.id
+                   AND mh.student_id IS NOT NULL
+                   AND mh.is_confirmed = 1) AS nconf,
+               i.student_id AS inv_sid
+          FROM INVOICE_TAB i
+         WHERE i.id = ?
+         LIMIT 1
+    ");
+    if (!$stmt) {
+        return null;
+    }
+    $stmt->bind_param('i', $invoice_id);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        return null;
+    }
+    $res = $stmt->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+    $stmt->close();
+    if (!$row) {
+        return null;
+    }
+    $atot = (float)($row['atot'] ?? 0);
+    $n = (int)($row['nconf'] ?? 0);
+    $invSid = $row['inv_sid'] ?? null;
+    if ($n > 0) {
+        return round($atot / $n, 2);
+    }
+    if ($invSid !== null && (int)$invSid > 0) {
+        return round($atot, 2);
+    }
+    return null;
+}
+
+/**
+ * Late fee (after 10th) applies only when the invoice share is a school base payment:
+ * split_amount >= SCHOOLYEAR_TAB.total_amount / 10 for the student's school year.
+ */
+function studentInvoiceShareQualifiesForSchoolLateFee(mysqli $conn, int $student_id, int $invoice_id): bool {
+    $threshold = computeSchoolBaseLateFeeThreshold($conn, $student_id);
+    if ($threshold === null) {
+        return false;
+    }
+    $split = invoiceSplitAmountForLateFee($conn, $invoice_id);
+    if ($split === null) {
+        return false;
+    }
+    return $split >= $threshold;
+}
+
+/**
+ * If the payment date is after the 10th of its month, record late fee on the student and create an urgent notification.
+ * additional_payments_status always increases; left_to_pay increases only when split >= school year total / 10.
+ * Deduplicated by invoice_reference + urgency (same as createNotificationOnce).
  *
  * @param mysqli $conn
  * @param int|null $student_id
  * @param string $invoice_reference
  * @param string $processing_date e.g. Y-m-d or Y-m-d H:i:s
- * @return bool true if urgent notification was created or already existed
+ * @param int|null $invoice_id required for split vs school-fee guard; if missing, no late-fee handling
+ * @return bool true if on time, already recorded, or blocked by rules; false on hard failure
  */
-function maybeCreateLateFeeUrgent($conn, $student_id, $invoice_reference, $processing_date) {
+function maybeCreateLateFeeUrgent($conn, $student_id, $invoice_reference, $processing_date, $invoice_id = null) {
     $invoice_reference = trim((string)$invoice_reference);
-    if ($invoice_reference === '') return false;
+    if ($invoice_reference === '') {
+        return false;
+    }
+
+    $invId = $invoice_id !== null ? (int)$invoice_id : 0;
+    if ($invId <= 0) {
+        return false;
+    }
+
+    $sid = (int)$student_id;
+    if ($sid <= 0) {
+        return false;
+    }
 
     $ts = strtotime((string)$processing_date);
-    if ($ts === false) return false;
+    if ($ts === false) {
+        return false;
+    }
 
     $payDate = date('Y-m-d', $ts);
     $year = date('Y', $ts);
     $month = date('m', $ts);
     $deadline = $year . '-' . $month . '-10';
 
-    if ($payDate <= $deadline) return true; // on time, nothing to do
+    if ($payDate <= $deadline) {
+        return true;
+    }
+
+    if (isSeptemberDate($processing_date)) {
+        return true;
+    }
+    if (hasPaidFullYearAmount($conn, $sid, $processing_date)) {
+        return true;
+    }
+    if (notificationUrgencyExists($conn, 'urgent', $invoice_reference)) {
+        return true;
+    }
 
     $daysLate = (int)floor((strtotime($payDate) - strtotime($deadline)) / 86400);
     $desc = "Late fee: payment received on $payDate (deadline was 10th; {$daysLate} day(s) late). Ref: $invoice_reference";
     $time_from = date('Y-m-d', $ts);
 
-    return createNotificationOnce($conn, 'urgent', $student_id, $invoice_reference, $time_from, $desc);
+    $conn->begin_transaction();
+    if (!applyLateFeeToStudentBalances($conn, $sid, $invId, (float)LATE_FEE_AMOUNT_LEK)) {
+        $conn->rollback();
+        return false;
+    }
+    $notifOk = createNotificationOnce($conn, 'urgent', $student_id, $invoice_reference, $time_from, $desc);
+    if (!$notifOk) {
+        $conn->rollback();
+        return false;
+    }
+    $conn->commit();
+    return $notifOk;
 }
 
 /* ===============================================================
@@ -414,8 +674,8 @@ function processInvoiceMatching($conn, $invoice_id, $reference_number, $benefici
     if ($is_confirmed) {
         $desc = "Confirmed: $invoice_reference matched to Student #$student_id (by $matched_by, " . round($confidence, 1) . "%)";
         $notif_info_ok = createNotificationOnce($conn, "info", $student_id, $invoice_reference, $time_from_date, $desc);
-        // Late fee: if payment date is after 10th of month, create urgent notification
-        maybeCreateLateFeeUrgent($conn, $student_id, $invoice_reference, $processing_date);
+        // Late fee: if payment date is after 10th of month, create urgent notification (school-sized payments only)
+        maybeCreateLateFeeUrgent($conn, $student_id, $invoice_reference, $processing_date, (int)$invoice_id);
     } else {
 
         $who = ($student_id !== null) ? "suggested Student #$student_id" : "no student suggested";

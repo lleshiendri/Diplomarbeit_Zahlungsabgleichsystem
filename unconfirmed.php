@@ -407,7 +407,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_invoice'])) {
             );
         }
         if (function_exists('maybeCreateLateFeeUrgent')) {
-            @maybeCreateLateFeeUrgent($conn, $primaryStudent, $invoice_reference, (string)$processing_date);
+            @maybeCreateLateFeeUrgent($conn, $primaryStudent, $invoice_reference, (string)$processing_date, (int)$invoice_id);
         }
 
         $conn->commit();
