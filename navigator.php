@@ -360,7 +360,7 @@ if ($syRes && $syRes->num_rows === 1) {
       <?php endif; ?>
     </nav>
     <div class="logout-wrap">
-      <a class="logout-link" href="http://buchhaltung.htl-projekt.com/login/login.php">
+      <a class="logout-link" href="logout.php">
         <span class="material-icons-outlined">logout</span> Logout
       </a>
     </div>
