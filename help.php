@@ -38,9 +38,11 @@
             <a class="help-link" href="#transactions">Transactions</a>
             <a class="help-link" href="#matching_history">Matching History</a>
             <a class="help-link" href="#add_students">Add Students</a>
+            <a class="help-link" href="#add_legal_guardian">Add Legal Guardian</a>
             <a class="help-link" href="#import_files">Import Files</a>
             <a class="help-link" href="#unconfirmed">Unconfirmed</a>
             <a class="help-link" href="#student_state">Student State</a>
+            <a class="help-link" href="#legal_guardians">Legal Guardians</a>
             <a class="help-link" href="#latencies">Latencies</a>
             
           </nav>
@@ -731,6 +733,74 @@
           </article>
 
 
+          <!-- Add Legal Guardian -->
+          <article id="add_legal_guardian" class="help-section card" data-title="add legal guardian">
+            <header class="help-section__header">
+              <h2>Add Legal Guardian</h2>
+              <p class="muted">
+                Register a new legal guardian and link them to a student using the Extern Key.
+              </p>
+            </header>
+
+            <div class="media">
+              <figure class="shot">
+                <img src="/help_page_images/add_guardian.png" alt="Add Legal Guardian form screenshot" />
+              </figure>
+
+              <div class="legend">
+                <h3>How to fill this form</h3>
+
+                <ul class="legend__list">
+                  <li>
+                    <span class="dot">1</span>
+                    <strong>First Name:</strong>
+                    Enter the guardian's first name (required).
+                  </li>
+
+                  <li>
+                    <span class="dot">2</span>
+                    <strong>Last Name:</strong>
+                    Enter the guardian's last name (required).
+                  </li>
+
+                  <li>
+                    <span class="dot">3</span>
+                    <strong>Extern Key:</strong>
+                    Enter the external key that matches the student this guardian is responsible for. The system uses this key to automatically link the guardian to the correct student record.
+                  </li>
+
+                  <li>
+                    <span class="dot">4</span>
+                    <strong>Email:</strong>
+                    Provide the guardian's email address. This is used for sending payment notifications, PDF reports, and late payment alerts.
+                  </li>
+
+                  <li>
+                    <span class="dot">5</span>
+                    <strong>Phone:</strong>
+                    Primary phone number for contact purposes.
+                  </li>
+
+                  <li>
+                    <span class="dot">6</span>
+                    <strong>Mobile:</strong>
+                    Mobile phone number (optional, but recommended).
+                  </li>
+                </ul>
+
+                <div class="callout callout--info">
+                  <strong>Best practice:</strong> Always fill in the Extern Key correctly — it is the only way the system can automatically connect this guardian to the right student.
+                </div>
+
+                <div class="callout callout--warning">
+                  <strong>Common mistake:</strong> Leaving the Extern Key empty or entering the wrong value means the guardian will not be linked to any student. Email notifications and PDF delivery will not work until the connection is established.
+                </div>
+              </div>
+            </div>
+          </article>
+
+
+
            <!-- Import Files -->
            <article id="import_files" class="help-section card" data-title="import_files">
             <header class="help-section__header">
@@ -913,6 +983,87 @@
 
 
 
+          <!-- Legal Guardians -->
+          <article id="legal_guardians" class="help-section card" data-title="legal guardians">
+            <header class="help-section__header">
+              <h2>Legal Guardians</h2>
+              <p class="muted">
+                Overview of all registered legal guardians linked to students, with contact details and management actions.
+              </p>
+            </header>
+
+            <div class="media">
+              <figure class="shot">
+                <img src="/help_page_images/legal_guardians.png" alt="Legal Guardians table screenshot" />
+              </figure>
+
+              <div class="legend">
+                <h3>Table columns</h3>
+
+                <ul class="legend__list">
+                  <li>
+                    <span class="dot">1</span>
+                    <strong>ID:</strong>
+                    Internal system identifier for the guardian record.
+                  </li>
+
+                  <li>
+                    <span class="dot">2</span>
+                    <strong>First Name:</strong>
+                    The guardian's first name as stored in the system.
+                  </li>
+
+                  <li>
+                    <span class="dot">3</span>
+                    <strong>Last Name:</strong>
+                    The guardian's last name (family name).
+                  </li>
+
+                  <li>
+                    <span class="dot">4</span>
+                    <strong>Extern Key:</strong>
+                    A unique external identifier that links the guardian to the corresponding student record. This key is used by the system to automatically associate guardians with students.
+                  </li>
+
+                  <li>
+                    <span class="dot">5</span>
+                    <strong>Email:</strong>
+                    The guardian's email address, used for sending payment notifications and PDF reports.
+                  </li>
+
+                  <li>
+                    <span class="dot">6</span>
+                    <strong>Phone:</strong>
+                    Primary phone number of the guardian.
+                  </li>
+
+                  <li>
+                    <span class="dot">7</span>
+                    <strong>Mobile:</strong>
+                    Mobile phone number (may differ from primary phone).
+                  </li>
+
+                  <li>
+                    <span class="dot">8</span>
+                    <strong>Actions:</strong>
+                    <strong>Pen</strong> = edit the guardian's details.
+                    <strong>Trash bin</strong> = delete the guardian record from the database.
+                  </li>
+                </ul>
+
+                <div class="callout callout--info">
+                  <strong>Tip:</strong> The Extern Key is what connects a guardian to a student. If a guardian appears unlinked, check that the Extern Key matches the student's record.
+                </div>
+
+                <div class="callout callout--warning">
+                  <strong>Important:</strong> Deleting a guardian removes all contact information associated with that record. Email notifications for the linked student will no longer be possible until a new guardian is assigned.
+                </div>
+              </div>
+            </div>
+          </article>
+
+
+
            <!-- Latencies -->
            <article id="latencies" class="help-section card" data-title="latencies">
             <header class="help-section__header">
@@ -960,8 +1111,7 @@
               </div>
             </div>
           </article>
-
-         
+                 
 
 
           <footer class="help-footer">

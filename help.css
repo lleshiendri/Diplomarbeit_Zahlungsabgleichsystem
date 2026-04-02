@@ -515,6 +515,8 @@ body{
 #helpPage #import_files .media,
 #helpPage #unconfirmed .media,
 #helpPage #transactions .media,
+#helpPage #legal_guardians .media,
+#helpPage #add_legal_guardian .media,
 #helpPage #matching_history .media{
   grid-template-columns: 1fr !important;   /* remove 2-column grid */
 }
@@ -525,6 +527,8 @@ body{
 #helpPage #import_files .legend,
 #helpPage #unconfirmed .legend,
 #helpPage #transactions .legend,
+#helpPage #legal_guardians .legend,
+#helpPage #add_legal_guardian .legend,
 #helpPage #matching_history .legend{
   margin-top: 10px; /* space under the image */
 }
