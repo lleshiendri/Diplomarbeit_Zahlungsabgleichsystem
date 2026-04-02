@@ -43,25 +43,66 @@ if (isset($_GET['delete_id'])) {
             $stmtMH->close();
         }
 
-        // 3) Revert each student's balance (split = total / count)
+        // 3) Revert each student's balance using the school-year threshold rule:
+        //    split >= total_amount/10 → revert left_to_pay / amount_paid
+        //    split <  total_amount/10 AND additional_payments_status < 0 → revert additional_payments_status
+        //    split <  total_amount/10 AND additional_payments_status >= 0 → revert left_to_pay / amount_paid
         if ($invoiceTotal !== null && count($studentIds) > 0) {
             $split = round($invoiceTotal / count($studentIds), 2);
-            $stmtRevert = $conn->prepare(
+
+            $stmtRevertSchool = $conn->prepare(
                 "UPDATE STUDENT_TAB
                     SET left_to_pay = COALESCE(left_to_pay, 0) + ?,
                         amount_paid = COALESCE(amount_paid, 0) - ?
                   WHERE id = ?"
             );
-            if ($stmtRevert) {
+            $stmtRevertAdditional = $conn->prepare(
+                "UPDATE STUDENT_TAB
+                    SET additional_payments_status = COALESCE(additional_payments_status, 0) + ?
+                  WHERE id = ?"
+            );
+            $stmtSY = $conn->prepare(
+                "SELECT sy.total_amount, COALESCE(st.additional_payments_status, 0) AS addl
+                   FROM SCHOOLYEAR_TAB sy
+                  INNER JOIN STUDENT_TAB st ON st.schoolyear_id = sy.id
+                  WHERE st.id = ? LIMIT 1"
+            );
+
+            if ($stmtRevertSchool && $stmtRevertAdditional) {
                 foreach ($studentIds as $sid) {
-                    $stmtRevert->bind_param("ddi", $split, $split, $sid);
-                    if (!$stmtRevert->execute()) {
-                        $ok  = false;
-                        $err = $stmtRevert->error;
-                        break;
+                    $syTotal = null;
+                    $addl = 0;
+                    if ($stmtSY) {
+                        $stmtSY->bind_param("i", $sid);
+                        if ($stmtSY->execute()) {
+                            $resSY = $stmtSY->get_result();
+                            $rowSY = $resSY ? $resSY->fetch_assoc() : null;
+                            if ($rowSY) {
+                                $syTotal = isset($rowSY['total_amount']) ? (float)$rowSY['total_amount'] : null;
+                                $addl = (float)($rowSY['addl'] ?? 0);
+                            }
+                        }
+                    }
+
+                    if ($syTotal !== null && $split < ($syTotal / 10) && $addl < 0) {
+                        $stmtRevertAdditional->bind_param("di", $split, $sid);
+                        if (!$stmtRevertAdditional->execute()) {
+                            $ok  = false;
+                            $err = $stmtRevertAdditional->error;
+                            break;
+                        }
+                    } else {
+                        $stmtRevertSchool->bind_param("ddi", $split, $split, $sid);
+                        if (!$stmtRevertSchool->execute()) {
+                            $ok  = false;
+                            $err = $stmtRevertSchool->error;
+                            break;
+                        }
                     }
                 }
-                $stmtRevert->close();
+                $stmtRevertSchool->close();
+                $stmtRevertAdditional->close();
+                if ($stmtSY) $stmtSY->close();
             }
         }
 

@@ -9,6 +9,7 @@ ob_start();
 require 'navigator.php';
 require 'db_connect.php';
 require_once 'matching_functions.php';
+require_once __DIR__ . '/includes/student_balance_match.php';
 
 $success_message = "";
 $error_message   = "";
@@ -374,26 +375,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_invoice'])) {
         }
         $stmt->close();
 
-        // Update STUDENT_TAB balances: left_to_pay -= share, amount_paid += share
-        $upd = $conn->prepare("
-            UPDATE STUDENT_TAB
-            SET left_to_pay = GREATEST(0, COALESCE(left_to_pay, 0) - ?),
-                amount_paid = COALESCE(amount_paid, 0) + ?
-            WHERE id = ?
-        ");
-        if (!$upd) {
-            throw new Exception("Statement error (update student): " . $conn->error);
-        }
-
-        foreach ($studentIds as $idx => $sid) {
-            $share = $shares[$idx] ?? 0.0;
-            $upd->bind_param("ddi", $share, $share, $sid);
-            if (!$upd->execute()) {
-                throw new Exception("Error updating student balances: " . $upd->error);
+        foreach ($sharePairs as $pair) {
+            $sid = (int)($pair['student_id'] ?? 0);
+            $share = (float)($pair['amount'] ?? 0);
+            if ($sid > 0 && $share > 0) {
+                applyStudentBalanceForConfirmedShare($conn, $sid, $share);
             }
-            error_log("MANUAL_CONFIRM[$debugId] student_update sid={$sid} share=" . number_format($share, 2, '.', ''));
         }
-        $upd->close();
+        error_log("MANUAL_CONFIRM[$debugId] balance updates applied via applyStudentBalanceForConfirmedShare");
 
         // Optional notifications – kept for parity with original flow (uses primary student)
         if (function_exists('createNotificationOnce')) {
