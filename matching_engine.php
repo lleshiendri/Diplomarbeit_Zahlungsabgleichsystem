@@ -22,6 +22,8 @@ if (!isset($conn) || !($conn instanceof mysqli)) {
     require_once __DIR__ . '/db_connect.php';
 }
 
+require_once __DIR__ . '/includes/student_balance_match.php';
+
 // ------------------------
 // Logging helpers
 // ------------------------
@@ -837,8 +839,6 @@ function persistPipelineResult(mysqli $conn, array $txn, array $signals, array $
     if (!empty($confirmedMatches) && $totalAmount > 0) {
         $n = count($confirmedMatches);
         $shares = splitAmountNoCentsLost($totalAmount, $n);
-        $hasLeftToPay = columnExists($conn, 'STUDENT_TAB', 'left_to_pay');
-        $hasAmountPaid = columnExists($conn, 'STUDENT_TAB', 'amount_paid');
 
         if ($ctx['invoice_columns']['student_id'] ?? false) {
             $primary = $confirmedMatches[array_key_first($confirmedMatches)];
@@ -850,31 +850,11 @@ function persistPipelineResult(mysqli $conn, array $txn, array $signals, array $
             }
         }
 
-        // Only confirmed matches: subtract left_to_pay and add same amount to amount_paid (do NOT touch for is_confirmed=false)
-        if ($hasLeftToPay) {
-            $idx = 0;
-            foreach ($confirmedMatches as $match) {
-                if (empty($match['is_confirmed'])) {
-                    continue; // safety: never change balance for unconfirmed suggestions
-                }
-                $sid = (int)$match['student_id'];
-                $share = $shares[$idx] ?? $match['share_amount'] ?? ($totalAmount / $n);
-                $idx++;
-                if ($hasAmountPaid) {
-                    $upd = $conn->prepare("UPDATE STUDENT_TAB SET left_to_pay = GREATEST(0, COALESCE(left_to_pay, 0) - ?), amount_paid = COALESCE(amount_paid, 0) + ? WHERE id = ?");
-                    if ($upd) {
-                        $upd->bind_param("ddi", $share, $share, $sid);
-                        $upd->execute();
-                        $upd->close();
-                    }
-                } else {
-                    $upd = $conn->prepare("UPDATE STUDENT_TAB SET left_to_pay = GREATEST(0, COALESCE(left_to_pay, 0) - ?) WHERE id = ?");
-                    if ($upd) {
-                        $upd->bind_param("di", $share, $sid);
-                        $upd->execute();
-                        $upd->close();
-                    }
-                }
+        $confirmedList = array_values($confirmedMatches);
+        foreach ($confirmedList as $i => $match) {
+            $share = (float)($shares[$i] ?? 0);
+            if ($share > 0) {
+                applyStudentBalanceForConfirmedShare($conn, (int)$match['student_id'], $share);
             }
         }
     } elseif ($decision['needs_review']) {
@@ -2043,7 +2023,23 @@ function recordManualConfirmation(mysqli $conn, int $invoice_id, int $student_id
     $stmt->bind_param("iids", $invoice_id, $student_id, $confidence, $matched_by);
     $ok = $stmt->execute();
     $stmt->close();
-    return (bool)$ok;
+    if (!$ok) {
+        return false;
+    }
+    $amtStmt = $conn->prepare("SELECT COALESCE(amount_total, 0) AS amt FROM INVOICE_TAB WHERE id = ? LIMIT 1");
+    if (!$amtStmt) {
+        return true;
+    }
+    $amtStmt->bind_param("i", $invoice_id);
+    $amtStmt->execute();
+    $ar = $amtStmt->get_result();
+    $row = $ar ? $ar->fetch_assoc() : null;
+    $amtStmt->close();
+    $amt = $row ? (float)$row['amt'] : 0.0;
+    if ($amt > 0) {
+        applyStudentBalanceForConfirmedShare($conn, $student_id, $amt);
+    }
+    return true;
 }
 
 function notif_exists(mysqli $conn, ?string $invoiceReference, string $urgency): bool {

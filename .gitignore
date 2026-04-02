@@ -59,3 +59,4 @@ generate_doc.js
 Endri_Diplomarbeit_Dokumentation.docx
 package.json
 package-lock.json
+sql/after_matching_history_insert.sql
