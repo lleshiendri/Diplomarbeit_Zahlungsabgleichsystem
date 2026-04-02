@@ -35,7 +35,7 @@ function fmt_date_or_dash($d): string {
    HELPER: Load base student info
    ============================================================ */
 function loadStudentBaseInfo(mysqli $conn, int $studentId): ?array {
-    $sql = "SELECT id, extern_key, long_name, name, amount_paid, left_to_pay, additional_payments_status
+    $sql = "SELECT id, extern_key, long_name, name, amount_paid, left_to_pay, additional_payments_status, reference_id
             FROM STUDENT_TAB WHERE id = ? LIMIT 1";
     $stmt = $conn->prepare($sql);
     if (!$stmt) return null;
@@ -146,12 +146,12 @@ function renderPDFStudentInfo(FPDF &$pdf, ?array $studentInfo) {
     $pdf->SetFont('Arial', '', 10);
     $pdf->Cell(0, 6, (string)($studentInfo['long_name'] ?? '-'), 0, 1);
     
-    // Extern Key
-    if (!empty($studentInfo['extern_key'])) {
+    // Reference ID
+    if (!empty($studentInfo['reference_id'])) {
         $pdf->SetFont('Arial', 'B', 10);
-        $pdf->Cell(40, 6, 'External ID:', 0, 0);
+        $pdf->Cell(40, 6, 'Reference ID:', 0, 0);
         $pdf->SetFont('Arial', '', 10);
-        $pdf->Cell(0, 6, (string)$studentInfo['extern_key'], 0, 1);
+        $pdf->Cell(0, 6, (string)$studentInfo['reference_id'], 0, 1);
     }
     
     $pdf->Ln(4);
