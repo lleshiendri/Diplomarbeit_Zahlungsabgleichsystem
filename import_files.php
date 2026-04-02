@@ -91,9 +91,35 @@ function validateCSVStructure($filePath, $fileType) {
     $header = array_map('trim', $header);
     $expected = $expectedHeaders[$fileType] ?? [];
 
-    // Compare header with expected columns
+    // Compare header with expected columns (exact)
     $missing = array_diff($expected, $header);
     $extra   = array_diff($header, $expected);
+
+    // Case / separator insensitive match (e.g. externalkey vs externalKey vs External_Key)
+    if ((!empty($missing) || !empty($extra)) && $fileType === 'LegalGuardians') {
+        $expectedNorm = array_map('normalizeImportHeaderKey', $expected);
+        $headerNorm   = array_map('normalizeImportHeaderKey', $header);
+        $missing = [];
+        foreach ($expected as $ei => $expLabel) {
+            $n = $expectedNorm[$ei];
+            if ($n === '') {
+                continue;
+            }
+            if (!in_array($n, $headerNorm, true)) {
+                $missing[] = $expLabel;
+            }
+        }
+        $extra = [];
+        foreach ($header as $hi => $rawLabel) {
+            $n = $headerNorm[$hi];
+            if ($n === '') {
+                continue;
+            }
+            if (!in_array($n, $expectedNorm, true)) {
+                $extra[] = $rawLabel;
+            }
+        }
+    }
 
     // If structure matches → valid
     if (empty($missing) && empty($extra)) {
@@ -165,6 +191,48 @@ function normalizeStudentField($value) {
     $value = trim((string)$value);
     $value = preg_replace('/\s+/u', ' ', $value);
     return $value;
+}
+
+/**
+ * Case-insensitive header key: "External_Key", "EXTERNALKEY" -> "externalkey"
+ */
+function normalizeImportHeaderKey($headerCell) {
+    $s = trim((string)$headerCell);
+    $s = preg_replace('/^\xEF\xBB\xBF/', '', $s);
+    return strtolower(preg_replace('/[^a-z0-9]/u', '', $s));
+}
+
+/** @return array<string,int> normalized key => first column index */
+function legalGuardianHeaderIndexMap(array $headerRow) {
+    $map = [];
+    foreach ($headerRow as $i => $raw) {
+        $k = normalizeImportHeaderKey($raw);
+        if ($k !== '' && !isset($map[$k])) {
+            $map[$k] = $i;
+        }
+    }
+    return $map;
+}
+
+/**
+ * Cell value by trying header aliases (file may use externalkey, externalKey, extern_key, …).
+ */
+function legalGuardianCell(array $row, array $indexMap, array $headerAliases) {
+    foreach ($headerAliases as $alias) {
+        $k = normalizeImportHeaderKey($alias);
+        if ($k === '' || !isset($indexMap[$k])) {
+            continue;
+        }
+        $j = $indexMap[$k];
+        if (!array_key_exists($j, $row)) {
+            continue;
+        }
+        $v = trim((string)$row[$j]);
+        if ($v !== '') {
+            return $v;
+        }
+    }
+    return '';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
@@ -267,8 +335,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             LIMIT 1
                         ");
                         $stmtInsertStudent = $conn->prepare("
-                            INSERT INTO STUDENT_TAB (forename, name, birth_date, gender, entry_date, exit_date, description, second_ID, extern_key, email)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO STUDENT_TAB (
+                                forename, name, birth_date, gender, entry_date, exit_date,
+                                description, second_ID, extern_key, email, class_id, schoolyear_id
+                            )
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ");
                         $stmtUpdateRef = $conn->prepare("
                             UPDATE STUDENT_TAB
@@ -282,6 +353,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 'message' => 'Student import prepare failed: ' . $conn->error
                             ]);
                             exit;
+                        }
+
+                        // Current school year id (same calendar rule as navigator.php) — used so
+                        // before_insert_student_left_to_pay can resolve total_amount; trigger also
+                        // has a SQL fallback if this is NULL.
+                        $importSchoolYearId = null;
+                        $monthSY = (int)date('n');
+                        $yearSY = (int)date('Y');
+                        $schoolYearStart = $monthSY < 9 ? $yearSY - 1 : $yearSY;
+                        $syPat = $schoolYearStart . '%';
+                        if ($stmtSy = $conn->prepare(
+                            'SELECT id FROM SCHOOLYEAR_TAB WHERE schoolyear LIKE ? LIMIT 1'
+                        )) {
+                            $stmtSy->bind_param('s', $syPat);
+                            if ($stmtSy->execute()) {
+                                $syRes = $stmtSy->get_result();
+                                $syRow = $syRes ? $syRes->fetch_assoc() : null;
+                                if ($syRow && isset($syRow['id'])) {
+                                    $importSchoolYearId = (int)$syRow['id'];
+                                }
+                            }
+                            $stmtSy->close();
+                        }
+
+                        $classByName = [];
+                        $classMapRes = $conn->query('SELECT id, name FROM CLASS_TAB');
+                        if ($classMapRes) {
+                            while ($cr = $classMapRes->fetch_assoc()) {
+                                $key = mb_strtolower(trim((string)$cr['name']), 'UTF-8');
+                                if ($key !== '') {
+                                    $classByName[$key] = (int)$cr['id'];
+                                }
+                            }
                         }
 
                         $rowNumber = 1; // header row is 1
@@ -372,8 +476,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             $email = isset($data[14]) ? trim((string)$data[14]) : null;
                             $email = $email !== '' ? mb_strtolower($email, 'UTF-8') : null;
 
+                            // Header index 5 = 'klasse.name' (see validateCSVStructure)
+                            $klasseName = isset($data[5]) ? trim((string)$data[5]) : '';
+                            $classIdResolved = null;
+                            if ($klasseName !== '') {
+                                $lk = mb_strtolower($klasseName, 'UTF-8');
+                                if (isset($classByName[$lk])) {
+                                    $classIdResolved = $classByName[$lk];
+                                }
+                            }
+
+                            $classBind = $classIdResolved !== null ? (string)(int)$classIdResolved : null;
+                            $syBind = $importSchoolYearId !== null ? (string)(int)$importSchoolYearId : null;
+
                             $stmtInsertStudent->bind_param(
-                                "ssssssssss",
+                                "ssssssssssss",
                                 $forename,
                                 $name,
                                 $birth_date,
@@ -383,7 +500,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 $description,
                                 $second_id,
                                 $extern_key,
-                                $email
+                                $email,
+                                $classBind,
+                                $syBind
                             );
 
                             if (!$stmtInsertStudent->execute()) {
@@ -540,18 +659,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                 }
                 if ($fileType === 'LegalGuardians') {
                     $filePath = $destination;
+                    $gDelim = $validation['delimiter'] ?? "\t";
 
                     if (($handle = fopen($filePath, "r")) !== FALSE) {
-                        // Read header
-                        $header = fgetcsv($handle, 1000, "\t");
+                        $header = fgetcsv($handle, 1000, $gDelim);
+                        if ($header === false) {
+                            $header = [];
+                        }
+                        if (isset($header[0])) {
+                            $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$header[0]);
+                        }
+                        $header = array_map('trim', $header);
+                        $lgCol = legalGuardianHeaderIndexMap($header);
 
-                        // Prepare insert statement for LEGAL_GUARDIAN_TAB
+                        $stmtFindGuardian = $conn->prepare("
+                            SELECT id
+                            FROM LEGAL_GUARDIAN_TAB
+                            WHERE first_name <=> ?
+                              AND last_name <=> ?
+                              AND email <=> ?
+                              AND extern_key <=> ?
+                            LIMIT 1
+                        ");
                         $stmtGuardian = $conn->prepare("
-                            INSERT INTO LEGAL_GUARDIAN_TAB 
-                                (first_name, last_name, phone, mobile, email, external_key) 
+                            INSERT INTO LEGAL_GUARDIAN_TAB
+                                (first_name, last_name, phone, mobile, email, extern_key)
                             VALUES (?, ?, ?, ?, ?, ?)
                         ");
-                        if (!$stmtGuardian) {
+                        if (!$stmtFindGuardian || !$stmtGuardian) {
                             echo json_encode([
                                 'success' => false,
                                 'message' => 'Guardian import prepare failed: ' . $conn->error
@@ -559,15 +694,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                             exit;
                         }
 
-                        while (($data = fgetcsv($handle, 1000, "\t")) !== FALSE) {
-                            $first_name = $data[2] ?? null;
-                            $last_name  = $data[1] ?? null;
-                            $mobile     = $data[8] ?? null;
-                            $phone = isset($data[7]) ? trim($data[7]) : null;
-                            $phone = $phone !== null && $phone !== '' ? preg_replace('/\s+/', '', $phone) : null;
-                            $email = isset($data[6]) ? trim($data[6]) : null;
-                            $email = $email !== null && $email !== '' ? mb_strtolower($email, 'UTF-8') : null;
-                            $external_key = $data[10] ?? null;
+                        while (($data = fgetcsv($handle, 1000, $gDelim)) !== FALSE) {
+                            $first_name = legalGuardianCell($data, $lgCol, ['firstName', 'firstname', 'forename']);
+                            if ($first_name === '') {
+                                $first_name = isset($data[2]) ? trim((string)$data[2]) : '';
+                            }
+                            $first_name = $first_name !== '' ? $first_name : null;
+
+                            $last_name = legalGuardianCell($data, $lgCol, ['lastName', 'lastname']);
+                            if ($last_name === '') {
+                                $last_name = isset($data[1]) ? trim((string)$data[1]) : '';
+                            }
+                            $last_name = $last_name !== '' ? $last_name : null;
+
+                            $mobile = legalGuardianCell($data, $lgCol, ['mobile']);
+                            if ($mobile === '') {
+                                $mobile = isset($data[8]) ? trim((string)$data[8]) : '';
+                            }
+                            $mobile = $mobile !== '' ? $mobile : null;
+
+                            $phone = legalGuardianCell($data, $lgCol, ['phone', 'phonenumber']);
+                            if ($phone === '') {
+                                $phone = isset($data[7]) ? trim((string)$data[7]) : '';
+                            }
+                            $phone = $phone !== '' ? preg_replace('/\s+/', '', $phone) : null;
+
+                            $email = legalGuardianCell($data, $lgCol, ['email', 'mail']);
+                            if ($email === '') {
+                                $email = isset($data[6]) ? trim((string)$data[6]) : '';
+                            }
+                            $email = $email !== '' ? mb_strtolower($email, 'UTF-8') : null;
+
+                            // Match student link key: externalkey, externalKey, extern_key, or studentExternalId
+                            $extern_key = legalGuardianCell($data, $lgCol, [
+                                'externalkey',
+                                'externkey',
+                                'extern_key',
+                                'external_key',
+                                'studentExternalId',
+                                'studentexternalid',
+                            ]);
+                            if ($extern_key === '') {
+                                $extern_key = isset($data[10]) ? trim((string)$data[10]) : '';
+                            }
+                            if ($extern_key === '' && isset($data[15])) {
+                                $extern_key = trim((string)$data[15]);
+                            }
+                            $extern_key = $extern_key !== '' ? $extern_key : null;
+
+                            $stmtFindGuardian->bind_param(
+                                "ssss",
+                                $first_name,
+                                $last_name,
+                                $email,
+                                $extern_key
+                            );
+                            if (!$stmtFindGuardian->execute()) {
+                                error_log('Guardian duplicate check failed: ' . $stmtFindGuardian->error);
+                                continue;
+                            }
+                            $dupRes = $stmtFindGuardian->get_result();
+                            if ($dupRes && $dupRes->fetch_assoc()) {
+                                continue;
+                            }
 
                             $stmtGuardian->bind_param(
                                 "ssssss",
@@ -576,17 +765,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajaxUpload'])) {
                                 $phone,
                                 $mobile,
                                 $email,
-                                $external_key
+                                $extern_key
                             );
                             if (!$stmtGuardian->execute()) {
                                 if ($stmtGuardian->errno === 1062) {
                                     continue;
-                                } else {
-                                    error_log("Guardian insert error ({$stmtGuardian->errno}): {$stmtGuardian->error}");
                                 }
+                                error_log("Guardian insert error ({$stmtGuardian->errno}): {$stmtGuardian->error}");
                             }
                         }
 
+                        $stmtFindGuardian->close();
+                        $stmtGuardian->close();
                         fclose($handle);
                     }
                 }

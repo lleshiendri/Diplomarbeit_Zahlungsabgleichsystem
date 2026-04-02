@@ -27,7 +27,9 @@ $restrictedPages = [
     'add_students.php',
     'add_transactions.php',
     'unconfirmed.php',
-    'import_files.php'
+    'import_files.php',
+    'help.php',
+    'legal_guardian_add.php',
 ];
 
 // Get the current page name

@@ -327,7 +327,7 @@ if ($syRes && $syRes->num_rows === 1) {
     </span>
 
     <?php if ($currentPage !== 'dashboard.php'): ?>
-      <?php if (in_array($currentPage, ['unconfirmed.php', 'student_state.php', 'Transactions.php', 'matching_history.php'], true)): ?>
+      <?php if (in_array($currentPage, ['unconfirmed.php', 'student_state.php', 'Transactions.php', 'matching_history.php', 'legal_guardians.php'], true)): ?>
         <span id="filterToggle" class="nav-icon-wrapper">
           <span class="nav-icon material-icons-outlined">filter_list</span>
         </span>
@@ -348,17 +348,21 @@ if ($syRes && $syRes->num_rows === 1) {
       <a href="Transactions.php"><span class="material-icons-outlined">receipt_long</span> Transactions</a>
       <a href="matching_history.php"><span class="material-icons-outlined">history</span> Matching History</a>
       <a href="add_students.php"><span class="material-icons-outlined">group_add</span> Add Students</a>
+      <a href="legal_guardian_add.php"><span class="material-icons-outlined">person_add</span> Add Guardian</a>
       <a href="import_files.php"><span class="material-icons-outlined">upload_file</span> Import File</a>
       <a href="unconfirmed.php"><span class="material-icons-outlined">priority_high</span> Unconfirmed</a>
       <?php endif; ?>
 
       <a href="student_state.php"><span class="material-icons-outlined">school</span> Student State</a>
+      <a href="legal_guardians.php"><span class="material-icons-outlined">supervisor_account</span> Legal Guardians</a>
       <a href="latencies.php"><span class="material-icons-outlined">schedule</span> Latencies</a>
       <a href="notifications.php"><span class="material-icons-outlined">notifications</span> Notifications</a>
-      <a href="help.php"><span class="material-icons-outlined">help_outline</span> Help & Tutorial</a>
+      <?php if ($isAdmin): ?>
+        <a href="help.php"><span class="material-icons-outlined">help_outline</span> Help & Tutorial</a>
+      <?php endif; ?>
     </nav>
     <div class="logout-wrap">
-      <a class="logout-link" href="http://buchhaltung.htl-projekt.com/login/login.php">
+      <a class="logout-link" href="logout.php">
         <span class="material-icons-outlined">logout</span> Logout
       </a>
     </div>
@@ -426,7 +430,7 @@ if ($syRes && $syRes->num_rows === 1) {
 
 <!-- FILTER PANEL -->
 <?php
-$filtersPages = ['unconfirmed.php', 'student_state.php', 'Transactions.php', 'matching_history.php'];
+$filtersPages = ['unconfirmed.php', 'student_state.php', 'Transactions.php', 'matching_history.php', 'legal_guardians.php'];
 if (in_array($currentPage, $filtersPages, true)) {
     define('APP_HAS_OVERLAY', true);
     include 'filters.php';

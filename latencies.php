@@ -9,7 +9,7 @@ if (!function_exists('maybeCreateLateFeeUrgent')) {
 // Ensure NOTIFICATION_TAB has an "urgent" row for every late payment this month (deadline 10th).
 // So the notifications page can show "send email" for each late transaction.
 $lateInvoices = $conn->query("
-    SELECT student_id, reference_number, processing_date
+    SELECT id, student_id, reference_number, processing_date
     FROM INVOICE_TAB
     WHERE student_id IS NOT NULL
       AND YEAR(processing_date) = YEAR(CURDATE())
@@ -20,7 +20,13 @@ if ($lateInvoices) {
     while ($row = $lateInvoices->fetch_assoc()) {
         $ref = isset($row['reference_number']) ? trim((string)$row['reference_number']) : '';
         if ($ref !== '') {
-            maybeCreateLateFeeUrgent($conn, (int)$row['student_id'], $ref, $row['processing_date']);
+            maybeCreateLateFeeUrgent(
+                $conn,
+                (int)$row['student_id'],
+                $ref,
+                $row['processing_date'],
+                (int)$row['id']
+            );
         }
     }
 }

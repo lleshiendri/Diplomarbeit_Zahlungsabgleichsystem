@@ -36,6 +36,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
         $gender = null;
     }
 
+    // Optional extern_key for trigger-based guardian linking
+    $extern_key_raw = trim($_POST['extern_key'] ?? '');
+    $extern_key = $extern_key_raw !== '' ? htmlspecialchars($extern_key_raw, ENT_QUOTES, 'UTF-8') : null;
+
     // Optional entry date: empty => NULL
     $entry_date_raw = isset($_POST['entry_date']) ? trim($_POST['entry_date']) : '';
     $entry_date = $entry_date_raw !== '' ? htmlspecialchars($entry_date_raw, ENT_QUOTES, 'UTF-8') : null;
@@ -69,14 +73,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
             
             $stmt = $conn->prepare("
                 INSERT INTO STUDENT_TAB 
-                    (name, forename, birth_date, class_id, additional_payments_status, left_to_pay, gender, entry_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (name, forename, birth_date, class_id, additional_payments_status, left_to_pay, gender, entry_date, extern_key)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
 
             if ($stmt) {
-                // name, forename, birth_date, class_id, additional_payments_status, left_to_pay, gender, entry_date
                 $stmt->bind_param(
-                    "sssssdss",
+                    "sssssdsss",
                     $name,
                     $forename,
                     $birth_date,
@@ -84,7 +87,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
                     $additional,
                     $left_to_pay,
                     $gender,
-                    $entry_date
+                    $entry_date,
+                    $extern_key
                 );
                 
                 // Execute INSERT first, then get the generated student ID
@@ -327,6 +331,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
                     <div class="input-group">
                         <span class="material-icons-outlined">payments</span>
                         <input type="number" step="0.01" id="left_to_pay" name="left_to_pay">
+                    </div>
+                </div>
+                <div>
+                    <label for="extern_key">Extern Key</label>
+                    <div class="input-group">
+                        <span class="material-icons-outlined">vpn_key</span>
+                        <input type="text" id="extern_key" name="extern_key" placeholder="Auto-links to matching guardian">
                     </div>
                 </div>
             </div>

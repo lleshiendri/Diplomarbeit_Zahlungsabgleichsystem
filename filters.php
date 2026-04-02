@@ -50,6 +50,17 @@ $mh_conf_min = trim($_GET['confidence_min'] ?? '');
 $mh_conf_max = trim($_GET['confidence_max'] ?? '');
 $mh_matched_by = trim($_GET['matched_by'] ?? '');
 
+/* =========================
+   LEGAL GUARDIAN FILTER KEYS
+   ========================= */
+$lg_q          = trim($_GET['q'] ?? '');
+$lg_first_name = trim($_GET['first_name'] ?? '');
+$lg_last_name  = trim($_GET['last_name'] ?? '');
+$lg_extern_key = trim($_GET['extern_key'] ?? '');
+$lg_email      = trim($_GET['email'] ?? '');
+$lg_sort       = trim($_GET['sort'] ?? '');
+$lg_dir        = trim($_GET['dir'] ?? '');
+
 $filter_used = isset($_GET['applied']);
 ?>
 
@@ -268,6 +279,59 @@ $filter_used = isset($_GET['applied']);
           <input type="number" name="amount_max" class="filter-input" placeholder="Max"
                  value="<?= htmlspecialchars($u_max, ENT_QUOTES, 'UTF-8'); ?>">
         </div>
+      </div>
+
+    <?php elseif ($currentPage === 'legal_guardians.php'): ?>
+
+      <!-- LEGAL GUARDIAN FILTERS -->
+      <div class="filter-group">
+        <label>Search</label>
+        <input type="text" name="q" class="filter-input"
+               placeholder="Name, extern key, email, ID..."
+               value="<?= htmlspecialchars($lg_q, ENT_QUOTES, 'UTF-8'); ?>">
+      </div>
+
+      <div class="filter-group">
+        <label>Sort By</label>
+        <select name="sort" class="filter-select">
+          <option value="id" <?= ($lg_sort === 'id' || $lg_sort === '') ? 'selected' : '' ?>>ID</option>
+          <option value="first_name" <?= $lg_sort === 'first_name' ? 'selected' : '' ?>>First Name</option>
+          <option value="last_name" <?= $lg_sort === 'last_name' ? 'selected' : '' ?>>Last Name</option>
+          <option value="extern_key" <?= $lg_sort === 'extern_key' ? 'selected' : '' ?>>Extern Key</option>
+          <option value="email" <?= $lg_sort === 'email' ? 'selected' : '' ?>>Email</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Order</label>
+        <select name="dir" class="filter-select">
+          <option value="asc" <?= ($lg_dir === 'asc' || $lg_dir === '') ? 'selected' : '' ?>>Ascending</option>
+          <option value="desc" <?= $lg_dir === 'desc' ? 'selected' : '' ?>>Descending</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>First Name</label>
+        <input type="text" name="first_name" class="filter-input"
+               value="<?= htmlspecialchars($lg_first_name, ENT_QUOTES, 'UTF-8'); ?>">
+      </div>
+
+      <div class="filter-group">
+        <label>Last Name</label>
+        <input type="text" name="last_name" class="filter-input"
+               value="<?= htmlspecialchars($lg_last_name, ENT_QUOTES, 'UTF-8'); ?>">
+      </div>
+
+      <div class="filter-group">
+        <label>Extern Key</label>
+        <input type="text" name="extern_key" class="filter-input"
+               value="<?= htmlspecialchars($lg_extern_key, ENT_QUOTES, 'UTF-8'); ?>">
+      </div>
+
+      <div class="filter-group">
+        <label>Email</label>
+        <input type="text" name="email" class="filter-input"
+               value="<?= htmlspecialchars($lg_email, ENT_QUOTES, 'UTF-8'); ?>">
       </div>
 
     <?php else: ?>
