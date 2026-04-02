@@ -58,9 +58,6 @@ function loadPaymentHistory(mysqli $conn, int $studentId): array {
             mh.matched_by,
             mh.is_confirmed,
             mh.created_at,
-            mh.matched_amount,
-            mh.amount_share,
-            mh.amount,
 
             i.id AS invoice_id,
             i.processing_date,
@@ -92,20 +89,6 @@ function loadPaymentHistory(mysqli $conn, int $studentId): array {
    ============================================================ */
 function resolveShareAmount(?array $row): float {
     if (!$row) return 0.0;
-    
-    // Prefer matched_amount, then amount_share, then amount
-    if (!empty($row['matched_amount']) && (float)$row['matched_amount'] > 0) {
-        return (float)$row['matched_amount'];
-    }
-    if (!empty($row['amount_share']) && (float)$row['amount_share'] > 0) {
-        return (float)$row['amount_share'];
-    }
-    if (!empty($row['amount']) && (float)$row['amount'] > 0) {
-        return (float)$row['amount'];
-    }
-    
-    // Fallback: use full invoice amount (assumes single-student match)
-    // TODO: could refine this by querying how many confirmed students link to this invoice
     return (float)($row['amount_total'] ?? 0.0);
 }
 
@@ -113,17 +96,10 @@ function resolveShareAmount(?array $row): float {
    HELPER: Calculate financial summary for a student
    ============================================================ */
 function calculateFinancialSummary(?array $baseInfo, array $paymentHistory): array {
-    $totalPaid = 0.0;
-    foreach ($paymentHistory as $row) {
-        $totalPaid += resolveShareAmount($row);
-    }
-    
     return [
-        'total_paid' => $totalPaid,
+        'total_paid'          => (float)($baseInfo['amount_paid'] ?? 0.0),
         'additional_payments' => (float)($baseInfo['additional_payments_status'] ?? 0.0),
-        'left_to_pay' => (float)($baseInfo['left_to_pay'] ?? 0.0),
-        // TODO: 'overdue_amount' - not derivable from current schema; would need invoice deadline dates
-        // TODO: 'next_deadline_outstanding' - not derivable from current schema; would need next expected due date
+        'left_to_pay'         => (float)($baseInfo['left_to_pay'] ?? 0.0),
     ];
 }
 
@@ -233,50 +209,116 @@ function renderPDFPaymentHistory(FPDF &$pdf, array $paymentHistory) {
     $pdf->SetFont('Arial', 'B', 11);
     $pdf->SetTextColor(40, 40, 40);
     $pdf->Cell(0, 8, 'Payment History', 0, 1, 'L');
-    
     $pdf->SetDrawColor(220, 220, 220);
     $pdf->Line(10, $pdf->GetY(), 200, $pdf->GetY());
     $pdf->Ln(3);
-    
+
     if (count($paymentHistory) === 0) {
         $pdf->SetFont('Arial', '', 10);
         $pdf->Cell(0, 6, 'No confirmed payments found.', 0, 1);
         return;
     }
-    
-    // Table header
+
+    // Total table width = 190 (matches line from x=10 to x=200)
+    $colWidths = [28, 52, 75, 35]; // sum = 190
+
+    // ── Header ───────────────────────────────────────────────────────────────
     $pdf->SetFont('Arial', 'B', 9);
-    $pdf->SetFillColor(240, 240, 240);
-    $pdf->SetTextColor(40, 40, 40);
-    
-    $pdf->Cell(25, 7, 'Date', 1, 0, 'C', true);
-    $pdf->Cell(25, 7, 'Reference', 1, 0, 'L', true);
-    $pdf->Cell(28, 7, 'Beneficiary', 1, 0, 'L', true);
-    $pdf->Cell(30, 7, 'Description', 1, 0, 'L', true);
-    $pdf->Cell(22, 7, 'Matched By', 1, 0, 'C', true);
-    $pdf->Cell(25, 7, 'Amount', 1, 1, 'R', true);
-    
-    // Table rows
+    $pdf->SetFillColor(46, 64, 87);
+    $pdf->SetTextColor(255, 255, 255);
+    $pdf->SetDrawColor(255, 255, 255);
+
+    $pdf->Cell($colWidths[0], 8, 'Date', 1, 0, 'C', true);
+    $pdf->Cell($colWidths[1], 8, 'Beneficiary', 1, 0, 'C', true);
+    $pdf->Cell($colWidths[2], 8, 'Description', 1, 0, 'C', true);
+    $pdf->Cell($colWidths[3], 8, 'Amount', 1, 1, 'C', true);
+
+    // ── Rows ─────────────────────────────────────────────────────────────────
     $pdf->SetFont('Arial', '', 9);
-    $pdf->SetTextColor(0, 0, 0);
-    $pdf->SetFillColor(255, 255, 255);
-    
+    $pdf->SetDrawColor(220, 220, 220);
+    $lineHeight = 5.5;
+    $maxLines = 3;
+    $even = false;
+
     foreach ($paymentHistory as $row) {
         $date = fmt_date_or_dash($row['processing_date'] ?? null);
-        $reference = substr((string)($row['reference_number'] ?? '-'), 0, 20);
-        $beneficiary = substr((string)($row['beneficiary'] ?? '-'), 0, 20);
-        $description = substr((string)($row['description'] ?? '-'), 0, 25);
-        $matchedBy = (string)($row['matched_by'] ?? 'auto');
-        $amount = resolveShareAmount($row);
-        
-        $pdf->Cell(25, 6, $date, 1, 0, 'C', true);
-        $pdf->Cell(25, 6, $reference, 1, 0, 'L', true);
-        $pdf->Cell(28, 6, $beneficiary, 1, 0, 'L', true);
-        $pdf->Cell(30, 6, $description, 1, 0, 'L', true);
-        $pdf->Cell(22, 6, $matchedBy, 1, 0, 'C', true);
-        $pdf->Cell(25, 6, money_lek($amount), 1, 1, 'R', true);
+        $beneficiary = (string)($row['beneficiary'] ?? '-');
+        $description = (string)($row['description'] ?? '-');
+        $amount = money_lek(resolveShareAmount($row));
+
+        // Calculate how many lines each text cell needs
+        $pdf->SetFont('Arial', '', 9);
+        $linesB = max(1, ceil($pdf->GetStringWidth($beneficiary) / ($colWidths[1] - 2)));
+        $linesD = max(1, ceil($pdf->GetStringWidth($description) / ($colWidths[2] - 2)));
+
+        // Cap at 3 lines, truncate text if it would exceed that
+        $linesB = min($linesB, $maxLines);
+        $linesD = min($linesD, $maxLines);
+
+        $maxCharsB = (int)(($colWidths[1] - 2) / ($pdf->GetStringWidth('A') ?: 2.2)) * $maxLines;
+        $maxCharsD = (int)(($colWidths[2] - 2) / ($pdf->GetStringWidth('A') ?: 2.2)) * $maxLines;
+
+        if (mb_strlen($beneficiary) > $maxCharsB) {
+            $beneficiary = mb_substr($beneficiary, 0, $maxCharsB - 3) . '...';
+        }
+        if (mb_strlen($description) > $maxCharsD) {
+            $description = mb_substr($description, 0, $maxCharsD - 3) . '...';
+        }
+
+        // Row height = tallest cell
+        $rowLines = max($linesB, $linesD, 1);
+        $rowHeight = $rowLines * $lineHeight;
+
+        // Alternating background
+        $fill = $even ? [245, 247, 250] : [255, 255, 255];
+        $pdf->SetFillColor($fill[0], $fill[1], $fill[2]);
+        $pdf->SetTextColor(40, 40, 40);
+
+        $x = $pdf->GetX();
+        $y = $pdf->GetY();
+
+        // Check page break manually before drawing row
+        if ($y + $rowHeight > $pdf->GetPageHeight() - 15) {
+            $pdf->AddPage();
+            $y = $pdf->GetY();
+        }
+
+        // Date (single line, vertically centred)
+        $pdf->SetXY($x, $y);
+        $pdf->MultiCell($colWidths[0], $rowHeight, $date, 1, 'C', true);
+
+        // Beneficiary (multi-line)
+        $pdf->SetXY($x + $colWidths[0], $y);
+        $pdf->MultiCell($colWidths[1], $lineHeight, $beneficiary, 1, 'L', true);
+        $usedB = $pdf->GetY() - $y;
+        if ($usedB < $rowHeight) {
+            $pdf->SetXY($x + $colWidths[0], $y + $usedB);
+            $pdf->Cell($colWidths[1], $rowHeight - $usedB, '', 'LR', 0, 'L', true);
+        }
+
+        // Description (multi-line)
+        $pdf->SetXY($x + $colWidths[0] + $colWidths[1], $y);
+        $pdf->MultiCell($colWidths[2], $lineHeight, $description, 1, 'L', true);
+        $usedD = $pdf->GetY() - $y;
+        if ($usedD < $rowHeight) {
+            $pdf->SetXY($x + $colWidths[0] + $colWidths[1], $y + $usedD);
+            $pdf->Cell($colWidths[2], $rowHeight - $usedD, '', 'LR', 0, 'L', true);
+        }
+
+        // Amount (single line, vertically centred, green)
+        $pdf->SetXY($x + $colWidths[0] + $colWidths[1] + $colWidths[2], $y);
+        $pdf->SetTextColor(30, 140, 80);
+        $pdf->MultiCell($colWidths[3], $rowHeight, $amount, 1, 'R', true);
+
+        // Bottom border line across full row
+        $pdf->SetDrawColor(220, 220, 220);
+        $pdf->Line($x, $y + $rowHeight, $x + 190, $y + $rowHeight);
+
+        $pdf->SetXY($x, $y + $rowHeight);
+        $pdf->SetTextColor(40, 40, 40);
+        $even = !$even;
     }
-    
+
     $pdf->Ln(4);
 }
 
