@@ -301,7 +301,17 @@ if ($page > $totalPages) {
 $offset = ($page - 1) * $limit;
 
 $paginationBase = $_GET;
-unset($paginationBase['page']);
+unset(
+    $paginationBase['page'],
+    $paginationBase['delete_id'],
+    $paginationBase['pdf_ok'],
+    $paginationBase['pdf_file'],
+    $paginationBase['pdf_error'],
+    $paginationBase['pdf_student_id'],
+    $paginationBase['email_ok'],
+    $paginationBase['email_sent'],
+    $paginationBase['email_error']
+);
 
 $returnQuery = http_build_query(array_merge($paginationBase, ['page' => $page]));
 $returnParam = $returnQuery !== '' ? rawurlencode($returnQuery) : '';
